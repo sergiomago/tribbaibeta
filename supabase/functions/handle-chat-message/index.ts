@@ -14,6 +14,7 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize OpenAI with v2 headers
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
       defaultHeaders: {
@@ -61,7 +62,7 @@ serve(async (req) => {
     const openaiMessage = await openai.beta.threads.messages.create(openaiThreadId, {
       role: 'user',
       content,
-      file_ids: [], // v2 format still accepts empty file_ids
+      attachments: [], // v2 format uses attachments instead of file_ids
     });
 
     // Save user message to database
@@ -132,22 +133,31 @@ serve(async (req) => {
           instructions: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`,
         });
 
-        // Wait for completion
+        // Wait for completion with enhanced v2 status handling
         let runStatus = await openai.beta.threads.runs.retrieve(
           openaiThreadId,
           run.id
         );
 
-        while (runStatus.status !== 'completed') {
-          if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
-            console.error('Assistant run failed:', runStatus);
-            throw new Error(`Assistant run ${runStatus.status}`);
+        while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
+          console.log(`Run status: ${runStatus.status}`);
+          
+          if (runStatus.status === 'requires_action') {
+            console.log('Run requires action:', runStatus.required_action);
+            // Handle tool calls if needed
+            // This is where we would handle any tool calls in v2
           }
+
           await new Promise(resolve => setTimeout(resolve, 1000));
           runStatus = await openai.beta.threads.runs.retrieve(
             openaiThreadId,
             run.id
           );
+        }
+
+        if (runStatus.status !== 'completed') {
+          console.error('Assistant run failed:', runStatus);
+          throw new Error(`Assistant run ${runStatus.status}`);
         }
 
         // Get assistant's response with v2 format
