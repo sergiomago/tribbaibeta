@@ -16,6 +16,9 @@ serve(async (req) => {
   try {
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
+      defaultHeaders: {
+        'OpenAI-Beta': 'assistants=v2'
+      }
     });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
