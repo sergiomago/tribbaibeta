@@ -84,6 +84,7 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
 }
 
 function extractTaggedRoleId(message: string): string | null {
+  // Remove the @ since it's already in the tag
   const match = message.match(/@(\w+)/);
-  return match ? match[1] : null;
+  return match ? match[1].replace('@', '') : null;
 }
