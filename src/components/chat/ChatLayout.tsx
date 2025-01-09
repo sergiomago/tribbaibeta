@@ -1,7 +1,15 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, Plus, Search, Tag, UserRound } from "lucide-react";
+import {
+  Edit2,
+  MessageSquare,
+  Plus,
+  Search,
+  Tag,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -11,9 +19,14 @@ import { cn } from "@/lib/utils";
 
 export function ChatLayout() {
   const [chatSidebarSize, setChatSidebarSize] = useState(25);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [chatTitle, setChatTitle] = useState("Project Discussion");
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-2rem)]">
+    <ResizablePanelGroup
+      direction="horizontal"
+      className="h-[calc(100vh-4rem)]"
+    >
       {/* Chat List Sidebar */}
       <ResizablePanel
         defaultSize={chatSidebarSize}
@@ -51,17 +64,44 @@ export function ChatLayout() {
 
       <ResizableHandle />
 
-      {/* Main Chat Area with Role Cards */}
+      {/* Main Chat Area */}
       <ResizablePanel defaultSize={100 - chatSidebarSize}>
         <div className="flex h-full flex-col">
+          {/* Chat Header with Title */}
           <div className="border-b p-4">
-            <h3 className="text-lg font-semibold">Project Discussion</h3>
-            <p className="text-sm text-muted-foreground">3 roles active</p>
+            <div className="flex items-center justify-between">
+              {isEditingTitle ? (
+                <Input
+                  value={chatTitle}
+                  onChange={(e) => setChatTitle(e.target.value)}
+                  onBlur={() => setIsEditingTitle(false)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setIsEditingTitle(false);
+                    }
+                  }}
+                  className="max-w-[300px]"
+                  autoFocus
+                />
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold">{chatTitle}</h3>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => setIsEditingTitle(true)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-          
+
           {/* Role Cards Section */}
           <div className="border-b bg-muted/30 p-4">
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="flex flex-wrap gap-2">
               <RoleCard
                 name="Technical Advisor"
                 tag="tech"
@@ -76,6 +116,14 @@ export function ChatLayout() {
                 name="UX Designer"
                 tag="design"
               />
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex h-9 items-center gap-1"
+              >
+                <Plus className="h-3 w-3" />
+                Add Role
+              </Button>
             </div>
           </div>
 
@@ -149,26 +197,24 @@ interface RoleCardProps {
 
 function RoleCard({ name, tag, active }: RoleCardProps) {
   return (
-    <div className={cn(
-      "group relative rounded-lg border bg-card p-3 shadow-sm transition-all hover:shadow-md",
-      active && "ring-2 ring-primary ring-offset-2"
-    )}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
-          <h4 className="font-medium line-clamp-1">{name}</h4>
-          <div className="mt-1 flex items-center gap-1">
-            <Tag className="h-3 w-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">@{tag}</span>
-          </div>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+    <div
+      className={cn(
+        "group relative flex h-9 items-center gap-2 rounded-lg border bg-card px-3 shadow-sm transition-all hover:shadow-md",
+        active && "ring-2 ring-primary ring-offset-2"
+      )}
+    >
+      <div className="flex items-center gap-1">
+        <Tag className="h-3 w-3 text-muted-foreground" />
+        <span className="text-sm">@{tag}</span>
       </div>
+      <span className="text-sm font-medium">{name}</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 opacity-0 transition-opacity group-hover:opacity-100"
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
     </div>
   );
 }

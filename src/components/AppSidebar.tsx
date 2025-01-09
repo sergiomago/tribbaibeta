@@ -1,11 +1,9 @@
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -41,41 +39,42 @@ export function AppSidebar() {
   ];
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b border-border/5 px-6 py-3">
-        <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
-          Chatrolando
-        </h2>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Menu</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <a href={item.url} className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="border-t border-border/5 p-6">
+    <Sidebar className="h-16 w-full border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <SidebarContent className="flex h-full flex-row items-center justify-between px-6">
+        <div className="flex items-center gap-4">
+          <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
+            Chatrolando
+          </h2>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu className="flex flex-row items-center gap-1">
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <a
+                        href={item.url}
+                        className="flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span className="sr-only">{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </div>
         <Button
           variant="ghost"
-          className="w-full justify-start"
+          size="icon"
+          className="h-9 w-9"
           onClick={() => signOut()}
         >
-          <LogOut className="mr-2 h-4 w-4" />
-          Sign out
+          <LogOut className="h-4 w-4" />
+          <span className="sr-only">Sign out</span>
         </Button>
-      </SidebarFooter>
+      </SidebarContent>
     </Sidebar>
   );
 }
