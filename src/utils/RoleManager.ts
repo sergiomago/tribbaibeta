@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createMemoryManager } from "./MemoryManager";
 
 export class RoleManager {
   private threadId: string;
@@ -41,6 +42,16 @@ export class RoleManager {
 
     if (error) throw error;
     return data;
+  }
+
+  async storeRoleMemory(roleId: string, content: string) {
+    const memoryManager = createMemoryManager(roleId, this.threadId);
+    await memoryManager.storeMemory(content);
+  }
+
+  async getRoleMemories(roleId: string, limit: number = 10) {
+    const memoryManager = createMemoryManager(roleId, this.threadId);
+    return await memoryManager.retrieveMemories(limit);
   }
 }
 

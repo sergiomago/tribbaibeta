@@ -25,7 +25,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { threadId, content, taggedRoleId } = await req.json();
+    const { threadId, content, taggedRoleId, conversationChain } = await req.json();
     console.log('Processing message for thread:', threadId, 'with content:', content);
 
     // Get thread details
@@ -67,17 +67,6 @@ serve(async (req) => {
       .select()
       .single();
 
-    // Get conversation chain (either tagged role or all roles in random order)
-    const { data: conversationChain } = await supabase.rpc(
-      'get_conversation_chain',
-      { 
-        p_thread_id: threadId,
-        p_tagged_role_id: taggedRoleId
-      }
-    );
-
-    console.log('Conversation chain:', conversationChain);
-
     // Generate a new chain ID for this conversation
     const chainId = crypto.randomUUID();
     
@@ -100,12 +89,13 @@ serve(async (req) => {
         .from('messages_memory')
         .select('content')
         .eq('role_id', role_id)
+        .eq('thread_id', threadId)
         .order('created_at', { ascending: false })
         .limit(10);
 
       // Prepare context from memory
-      const memoryContext = roleMemory
-        ? `Previous relevant context: ${roleMemory.map(m => m.content).join('\n')}`
+      const memoryContext = roleMemory && roleMemory.length > 0
+        ? `Previous relevant context:\n${roleMemory.map(m => m.content).join('\n')}`
         : '';
 
       // Get previous messages in the chain
@@ -116,7 +106,7 @@ serve(async (req) => {
         .order('chain_order', { ascending: true });
 
       // Prepare conversation context
-      const conversationContext = previousMessages
+      const conversationContext = previousMessages && previousMessages.length > 0
         ? `Previous responses in this conversation:\n${previousMessages.map(m => m.content).join('\n')}`
         : '';
 
@@ -147,6 +137,17 @@ serve(async (req) => {
       // Get assistant's response
       const messages = await openai.beta.threads.messages.list(openaiThreadId);
       const lastMessage = messages.data[0];
+      const responseContent = lastMessage.content[0].text.value;
+
+      // Store response in role's memory
+      await supabase
+        .from('messages_memory')
+        .insert({
+          role_id: role_id,
+          thread_id: threadId,
+          content: responseContent,
+          context_type: 'conversation'
+        });
 
       // Save assistant's response
       const { data: responseMessage } = await supabase
@@ -154,7 +155,7 @@ serve(async (req) => {
         .insert({
           thread_id: threadId,
           role_id: role_id,
-          content: lastMessage.content[0].text.value,
+          content: responseContent,
           chain_id: chainId,
           chain_order: chain_order,
           reply_to_message_id: userMessage.id,
@@ -163,18 +164,8 @@ serve(async (req) => {
         .select()
         .single();
 
-      // Update role's memory
-      await supabase
-        .from('messages_memory')
-        .insert({
-          role_id: role_id,
-          content: lastMessage.content[0].text.value,
-          context_type: 'thread',
-          thread_id: threadId,
-        });
-
       // Check if the assistant tagged another role
-      const taggedRole = extractTaggedRole(lastMessage.content[0].text.value);
+      const taggedRole = extractTaggedRole(responseContent);
       
       if (taggedRole) {
         // If a role was tagged, stop the current chain and start a new one

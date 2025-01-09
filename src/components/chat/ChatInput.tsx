@@ -27,6 +27,11 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
       const chain = await roleManager.getConversationChain(taggedRoleId);
       console.log("Conversation chain:", chain);
 
+      // Store the message in role's memory if it's tagged
+      if (taggedRoleId) {
+        await roleManager.storeRoleMemory(taggedRoleId, message);
+      }
+
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId,
