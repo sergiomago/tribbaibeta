@@ -14,7 +14,7 @@ export function ChatLayout() {
   return (
     <ResizablePanelGroup 
       direction="horizontal" 
-      className="h-[calc(100vh-4rem)]" // Adjusted to account for top navbar
+      className="min-h-[calc(100vh-4rem)]" // Changed to min-height
     >
       {/* Chat List Sidebar */}
       <ResizablePanel
@@ -55,9 +55,9 @@ export function ChatLayout() {
 
       {/* Main Chat Area */}
       <ResizablePanel defaultSize={100 - chatSidebarSize}>
-        <div className="flex h-full flex-col">
+        <div className="flex flex-col h-[calc(100vh-4rem)]"> {/* Fixed height for main container */}
           {/* Role Management Bar */}
-          <div className="border-b p-4">
+          <div className="border-b p-4 flex-shrink-0"> {/* Added flex-shrink-0 */}
             <div className="flex items-center justify-between mb-2">
               <Input
                 className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
@@ -75,10 +75,14 @@ export function ChatLayout() {
               <RoleTag name="Designer" tag="design" />
             </div>
           </div>
+          
+          {/* Messages Container */}
           <div className="flex-1 overflow-y-auto p-4">
             {/* Chat messages will go here */}
           </div>
-          <div className="border-t p-4 bg-background">
+          
+          {/* Input Container - Fixed at bottom */}
+          <div className="border-t p-4 bg-background mt-auto">
             <div className="flex gap-2">
               <Input placeholder="Type your message..." className="flex-1" />
               <Button>Send</Button>
