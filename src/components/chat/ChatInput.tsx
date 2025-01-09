@@ -21,7 +21,23 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
     setIsSending(true);
     try {
       const roleManager = createRoleManager(threadId);
-      const taggedRoleId = extractTaggedRoleId(message);
+      const taggedRoleTag = extractRoleTag(message);
+      
+      // Get role ID from tag if a role was tagged
+      let taggedRoleId = null;
+      if (taggedRoleTag) {
+        const { data: roleData, error: roleError } = await supabase
+          .from("roles")
+          .select("id")
+          .eq("tag", taggedRoleTag)
+          .single();
+          
+        if (roleError) {
+          console.error("Error finding role:", roleError);
+          throw new Error(`Role with tag @${taggedRoleTag} not found`);
+        }
+        taggedRoleId = roleData.id;
+      }
       
       // Get the conversation chain based on tagged role
       const chain = await roleManager.getConversationChain(taggedRoleId);
@@ -49,7 +65,7 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
       console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -83,8 +99,7 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   );
 }
 
-function extractTaggedRoleId(message: string): string | null {
-  // Remove the @ since it's already in the tag
+function extractRoleTag(message: string): string | null {
   const match = message.match(/@(\w+)/);
-  return match ? match[1].replace('@', '') : null;
+  return match ? match[1] : null;
 }
