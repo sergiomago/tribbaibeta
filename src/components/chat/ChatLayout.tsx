@@ -10,6 +10,7 @@ import { ChatInput } from "./ChatInput";
 
 export function ChatLayout() {
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
 
   return (
     <ResizablePanelGroup 
@@ -40,7 +41,13 @@ export function ChatLayout() {
             {/* Chat messages will go here */}
           </div>
           
-          <ChatInput />
+          {currentThreadId ? (
+            <ChatInput threadId={currentThreadId} />
+          ) : (
+            <div className="border-t p-4 bg-background text-center text-muted-foreground">
+              Select or create a thread to start chatting
+            </div>
+          )}
         </div>
       </ResizablePanel>
     </ResizablePanelGroup>
