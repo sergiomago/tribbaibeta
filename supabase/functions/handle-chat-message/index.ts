@@ -53,10 +53,11 @@ serve(async (req) => {
     if (messageError) throw messageError;
 
     // Create embedding for memory storage
+    let embedding;
     if (taggedRoleId) {
       try {
         console.log('Creating embedding for memory:', content);
-        const { data: embedding, error: embeddingError } = await supabase.functions.invoke(
+        const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke(
           'create-embedding',
           {
             body: { content }
@@ -64,6 +65,7 @@ serve(async (req) => {
         );
 
         if (embeddingError) throw embeddingError;
+        embedding = embeddingData;
 
         // Store in role_memories with embedding
         const { error: memoryError } = await supabase
@@ -129,12 +131,43 @@ serve(async (req) => {
         if (roleError) throw roleError;
         if (!role?.assistant_id) continue;
 
-        // Run assistant
+        // Retrieve relevant memories
+        let relevantMemories = [];
+        try {
+          const { data: memories, error: memoriesError } = await supabase.rpc(
+            'get_similar_memories',
+            {
+              p_embedding: embedding?.vector,
+              p_match_threshold: 0.7,
+              p_match_count: 5,
+              p_role_id: role_id
+            }
+          );
+
+          if (!memoriesError && memories) {
+            relevantMemories = memories;
+            console.log('Retrieved relevant memories:', memories);
+          }
+        } catch (error) {
+          console.error('Error retrieving memories:', error);
+          // Continue without memories if retrieval fails
+        }
+
+        // Prepare context from memories
+        let memoryContext = '';
+        if (relevantMemories.length > 0) {
+          memoryContext = 'Relevant context from memory:\n' + 
+            relevantMemories
+              .map(m => `- ${m.content}`)
+              .join('\n');
+        }
+
+        // Run assistant with memory-enhanced instructions
         const run = await openai.beta.threads.runs.create(
           openaiThreadId,
           {
             assistant_id: role.assistant_id,
-            instructions: role.instructions
+            instructions: `${role.instructions}\n\n${memoryContext}`
           }
         );
 
