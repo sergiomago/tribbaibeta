@@ -148,22 +148,13 @@ export class LlongtermManager {
 
   private async updateMemoryInteractions(memoryIds: string[]) {
     try {
-      const updateQuery = `
-        jsonb_set(
-          jsonb_set(
-            metadata,
-            '{interaction_count}',
-            (COALESCE((metadata->>'interaction_count')::int, 0) + 1)::text::jsonb
-          ),
-          '{last_accessed}',
-          '"${new Date().toISOString()}"'::jsonb
-        )
-      `;
-
       const { error } = await supabase
         .from('role_memories')
         .update({ 
-          metadata: supabase.sql`${updateQuery}` 
+          metadata: {
+            interaction_count: `(COALESCE((metadata->>'interaction_count')::int, 0) + 1)`,
+            last_accessed: new Date().toISOString()
+          }
         })
         .in('id', memoryIds);
 
