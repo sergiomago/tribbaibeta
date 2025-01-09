@@ -30,12 +30,17 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
           .from("roles")
           .select("id")
           .eq("tag", taggedRoleTag)
-          .single();
+          .maybeSingle();
           
         if (roleError) {
           console.error("Error finding role:", roleError);
-          throw new Error(`Role with tag @${taggedRoleTag} not found`);
+          throw new Error("Failed to look up role. Please try again.");
         }
+        
+        if (!roleData) {
+          throw new Error(`No role found with tag @${taggedRoleTag}`);
+        }
+        
         taggedRoleId = roleData.id;
       }
       
