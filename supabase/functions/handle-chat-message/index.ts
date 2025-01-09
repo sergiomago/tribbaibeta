@@ -14,11 +14,9 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize OpenAI without defaultHeaders
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
-      defaultHeaders: {
-        'OpenAI-Beta': 'assistants=v2'
-      }
     });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -50,13 +48,17 @@ serve(async (req) => {
       throw new Error('Thread not found');
     }
 
-    // Create or get OpenAI thread
+    // Create or get OpenAI thread with explicit headers
     let openaiThreadId = thread.openai_thread_id;
     if (!openaiThreadId) {
       try {
         console.log('Creating new OpenAI thread');
         const openaiThread = await openai.beta.threads.create({
           metadata: { thread_id: threadId }
+        }, {
+          headers: {
+            'OpenAI-Beta': 'assistants=v2'
+          }
         });
         
         openaiThreadId = openaiThread.id;
@@ -75,7 +77,7 @@ serve(async (req) => {
       }
     }
 
-    // Add user message to OpenAI thread
+    // Add user message to OpenAI thread with explicit headers
     let openaiMessage;
     try {
       console.log('Creating OpenAI message');
@@ -85,6 +87,11 @@ serve(async (req) => {
           role: 'user',
           content,
           metadata: { source_message_id: threadId }
+        },
+        {
+          headers: {
+            'OpenAI-Beta': 'assistants=v2'
+          }
         }
       );
     } catch (error) {
@@ -146,18 +153,31 @@ serve(async (req) => {
           continue;
         }
 
-        // Run assistant
+        // Run assistant with explicit headers
         try {
           console.log('Running assistant for role:', role.name);
-          const run = await openai.beta.threads.runs.create(openaiThreadId, {
-            assistant_id: role.assistant_id,
-            instructions: role.instructions
-          });
+          const run = await openai.beta.threads.runs.create(
+            openaiThreadId,
+            {
+              assistant_id: role.assistant_id,
+              instructions: role.instructions
+            },
+            {
+              headers: {
+                'OpenAI-Beta': 'assistants=v2'
+              }
+            }
+          );
 
           // Wait for completion
           let runStatus = await openai.beta.threads.runs.retrieve(
             openaiThreadId,
-            run.id
+            run.id,
+            {
+              headers: {
+                'OpenAI-Beta': 'assistants=v2'
+              }
+            }
           );
 
           while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
@@ -165,7 +185,12 @@ serve(async (req) => {
             await new Promise(resolve => setTimeout(resolve, 1000));
             runStatus = await openai.beta.threads.runs.retrieve(
               openaiThreadId,
-              run.id
+              run.id,
+              {
+                headers: {
+                  'OpenAI-Beta': 'assistants=v2'
+                }
+              }
             );
           }
 
@@ -174,11 +199,19 @@ serve(async (req) => {
             continue;
           }
 
-          // Get assistant's response
-          const messages = await openai.beta.threads.messages.list(openaiThreadId, {
-            order: 'desc',
-            limit: 1
-          });
+          // Get assistant's response with explicit headers
+          const messages = await openai.beta.threads.messages.list(
+            openaiThreadId,
+            {
+              order: 'desc',
+              limit: 1
+            },
+            {
+              headers: {
+                'OpenAI-Beta': 'assistants=v2'
+              }
+            }
+          );
           
           const lastMessage = messages.data[0];
           const responseContent = lastMessage.content[0].text.value;
