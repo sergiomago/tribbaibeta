@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ChatSidebarProps {
   defaultSize: number;
@@ -14,6 +15,7 @@ interface ChatSidebarProps {
 
 export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
@@ -31,6 +33,8 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
 
   const createThread = useMutation({
     mutationFn: async () => {
+      if (!user) throw new Error("User not authenticated");
+
       // First create an OpenAI thread
       const { data: openAIThread, error: openAIError } = await supabase.functions.invoke(
         "create-thread"
@@ -43,6 +47,7 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
         .insert({
           name: "New Thread",
           openai_thread_id: openAIThread.id,
+          user_id: user.id, // Add the user_id here
         })
         .select()
         .single();
