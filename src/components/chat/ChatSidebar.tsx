@@ -1,78 +1,109 @@
-import { Search, Plus, MessageSquare } from "lucide-react";
+import { useState } from "react";
+import { Plus, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface ChatSidebarProps {
   defaultSize: number;
   onResize: (size: number) => void;
+  onThreadSelect: (threadId: string) => void;
 }
 
-interface ChatListItemProps {
-  title: string;
-  type: "individual";
-  lastMessage?: string;
-  timestamp?: string;
-  active?: boolean;
-}
+export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
 
-export function ChatSidebar({ defaultSize, onResize }: ChatSidebarProps) {
+  const { data: threads, isLoading } = useQuery({
+    queryKey: ["threads"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("threads")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const createThread = useMutation({
+    mutationFn: async () => {
+      // First create an OpenAI thread
+      const { data: openAIThread, error: openAIError } = await supabase.functions.invoke(
+        "create-thread"
+      );
+      if (openAIError) throw openAIError;
+
+      // Then create the thread in our database
+      const { data, error } = await supabase
+        .from("threads")
+        .insert({
+          name: "New Thread",
+          openai_thread_id: openAIThread.id,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (newThread) => {
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
+      setSelectedThreadId(newThread.id);
+      onThreadSelect(newThread.id);
+      toast({
+        title: "Success",
+        description: "New thread created",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to create thread: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleThreadClick = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    onThreadSelect(threadId);
+  };
+
   return (
-    <div className="flex h-full flex-col gap-4 border-r p-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Chats</h2>
-        <Button variant="ghost" size="icon">
-          <Plus className="h-4 w-4" />
+    <div className="h-full flex flex-col border-r">
+      <div className="p-4 border-b">
+        <Button
+          className="w-full"
+          onClick={() => createThread.mutate()}
+          disabled={createThread.isPending}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Thread
         </Button>
       </div>
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input className="pl-9" placeholder="Search chats..." />
-      </div>
-      <div className="flex-1 space-y-2">
-        <ChatListItem
-          title="Project Discussion"
-          type="individual"
-          active={true}
-          lastMessage="Let's analyze the requirements..."
-          timestamp="2m ago"
-        />
-        <ChatListItem
-          title="Code Review"
-          type="individual"
-          lastMessage="The implementation looks good..."
-          timestamp="1h ago"
-        />
-      </div>
-    </div>
-  );
-}
-
-function ChatListItem({
-  title,
-  lastMessage,
-  timestamp,
-  active,
-}: ChatListItemProps) {
-  return (
-    <button
-      className={`w-full rounded-lg p-3 text-left transition-colors hover:bg-accent ${
-        active ? "bg-accent" : ""
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        <MessageSquare className="h-5 w-5 text-primary" />
-        <div className="flex-1 overflow-hidden">
-          <h4 className="font-medium">{title}</h4>
-          {lastMessage && (
-            <p className="truncate text-sm text-muted-foreground">
-              {lastMessage}
-            </p>
-          )}
+      <ScrollArea className="flex-1">
+        <div className="p-2 space-y-2">
+          {threads?.map((thread) => (
+            <button
+              key={thread.id}
+              onClick={() => handleThreadClick(thread.id)}
+              className={`w-full p-3 text-left rounded-lg transition-colors ${
+                selectedThreadId === thread.id
+                  ? "bg-primary/10 text-primary"
+                  : "hover:bg-muted"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                <span className="font-medium">{thread.name}</span>
+              </div>
+            </button>
+          ))}
         </div>
-        {timestamp && (
-          <span className="text-xs text-muted-foreground">{timestamp}</span>
-        )}
-      </div>
-    </button>
+      </ScrollArea>
+    </div>
   );
 }
