@@ -15,9 +15,17 @@ const Index = () => {
     <SidebarProvider>
       <div className="flex h-screen w-full flex-col bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
         <AppSidebar />
-        <main className="flex-1 overflow-hidden">
-          <ChatLayout />
-        </main>
+        <div className="flex flex-1">
+          {/* Chat History Sidebar */}
+          <div className="w-64 border-r bg-background">
+            {/* Chat history list will go here */}
+          </div>
+          
+          {/* Main Chat Area */}
+          <main className="flex-1">
+            <ChatLayout />
+          </main>
+        </div>
       </div>
     </SidebarProvider>
   );

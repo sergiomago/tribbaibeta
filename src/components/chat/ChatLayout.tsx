@@ -42,7 +42,7 @@ export function ChatLayout() {
       />
 
       {/* Chat Messages */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4">
         {/* Chat messages will go here */}
       </div>
 
