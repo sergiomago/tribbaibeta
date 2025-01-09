@@ -1,7 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
 import { MemoryMetadata } from "./types";
+import { MemoryScoring } from "./scoring";
 
 export class MemoryStorage {
+  private static readonly BATCH_SIZE = 50;
+
   static async storeMemory(roleId: string, content: string, contextType: string = 'conversation', topic?: string) {
     try {
       const response = await fetch('https://api.llongterm.com/v1/embeddings', {
@@ -52,31 +55,44 @@ export class MemoryStorage {
 
   static async updateMemoryInteractions(memoryIds: string[]) {
     try {
-      for (const id of memoryIds) {
-        const { data: memory, error: fetchError } = await supabase
-          .from('role_memories')
-          .select('metadata')
-          .eq('id', id)
-          .single();
-
-        if (fetchError) throw fetchError;
-
-        const currentMetadata = memory.metadata as MemoryMetadata;
-        const newMetadata: MemoryMetadata = {
-          ...currentMetadata,
-          interaction_count: (currentMetadata.interaction_count || 0) + 1,
-          last_accessed: new Date().toISOString()
-        };
-
-        const { error: updateError } = await supabase
-          .from('role_memories')
-          .update({ metadata: newMetadata })
-          .eq('id', id);
-
-        if (updateError) throw updateError;
+      // Process in batches to avoid overwhelming the database
+      for (let i = 0; i < memoryIds.length; i += this.BATCH_SIZE) {
+        const batch = memoryIds.slice(i, i + this.BATCH_SIZE);
+        await this.updateMemoryBatch(batch);
       }
     } catch (error) {
       console.error('Error in updateMemoryInteractions:', error);
+      throw error;
+    }
+  }
+
+  private static async updateMemoryBatch(memoryIds: string[]) {
+    for (const id of memoryIds) {
+      const { data: memory, error: fetchError } = await supabase
+        .from('role_memories')
+        .select('metadata')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const currentMetadata = memory.metadata as MemoryMetadata;
+      const newMetadata: MemoryMetadata = {
+        ...currentMetadata,
+        interaction_count: (currentMetadata.interaction_count || 0) + 1,
+        last_accessed: new Date().toISOString(),
+        importance_score: MemoryScoring.calculateImportanceScore({
+          content: memory.content,
+          metadata: currentMetadata
+        })
+      };
+
+      const { error: updateError } = await supabase
+        .from('role_memories')
+        .update({ metadata: newMetadata })
+        .eq('id', id);
+
+      if (updateError) throw updateError;
     }
   }
 
