@@ -70,7 +70,6 @@ serve(async (req) => {
         console.log('Memory stored successfully');
       } catch (error) {
         console.error('Error in memory storage:', error);
-        // Continue execution even if memory storage fails
       }
     }
 
@@ -113,7 +112,6 @@ serve(async (req) => {
             console.log('Retrieved and formatted memories for context');
           } catch (error) {
             console.error('Error retrieving memories:', error);
-            // Continue without memories if retrieval fails
           }
         }
 
