@@ -39,10 +39,17 @@ serve(async (req) => {
       throw new Error('Thread not found');
     }
 
-    // Create or get OpenAI thread
+    // Create or get OpenAI thread with v2 format
     let openaiThreadId = thread.openai_thread_id;
     if (!openaiThreadId) {
-      const openaiThread = await openai.beta.threads.create();
+      const openaiThread = await openai.beta.threads.create({
+        tools: [{ type: "code_interpreter" }],
+        tool_resources: {
+          code_interpreter: {
+            file_ids: []
+          }
+        }
+      });
       openaiThreadId = openaiThread.id;
       await supabase
         .from('threads')
@@ -50,10 +57,11 @@ serve(async (req) => {
         .eq('id', threadId);
     }
 
-    // Add user message to OpenAI thread
+    // Add user message to OpenAI thread with v2 format
     const openaiMessage = await openai.beta.threads.messages.create(openaiThreadId, {
       role: 'user',
       content,
+      file_ids: [], // v2 format still accepts empty file_ids
     });
 
     // Save user message to database
@@ -112,9 +120,15 @@ serve(async (req) => {
         : '';
 
       try {
-        // Run assistant with memory and conversation context
+        // Run assistant with v2 format
         const run = await openai.beta.threads.runs.create(openaiThreadId, {
           assistant_id: role.assistant_id,
+          tools: [{ type: "code_interpreter" }],
+          tool_resources: {
+            code_interpreter: {
+              file_ids: []
+            }
+          },
           instructions: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`,
         });
 
@@ -136,7 +150,7 @@ serve(async (req) => {
           );
         }
 
-        // Get assistant's response
+        // Get assistant's response with v2 format
         const messages = await openai.beta.threads.messages.list(openaiThreadId, {
           order: 'desc',
           limit: 1

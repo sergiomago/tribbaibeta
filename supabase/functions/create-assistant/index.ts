@@ -19,6 +19,7 @@ serve(async (req) => {
 
     console.log('Creating assistant with:', { name, instructions, model });
 
+    // Create assistant with v2 format
     const response = await fetch('https://api.openai.com/v1/assistants', {
       method: 'POST',
       headers: {
@@ -30,7 +31,16 @@ serve(async (req) => {
         name,
         instructions,
         model,
-        tools: [{ type: "code_interpreter" }],
+        tools: [
+          { 
+            type: "code_interpreter"
+          }
+        ],
+        tool_resources: {
+          code_interpreter: {
+            file_ids: []
+          }
+        }
       }),
     });
 
