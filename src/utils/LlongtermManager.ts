@@ -1,6 +1,7 @@
 import { MemoryMaintenance } from "./memory/maintenance";
 import { MemoryConsolidation } from "./memory/consolidation";
 import { MemoryStorage } from "./memory/storage";
+import { supabase } from "@/integrations/supabase/client";
 
 export class LlongtermManager {
   private roleId: string;
