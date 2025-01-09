@@ -49,7 +49,7 @@ export function ChatLayout() {
       {/* Main Chat Area */}
       <ResizablePanel defaultSize={100 - chatSidebarSize}>
         <div className="flex flex-col h-[calc(100vh-4rem)]">
-          <RoleManagementBar />
+          <RoleManagementBar threadId={currentThreadId} />
 
           {/* Messages Container */}
           <div className="flex-1 overflow-y-auto p-4">

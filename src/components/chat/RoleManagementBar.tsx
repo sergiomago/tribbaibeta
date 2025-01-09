@@ -12,7 +12,11 @@ interface RoleTagProps {
   onRemove: (roleId: string) => void;
 }
 
-export function RoleManagementBar() {
+interface RoleManagementBarProps {
+  threadId: string | null;
+}
+
+export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   const [title, setTitle] = useState("Project Discussion");
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -28,8 +32,11 @@ export function RoleManagementBar() {
 
   const addRoleToThread = useMutation({
     mutationFn: async (roleId: string) => {
+      if (!threadId) {
+        throw new Error("No thread selected");
+      }
       const { error } = await supabase.from("thread_roles").insert({
-        thread_id: "current-thread-id", // This will need to be dynamic
+        thread_id: threadId,
         role_id: roleId,
       });
       if (error) throw error;
@@ -52,10 +59,13 @@ export function RoleManagementBar() {
 
   const removeRoleFromThread = useMutation({
     mutationFn: async (roleId: string) => {
+      if (!threadId) {
+        throw new Error("No thread selected");
+      }
       const { error } = await supabase
         .from("thread_roles")
         .delete()
-        .eq("thread_id", "current-thread-id") // This will need to be dynamic
+        .eq("thread_id", threadId)
         .eq("role_id", roleId);
       if (error) throw error;
     },
@@ -91,7 +101,12 @@ export function RoleManagementBar() {
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Chat title..."
         />
-        <Button variant="outline" size="sm" onClick={handleAddRole}>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={handleAddRole}
+          disabled={!threadId}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Role
         </Button>
