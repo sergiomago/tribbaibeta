@@ -80,12 +80,19 @@ const Index = () => {
 
         if (assistantError) throw assistantError;
 
-        // Store role in database
-        const { data, error } = await supabase.from("roles").insert({
-          ...values,
+        // Store role in database with proper typing
+        const roleData = {
+          name: values.name,
+          alias: values.alias || null,
+          tag: values.tag || null,
+          description: values.description || null,
+          instructions: values.instructions,
+          model: values.model,
           user_id: user.id,
           assistant_id: assistantData.assistant_id,
-        });
+        };
+
+        const { data, error } = await supabase.from("roles").insert(roleData);
 
         if (error) throw error;
         return data;
