@@ -1,7 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import OpenAI from "https://esm.sh/openai@4.26.0";
+import { MemoryManager } from "../shared/memoryManager.ts";
+import { OpenAIManager } from "../shared/openAIManager.ts";
+import { ConversationChainItem, Message, Thread, Role } from "../shared/types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,13 +16,13 @@ serve(async (req) => {
   }
 
   try {
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY'),
-    });
-
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const openAIKey = Deno.env.get('OPENAI_API_KEY')!;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const memoryManager = new MemoryManager(supabaseUrl, supabaseKey);
+    const openAIManager = new OpenAIManager(openAIKey);
 
     const { threadId, content, taggedRoleId, conversationChain } = await req.json();
     console.log('Processing message:', { threadId, content, taggedRoleId });
@@ -39,7 +41,7 @@ serve(async (req) => {
     if (threadError) throw threadError;
     if (!thread) throw new Error('Thread not found');
 
-    // Store the message and get its ID
+    // Store user message
     const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -52,73 +54,44 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Create embedding for memory storage
+    // Handle memory storage for tagged role
     let embedding;
     if (taggedRoleId) {
       try {
-        console.log('Creating embedding for memory:', content);
-        const { data: embeddingData, error: embeddingError } = await supabase.functions.invoke(
-          'create-embedding',
-          {
-            body: { content }
-          }
+        console.log('Processing memory for tagged role');
+        embedding = await memoryManager.createEmbedding(content);
+        await memoryManager.storeMemory(
+          taggedRoleId,
+          content,
+          threadId,
+          userMessage.id,
+          embedding.vector
         );
-
-        if (embeddingError) throw embeddingError;
-        embedding = embeddingData;
-
-        // Store in role_memories with embedding
-        const { error: memoryError } = await supabase
-          .from('role_memories')
-          .insert({
-            role_id: taggedRoleId,
-            content,
-            embedding: embedding.vector,
-            context_type: 'conversation',
-            metadata: {
-              thread_id: threadId,
-              message_id: userMessage.id,
-              timestamp: new Date().toISOString()
-            }
-          });
-
-        if (memoryError) {
-          console.error('Error storing memory:', memoryError);
-          throw memoryError;
-        }
-
-        console.log('Successfully stored memory with embedding');
+        console.log('Memory stored successfully');
       } catch (error) {
         console.error('Error in memory storage:', error);
         // Continue execution even if memory storage fails
       }
     }
 
-    // Process the message with OpenAI
+    // Ensure OpenAI thread exists
     let openaiThreadId = thread.openai_thread_id;
     if (!openaiThreadId) {
-      const openaiThread = await openai.beta.threads.create({
-        metadata: { thread_id: threadId }
-      });
-      openaiThreadId = openaiThread.id;
-      
+      openaiThreadId = await openAIManager.createThread();
       await supabase
         .from('threads')
         .update({ openai_thread_id: openaiThreadId })
         .eq('id', threadId);
     }
 
-    // Add message to OpenAI thread
-    await openai.beta.threads.messages.create(
+    // Add user message to OpenAI thread
+    await openAIManager.addMessageToThread(
       openaiThreadId,
-      {
-        role: 'user',
-        content,
-        metadata: { source_message_id: threadId }
-      }
+      content,
+      { source_message_id: threadId }
     );
 
-    // Process responses for each role in the conversation chain
+    // Process each role in the conversation chain
     for (const { role_id, chain_order } of conversationChain) {
       try {
         // Get role details
@@ -131,76 +104,25 @@ serve(async (req) => {
         if (roleError) throw roleError;
         if (!role?.assistant_id) continue;
 
-        // Retrieve relevant memories
-        let relevantMemories = [];
-        try {
-          const { data: memories, error: memoriesError } = await supabase.rpc(
-            'get_similar_memories',
-            {
-              p_embedding: embedding?.vector,
-              p_match_threshold: 0.7,
-              p_match_count: 5,
-              p_role_id: role_id
-            }
-          );
-
-          if (!memoriesError && memories) {
-            relevantMemories = memories;
-            console.log('Retrieved relevant memories:', memories);
-          }
-        } catch (error) {
-          console.error('Error retrieving memories:', error);
-          // Continue without memories if retrieval fails
-        }
-
-        // Prepare context from memories
+        // Get relevant memories if we have an embedding
         let memoryContext = '';
-        if (relevantMemories.length > 0) {
-          memoryContext = 'Relevant context from memory:\n' + 
-            relevantMemories
-              .map(m => `- ${m.content}`)
-              .join('\n');
-        }
-
-        // Run assistant with memory-enhanced instructions
-        const run = await openai.beta.threads.runs.create(
-          openaiThreadId,
-          {
-            assistant_id: role.assistant_id,
-            instructions: `${role.instructions}\n\n${memoryContext}`
+        if (embedding?.vector) {
+          try {
+            const memories = await memoryManager.retrieveRelevantMemories(role_id, embedding.vector);
+            memoryContext = memoryManager.formatMemoryContext(memories);
+            console.log('Retrieved and formatted memories for context');
+          } catch (error) {
+            console.error('Error retrieving memories:', error);
+            // Continue without memories if retrieval fails
           }
-        );
-
-        // Wait for completion
-        let runStatus = await openai.beta.threads.runs.retrieve(
-          openaiThreadId,
-          run.id
-        );
-
-        while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          runStatus = await openai.beta.threads.runs.retrieve(
-            openaiThreadId,
-            run.id
-          );
-        }
-
-        if (runStatus.status !== 'completed') {
-          console.error('Assistant run failed:', runStatus);
-          continue;
         }
 
         // Get assistant's response
-        const messages = await openai.beta.threads.messages.list(
+        const assistantMessage = await openAIManager.runAssistant(
           openaiThreadId,
-          {
-            order: 'desc',
-            limit: 1
-          }
+          role,
+          memoryContext
         );
-        
-        const lastMessage = messages.data[0];
-        const responseContent = lastMessage.content[0].text.value;
 
         // Save assistant's response
         await supabase
@@ -208,11 +130,11 @@ serve(async (req) => {
           .insert({
             thread_id: threadId,
             role_id: role_id,
-            content: responseContent,
+            content: assistantMessage.content[0].text.value,
             chain_id: crypto.randomUUID(),
             chain_order: chain_order,
             reply_to_message_id: userMessage.id,
-            openai_message_id: lastMessage.id,
+            openai_message_id: assistantMessage.id,
           });
 
       } catch (error) {
