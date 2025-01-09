@@ -1,11 +1,10 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata, JsonMetadata } from "./types";
-import { MemoryScoring } from "./scoring";
+import { MemoryMetadata, Memory, DatabaseMemory } from "./types";
 
 export class MemoryStorage {
   private static readonly BATCH_SIZE = 50;
 
-  static async storeMemory(roleId: string, content: string, contextType: string = 'conversation', topic?: string) {
+  static async storeMemory(roleId: string, content: string, contextType: string = 'conversation'): Promise<void> {
     try {
       const response = await fetch('https://api.llongterm.com/v1/embeddings', {
         method: 'POST',
@@ -27,13 +26,10 @@ export class MemoryStorage {
 
       const metadata: MemoryMetadata = {
         timestamp: Date.now(),
-        topic,
-        context_length: content.length,
-        expires_at: this.getExpirationDate(),
+        context_type: contextType,
         interaction_count: 1,
         importance_score: 0.5,
-        consolidated: false,
-        context_type: contextType
+        consolidated: false
       };
 
       const { error } = await supabase
@@ -41,9 +37,9 @@ export class MemoryStorage {
         .insert({
           role_id: roleId,
           content,
-          embedding,
+          embedding: JSON.stringify(embedding),
           context_type: contextType,
-          metadata: metadata as JsonMetadata
+          metadata
         });
 
       if (error) throw error;
@@ -53,9 +49,8 @@ export class MemoryStorage {
     }
   }
 
-  static async updateMemoryInteractions(memoryIds: string[]) {
+  static async updateMemoryInteractions(memoryIds: string[]): Promise<void> {
     try {
-      // Process in batches to avoid overwhelming the database
       for (let i = 0; i < memoryIds.length; i += this.BATCH_SIZE) {
         const batch = memoryIds.slice(i, i + this.BATCH_SIZE);
         await this.updateMemoryBatch(batch);
@@ -66,37 +61,31 @@ export class MemoryStorage {
     }
   }
 
-  private static async updateMemoryBatch(memoryIds: string[]) {
+  private static async updateMemoryBatch(memoryIds: string[]): Promise<void> {
     for (const id of memoryIds) {
       const { data: memory, error: fetchError } = await supabase
         .from('role_memories')
-        .select('content, metadata')
+        .select('metadata')
         .eq('id', id)
         .single();
 
       if (fetchError) throw fetchError;
-
       if (!memory) continue;
 
       const currentMetadata = memory.metadata as MemoryMetadata;
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
+        timestamp: currentMetadata.timestamp || Date.now(),
         interaction_count: (currentMetadata.interaction_count || 0) + 1,
         last_accessed: new Date().toISOString()
       };
 
       const { error: updateError } = await supabase
         .from('role_memories')
-        .update({ metadata: newMetadata as JsonMetadata })
+        .update({ metadata: newMetadata })
         .eq('id', id);
 
       if (updateError) throw updateError;
     }
-  }
-
-  private static getExpirationDate(): string {
-    const date = new Date();
-    date.setDate(date.getDate() + 30); // 30 days TTL
-    return date.toISOString();
   }
 }

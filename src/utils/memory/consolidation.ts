@@ -1,28 +1,29 @@
-import { MemoryMetadata, JsonMetadata } from './types';
-import { supabase } from '@/integrations/supabase/client';
-import { createEmbedding } from '../embeddings';
-import { summarizeMemories } from '../summarization';
+import { supabase } from "@/integrations/supabase/client";
+import { MemoryMetadata, DatabaseMemory } from "./types";
+import { createEmbedding } from "../embeddings";
+import { summarizeMemories } from "../summarization";
 
 const CONSOLIDATION_THRESHOLD = 5;
 const SIMILARITY_THRESHOLD = 0.85;
-
-async function findSimilarMemories(
-  memories: any[],
-  targetEmbedding: number[],
-  threshold: number
-): Promise<any[]> {
-  return memories.filter((memory) => {
-    if (!memory.embedding) return false;
-    const similarity = cosineSimilarity(targetEmbedding, memory.embedding);
-    return similarity > threshold;
-  });
-}
 
 function cosineSimilarity(a: number[], b: number[]): number {
   const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
   const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
   const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
   return dotProduct / (magnitudeA * magnitudeB);
+}
+
+async function findSimilarMemories(
+  memories: DatabaseMemory[],
+  targetEmbedding: number[],
+  threshold: number
+): Promise<DatabaseMemory[]> {
+  return memories.filter((memory) => {
+    if (!memory.embedding) return false;
+    const embedding = JSON.parse(memory.embedding) as number[];
+    const similarity = cosineSimilarity(targetEmbedding, embedding);
+    return similarity > threshold;
+  });
 }
 
 export async function consolidateMemories(roleId: string): Promise<void> {
@@ -34,31 +35,17 @@ export async function consolidateMemories(roleId: string): Promise<void> {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!memories || memories.length < CONSOLIDATION_THRESHOLD) return;
 
-    // Convert database JSON to MemoryMetadata
-    const processedMemories = memories.map(memory => ({
-      ...memory,
-      metadata: {
-        timestamp: Date.now(),
-        ...(memory.metadata as JsonMetadata)
-      } as MemoryMetadata
-    }));
-
-    // Check if consolidation is needed
-    if (processedMemories.length < CONSOLIDATION_THRESHOLD) {
-      return;
-    }
-
-    // Group similar memories
-    const consolidatedGroups: any[][] = [];
     const processedIds = new Set<string>();
+    const consolidatedGroups: DatabaseMemory[][] = [];
 
-    for (const memory of processedMemories) {
+    for (const memory of memories) {
       if (processedIds.has(memory.id)) continue;
 
-      const embedding = memory.embedding || await createEmbedding(memory.content);
+      const embedding = memory.embedding ? JSON.parse(memory.embedding) as number[] : await createEmbedding(memory.content);
       const similarMemories = await findSimilarMemories(
-        processedMemories.filter(m => !processedIds.has(m.id)),
+        memories.filter(m => !processedIds.has(m.id)),
         embedding,
         SIMILARITY_THRESHOLD
       );
@@ -73,7 +60,8 @@ export async function consolidateMemories(roleId: string): Promise<void> {
     for (const group of consolidatedGroups) {
       const contents = group.map(m => m.content);
       const summary = await summarizeMemories(contents);
-      const oldestTimestamp = Math.min(...group.map(m => m.metadata.timestamp));
+      const summaryEmbedding = await createEmbedding(summary);
+      const oldestTimestamp = Math.min(...group.map(m => new Date(m.created_at).getTime()));
 
       // Create new consolidated memory
       const { error: insertError } = await supabase
@@ -82,13 +70,13 @@ export async function consolidateMemories(roleId: string): Promise<void> {
           role_id: roleId,
           content: summary,
           context_type: 'consolidated',
+          embedding: JSON.stringify(summaryEmbedding),
           metadata: {
             timestamp: oldestTimestamp,
             consolidated: true,
             source_count: group.length,
             source_ids: group.map(m => m.id)
-          } as JsonMetadata,
-          embedding: await createEmbedding(summary)
+          }
         });
 
       if (insertError) throw insertError;

@@ -1,8 +1,9 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface MemoryMetadata {
   timestamp: number;
   source?: string;
   context?: string;
-  relevance?: number;
   interaction_count?: number;
   importance_score?: number;
   consolidated?: boolean;
@@ -11,10 +12,7 @@ export interface MemoryMetadata {
   last_accessed?: string;
   source_count?: number;
   source_ids?: string[];
-}
-
-export type JsonMetadata = {
-  [key: string]: any;
+  relevance_score?: number;
 }
 
 export interface Memory {
@@ -23,4 +21,19 @@ export interface Memory {
   metadata: MemoryMetadata;
   embedding?: number[];
   relevanceScore?: number;
+}
+
+export type DatabaseMemory = {
+  id: string;
+  role_id: string;
+  content: string;
+  embedding: string;
+  context_type: string;
+  metadata: Json;
+  created_at: string;
+  relevance_score?: number;
+  last_accessed?: string;
+  access_count?: number;
+  context_relevance?: number;
+  topic_vector?: string;
 }
