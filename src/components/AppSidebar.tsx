@@ -39,7 +39,7 @@ export function AppSidebar() {
   ];
 
   return (
-    <Sidebar className="h-16 w-full border-r bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <Sidebar className="h-14 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <SidebarContent className="flex h-full flex-row items-center justify-between px-6">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">

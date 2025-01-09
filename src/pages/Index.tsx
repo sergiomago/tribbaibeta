@@ -15,7 +15,7 @@ const Index = () => {
     <SidebarProvider>
       <div className="flex h-screen w-full flex-col bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
         <AppSidebar />
-        <main className="flex-1">
+        <main className="flex-1 overflow-hidden">
           <ChatLayout />
         </main>
       </div>
