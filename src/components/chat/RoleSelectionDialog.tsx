@@ -30,16 +30,19 @@ export function RoleSelectionDialog({
     queryFn: async () => {
       if (!threadId) return [];
       
-      // Get all roles that aren't already assigned to this thread
+      // First get the IDs of roles already assigned to this thread
+      const { data: assignedRoles } = await supabase
+        .from("thread_roles")
+        .select("role_id")
+        .eq("thread_id", threadId);
+
+      const assignedRoleIds = assignedRoles?.map(tr => tr.role_id) || [];
+
+      // Then get all roles that aren't in that list
       const { data, error } = await supabase
         .from("roles")
         .select("*")
-        .not("id", "in", (
-          supabase
-            .from("thread_roles")
-            .select("role_id")
-            .eq("thread_id", threadId)
-        ));
+        .not("id", "in", `(${assignedRoleIds.length > 0 ? assignedRoleIds.join(",") : "null"})`);
 
       if (error) throw error;
       return data;
