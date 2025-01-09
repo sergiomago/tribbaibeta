@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
-interface MemoryMetadata {
+interface MemoryMetadata extends Record<string, Json> {
   thread_id: string;
   timestamp: string;
   topic?: string;
@@ -53,7 +54,7 @@ export class LlongtermManager {
         body: JSON.stringify({
           input: content,
           model: "text-embedding-ada-002",
-          encoding_format: "float" // Explicit format specification
+          encoding_format: "float"
         })
       });
 
@@ -147,23 +148,22 @@ export class LlongtermManager {
 
   private async updateMemoryInteractions(memoryIds: string[]) {
     try {
+      const updateQuery = `
+        jsonb_set(
+          jsonb_set(
+            metadata,
+            '{interaction_count}',
+            (COALESCE((metadata->>'interaction_count')::int, 0) + 1)::text::jsonb
+          ),
+          '{last_accessed}',
+          '"${new Date().toISOString()}"'::jsonb
+        )
+      `;
+
       const { error } = await supabase
         .from('role_memories')
-        .update({
-          metadata: supabase.raw(`
-            jsonb_set(
-              metadata,
-              '{interaction_count}',
-              (COALESCE((metadata->>'interaction_count')::int, 0) + 1)::text::jsonb
-            )
-          `),
-          metadata: supabase.raw(`
-            jsonb_set(
-              metadata,
-              '{last_accessed}',
-              '"${new Date().toISOString()}"'::jsonb
-            )
-          `)
+        .update({ 
+          metadata: supabase.sql`${updateQuery}` 
         })
         .in('id', memoryIds);
 
