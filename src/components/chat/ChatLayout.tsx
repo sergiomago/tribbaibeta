@@ -12,7 +12,10 @@ export function ChatLayout() {
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-3.5rem)]">
+    <ResizablePanelGroup 
+      direction="horizontal" 
+      className="h-[calc(100vh-4rem)]" // Adjusted to account for top navbar
+    >
       {/* Chat List Sidebar */}
       <ResizablePanel
         defaultSize={chatSidebarSize}
@@ -72,10 +75,10 @@ export function ChatLayout() {
               <RoleTag name="Designer" tag="design" />
             </div>
           </div>
-          <div className="flex-1 overflow-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4">
             {/* Chat messages will go here */}
           </div>
-          <div className="border-t p-4">
+          <div className="border-t p-4 bg-background">
             <div className="flex gap-2">
               <Input placeholder="Type your message..." className="flex-1" />
               <Button>Send</Button>
