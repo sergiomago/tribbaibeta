@@ -19,6 +19,10 @@ interface Message {
   role_id: string | null;
   created_at: string;
   response_order: number | null;
+  role?: {
+    name: string;
+    tag: string;
+  } | null;
 }
 
 export function ChatLayout() {
@@ -49,7 +53,7 @@ export function ChatLayout() {
         .from("messages")
         .select(`
           *,
-          role:roles(name, tag)
+          role:roles!messages_role_id_fkey(name, tag)
         `)
         .eq("thread_id", currentThreadId)
         .order("created_at", { ascending: true });
