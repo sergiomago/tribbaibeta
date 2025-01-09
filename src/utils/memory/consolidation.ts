@@ -1,97 +1,107 @@
-import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata, JsonMetadata } from "./types";
+import { MemoryMetadata, JsonMetadata } from './types';
+import { supabase } from '@/integrations/supabase/client';
+import { createEmbedding } from '../embeddings';
+import { summarizeMemories } from '../summarization';
 
-export class MemoryConsolidation {
-  private static readonly CONSOLIDATION_THRESHOLD = 0.85;
+const CONSOLIDATION_THRESHOLD = 5;
+const SIMILARITY_THRESHOLD = 0.85;
 
-  static async consolidateMemories(roleId: string) {
-    try {
-      const { data: memories, error } = await supabase
-        .from('role_memories')
-        .select('*')
-        .eq('role_id', roleId)
-        .eq('metadata->consolidated', false);
+async function findSimilarMemories(
+  memories: any[],
+  targetEmbedding: number[],
+  threshold: number
+): Promise<any[]> {
+  return memories.filter((memory) => {
+    if (!memory.embedding) return false;
+    const similarity = cosineSimilarity(targetEmbedding, memory.embedding);
+    return similarity > threshold;
+  });
+}
 
-      if (error) throw error;
-      if (!memories || memories.length === 0) return;
+function cosineSimilarity(a: number[], b: number[]): number {
+  const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
+  const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+  const magnitudeB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+  return dotProduct / (magnitudeA * magnitudeB);
+}
 
-      for (const memory of memories) {
-        const similarMemories = await this.getSimilarMemories(
-          memory.content,
-          roleId,
-          this.CONSOLIDATION_THRESHOLD,
-          5
-        );
+export async function consolidateMemories(roleId: string): Promise<void> {
+  try {
+    const { data: memories, error } = await supabase
+      .from('role_memories')
+      .select('*')
+      .eq('role_id', roleId)
+      .order('created_at', { ascending: false });
 
-        if (similarMemories && similarMemories.length > 1) {
-          // Combine similar memories
-          const combinedContent = similarMemories
-            .map(m => m.content)
-            .join('\n\n');
+    if (error) throw error;
 
-          // Create a new consolidated memory
-          await this.storeMemory(
-            combinedContent,
-            'consolidated',
-            (memory.metadata as unknown as MemoryMetadata).topic
-          );
+    // Convert database JSON to MemoryMetadata
+    const processedMemories = memories.map(memory => ({
+      ...memory,
+      metadata: {
+        timestamp: Date.now(),
+        ...(memory.metadata as JsonMetadata)
+      } as MemoryMetadata
+    }));
 
-          // Mark original memories as consolidated
-          const memoryIds = similarMemories.map(m => m.id);
-          const updateMetadata: JsonMetadata = {
-            consolidated: true,
-            timestamp: new Date().toISOString()
-          } as JsonMetadata;
-
-          await supabase
-            .from('role_memories')
-            .update({ metadata: updateMetadata })
-            .in('id', memoryIds);
-        }
-      }
-    } catch (error) {
-      console.error('Error during memory consolidation:', error);
+    // Check if consolidation is needed
+    if (processedMemories.length < CONSOLIDATION_THRESHOLD) {
+      return;
     }
-  }
 
-  private static async getSimilarMemories(content: string, roleId: string, threshold: number, limit: number) {
-    try {
-      const response = await fetch('https://api.llongterm.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.LLONGTERM_API_KEY}`
-        },
-        body: JSON.stringify({
-          input: content,
-          model: "text-embedding-ada-002"
-        })
-      });
+    // Group similar memories
+    const consolidatedGroups: any[][] = [];
+    const processedIds = new Set<string>();
 
-      if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+    for (const memory of processedMemories) {
+      if (processedIds.has(memory.id)) continue;
 
-      const { data } = await response.json();
-      const embedding = data[0].embedding;
+      const embedding = memory.embedding || await createEmbedding(memory.content);
+      const similarMemories = await findSimilarMemories(
+        processedMemories.filter(m => !processedIds.has(m.id)),
+        embedding,
+        SIMILARITY_THRESHOLD
+      );
 
-      const { data: memories, error } = await supabase
-        .rpc('get_similar_memories', {
-          p_embedding: embedding,
-          p_match_threshold: threshold,
-          p_match_count: limit,
-          p_role_id: roleId
+      if (similarMemories.length > 1) {
+        consolidatedGroups.push(similarMemories);
+        similarMemories.forEach(m => processedIds.add(m.id));
+      }
+    }
+
+    // Consolidate each group
+    for (const group of consolidatedGroups) {
+      const contents = group.map(m => m.content);
+      const summary = await summarizeMemories(contents);
+      const oldestTimestamp = Math.min(...group.map(m => m.metadata.timestamp));
+
+      // Create new consolidated memory
+      const { error: insertError } = await supabase
+        .from('role_memories')
+        .insert({
+          role_id: roleId,
+          content: summary,
+          metadata: {
+            timestamp: oldestTimestamp,
+            consolidated: true,
+            source_count: group.length,
+            source_ids: group.map(m => m.id)
+          },
+          embedding: await createEmbedding(summary)
         });
 
-      if (error) throw error;
-      return memories;
-    } catch (error) {
-      console.error('Error retrieving similar memories:', error);
-      throw error;
-    }
-  }
+      if (insertError) throw insertError;
 
-  private static async storeMemory(content: string, contextType: string = 'conversation', topic?: string) {
-    // Implementation moved to MemoryStorage class
-    // This is just a placeholder to maintain the interface
-    console.log('Memory storage moved to MemoryStorage class');
+      // Delete old memories
+      const { error: deleteError } = await supabase
+        .from('role_memories')
+        .delete()
+        .in('id', group.map(m => m.id));
+
+      if (deleteError) throw deleteError;
+    }
+  } catch (error) {
+    console.error('Error consolidating memories:', error);
+    throw error;
   }
 }

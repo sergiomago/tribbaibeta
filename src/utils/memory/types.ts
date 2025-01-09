@@ -1,23 +1,19 @@
-import { Json } from "@/integrations/supabase/types";
+export interface MemoryMetadata {
+  timestamp: number;
+  source?: string;
+  context?: string;
+  relevance?: number;
+  [key: string]: any; // Allow additional properties for flexibility
+}
+
+export type JsonMetadata = {
+  [key: string]: any;
+}
 
 export interface Memory {
+  id: string;
   content: string;
   metadata: MemoryMetadata;
+  embedding?: number[];
+  relevanceScore?: number;
 }
-
-export interface MemoryMetadata {
-  topic?: string;
-  timestamp: string;
-  thread_id?: string;
-  expires_at?: string;
-  importance_score?: number;
-  consolidated?: boolean;
-  interaction_count?: number;
-  context_type?: string;
-  relevance_score?: number;
-  last_accessed?: string;
-  context_length?: number;
-}
-
-// Helper type for Supabase compatibility
-export type JsonMetadata = Record<keyof MemoryMetadata, Json>;
