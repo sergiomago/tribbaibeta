@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { AppSidebar } from "@/components/AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { ChatLayout } from "@/components/chat/ChatLayout";
 
 const Index = () => {
   const { toast } = useToast();
@@ -95,54 +96,8 @@ const Index = () => {
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
         <AppSidebar />
-        <main className="flex-1 p-8">
-          <div className="container mx-auto">
-            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  Your Roles
-                </h2>
-                <p className="mt-2 text-gray-600 dark:text-gray-300">
-                  Create and manage your AI assistants
-                </p>
-              </div>
-              <Button
-                onClick={() => setShowForm(!showForm)}
-                className="bg-primary hover:bg-primary/90 text-white"
-              >
-                <PlusCircle className="mr-2 h-4 w-4" />
-                New Role
-              </Button>
-            </div>
-
-            <div className="mb-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
-                <Input
-                  type="text"
-                  placeholder="Search roles..."
-                  className="pl-10"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-8 lg:grid-cols-[400px,1fr]">
-              {showForm && (
-                <div className="glass p-6 rounded-xl border shadow-sm animate-in fade-in slide-in-from-left duration-500">
-                  <h3 className="text-xl font-semibold mb-4">Create New Role</h3>
-                  <RoleForm onSubmit={handleSubmit} isCreating={isCreating} />
-                </div>
-              )}
-
-              <div className={showForm ? "lg:col-start-2" : "lg:col-span-2"}>
-                <div className="glass rounded-xl border shadow-sm p-6">
-                  <RoleList roles={filteredRoles} isLoading={isLoadingRoles} />
-                </div>
-              </div>
-            </div>
-          </div>
+        <main className="flex-1">
+          <ChatLayout />
         </main>
       </div>
     </SidebarProvider>
