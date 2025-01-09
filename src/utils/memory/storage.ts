@@ -70,11 +70,13 @@ export class MemoryStorage {
     for (const id of memoryIds) {
       const { data: memory, error: fetchError } = await supabase
         .from('role_memories')
-        .select('metadata')
+        .select('content, metadata')
         .eq('id', id)
         .single();
 
       if (fetchError) throw fetchError;
+
+      if (!memory) continue;
 
       const currentMetadata = memory.metadata as MemoryMetadata;
       const newMetadata: MemoryMetadata = {
