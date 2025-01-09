@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { MemoryMetadata } from "./types";
+import { MemoryScoring } from "./scoring";
 
 export class MemoryMaintenance {
   private static readonly MIN_IMPORTANCE_SCORE = 0.3;
@@ -19,7 +21,7 @@ export class MemoryMaintenance {
       // Extend TTL for important memories
       if (importantMemories && importantMemories.length > 0) {
         for (const memory of importantMemories) {
-          const currentMetadata = memory.metadata as MemoryMetadata;
+          const currentMetadata = memory.metadata as unknown as MemoryMetadata;
           const newMetadata: MemoryMetadata = {
             ...currentMetadata,
             expires_at: this.getExpirationDate(),

@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata } from "./types";
+import { MemoryMetadata, JsonMetadata } from "./types";
 import { MemoryScoring } from "./scoring";
 
 export class MemoryStorage {
@@ -26,14 +26,14 @@ export class MemoryStorage {
       const embedding = data[0].embedding;
 
       const metadata: MemoryMetadata = {
-        thread_id: roleId,
         timestamp: new Date().toISOString(),
         topic,
         context_length: content.length,
         expires_at: this.getExpirationDate(),
         interaction_count: 1,
         importance_score: 0.5,
-        consolidated: false
+        consolidated: false,
+        context_type: contextType
       };
 
       const { error } = await supabase
@@ -43,7 +43,7 @@ export class MemoryStorage {
           content,
           embedding,
           context_type: contextType,
-          metadata
+          metadata: metadata as unknown as JsonMetadata
         });
 
       if (error) throw error;
@@ -78,7 +78,7 @@ export class MemoryStorage {
 
       if (!memory) continue;
 
-      const currentMetadata = memory.metadata as MemoryMetadata;
+      const currentMetadata = memory.metadata as unknown as MemoryMetadata;
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
         interaction_count: (currentMetadata.interaction_count || 0) + 1,
@@ -91,7 +91,7 @@ export class MemoryStorage {
 
       const { error: updateError } = await supabase
         .from('role_memories')
-        .update({ metadata: newMetadata })
+        .update({ metadata: newMetadata as unknown as JsonMetadata })
         .eq('id', id);
 
       if (updateError) throw updateError;
