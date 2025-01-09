@@ -121,6 +121,11 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
             onRemove={() => removeRoleFromThread.mutate(role.id)}
           />
         ))}
+        {threadRoles?.length === 0 && (
+          <div className="text-sm text-muted-foreground">
+            No roles assigned. Add roles to start chatting.
+          </div>
+        )}
       </div>
     </div>
   );
