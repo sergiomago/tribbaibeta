@@ -25,7 +25,7 @@ export const RoleList = ({ roles, isLoading }: RoleListProps) => {
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {roles.map((role) => (
         <RoleCard key={role.id} role={role} />
       ))}
