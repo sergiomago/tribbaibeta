@@ -148,31 +148,46 @@ export type Database = {
       }
       role_memories: {
         Row: {
+          access_count: number | null
           content: string
+          context_relevance: number | null
           context_type: string
           created_at: string
           embedding: string | null
           id: string
+          last_accessed: string | null
           metadata: Json | null
+          relevance_score: number | null
           role_id: string | null
+          topic_vector: string | null
         }
         Insert: {
+          access_count?: number | null
           content: string
+          context_relevance?: number | null
           context_type: string
           created_at?: string
           embedding?: string | null
           id?: string
+          last_accessed?: string | null
           metadata?: Json | null
+          relevance_score?: number | null
           role_id?: string | null
+          topic_vector?: string | null
         }
         Update: {
+          access_count?: number | null
           content?: string
+          context_relevance?: number | null
           context_type?: string
           created_at?: string
           embedding?: string | null
           id?: string
+          last_accessed?: string | null
           metadata?: Json | null
+          relevance_score?: number | null
           role_id?: string | null
+          topic_vector?: string | null
         }
         Relationships: [
           {
