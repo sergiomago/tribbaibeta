@@ -40,17 +40,23 @@ serve(async (req) => {
       throw new Error('Thread not found');
     }
 
-    // Create or get OpenAI thread with v2 format
+    // Create or get OpenAI thread with enhanced v2 configuration
     let openaiThreadId = thread.openai_thread_id;
     if (!openaiThreadId) {
-      const openaiThread = await openai.beta.threads.create({
-        tools: [{ type: "code_interpreter" }],
-        tool_resources: {
-          code_interpreter: {
-            file_ids: []
-          }
+      console.log('Creating new OpenAI thread with v2 configuration');
+      const threadConfig = {
+        tools: [
+          { type: "code_interpreter" },
+          { type: "retrieval" }
+        ],
+        metadata: {
+          thread_id: threadId
         }
-      });
+      };
+      
+      const openaiThread = await openai.beta.threads.create(threadConfig);
+      console.log('Created OpenAI thread:', openaiThread);
+      
       openaiThreadId = openaiThread.id;
       await supabase
         .from('threads')
@@ -59,11 +65,20 @@ serve(async (req) => {
     }
 
     // Add user message to OpenAI thread with v2 format
-    const openaiMessage = await openai.beta.threads.messages.create(openaiThreadId, {
+    const messageConfig = {
       role: 'user',
       content,
-      attachments: [], // v2 format uses attachments instead of file_ids
-    });
+      file_ids: [], // Keeping for backward compatibility
+      metadata: {
+        source_message_id: threadId
+      }
+    };
+    
+    console.log('Creating message with config:', messageConfig);
+    const openaiMessage = await openai.beta.threads.messages.create(
+      openaiThreadId,
+      messageConfig
+    );
 
     // Save user message to database
     const { data: userMessage } = await supabase
