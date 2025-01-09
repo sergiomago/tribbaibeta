@@ -38,11 +38,20 @@ export function RoleSelectionDialog({
 
       const assignedRoleIds = assignedRoles?.map(tr => tr.role_id) || [];
 
-      // Then get all roles that aren't in that list
+      // If there are no assigned roles, just return all roles
+      if (assignedRoleIds.length === 0) {
+        const { data, error } = await supabase
+          .from("roles")
+          .select("*");
+        if (error) throw error;
+        return data;
+      }
+
+      // Otherwise, get all roles that aren't in the assigned list
       const { data, error } = await supabase
         .from("roles")
         .select("*")
-        .not("id", "in", `(${assignedRoleIds.length > 0 ? assignedRoleIds.join(",") : "null"})`);
+        .not("id", "in", `(${assignedRoleIds.join(",")})`);
 
       if (error) throw error;
       return data;
