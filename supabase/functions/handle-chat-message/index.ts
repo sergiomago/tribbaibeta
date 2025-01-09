@@ -14,7 +14,6 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize OpenAI without defaultHeaders
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
@@ -24,10 +23,9 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { threadId, content, taggedRoleId, conversationChain } = await req.json();
-    console.log('Request payload:', { threadId, content, taggedRoleId, conversationChain });
+    console.log('Processing message:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
-      console.error('Missing required fields:', { threadId, content });
       throw new Error('Missing required fields');
     }
 
@@ -38,102 +36,87 @@ serve(async (req) => {
       .eq('id', threadId)
       .single();
 
-    if (threadError) {
-      console.error('Error fetching thread:', threadError);
-      throw new Error(`Failed to fetch thread: ${threadError.message}`);
-    }
+    if (threadError) throw threadError;
+    if (!thread) throw new Error('Thread not found');
 
-    if (!thread) {
-      console.error('Thread not found:', threadId);
-      throw new Error('Thread not found');
-    }
-
-    // Create or get OpenAI thread with explicit headers
-    let openaiThreadId = thread.openai_thread_id;
-    if (!openaiThreadId) {
-      try {
-        console.log('Creating new OpenAI thread');
-        const openaiThread = await openai.beta.threads.create({
-          metadata: { thread_id: threadId }
-        }, {
-          headers: {
-            'OpenAI-Beta': 'assistants=v2'
-          }
-        });
-        
-        openaiThreadId = openaiThread.id;
-        const { error: updateError } = await supabase
-          .from('threads')
-          .update({ openai_thread_id: openaiThreadId })
-          .eq('id', threadId);
-
-        if (updateError) {
-          console.error('Error updating thread with OpenAI ID:', updateError);
-          throw new Error(`Failed to update thread with OpenAI ID: ${updateError.message}`);
-        }
-      } catch (error) {
-        console.error('Error creating OpenAI thread:', error);
-        throw new Error(`Failed to create OpenAI thread: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      }
-    }
-
-    // Add user message to OpenAI thread with explicit headers
-    let openaiMessage;
-    try {
-      console.log('Creating OpenAI message');
-      openaiMessage = await openai.beta.threads.messages.create(
-        openaiThreadId,
-        {
-          role: 'user',
-          content,
-          metadata: { source_message_id: threadId }
-        },
-        {
-          headers: {
-            'OpenAI-Beta': 'assistants=v2'
-          }
-        }
-      );
-    } catch (error) {
-      console.error('Error creating OpenAI message:', error);
-      throw new Error(`Failed to create OpenAI message: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-
-    // Save user message to database
+    // Store the message and get its ID
     const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
-        content,
+        content: content,
         tagged_role_id: taggedRoleId || null,
-        openai_message_id: openaiMessage.id
       })
       .select()
       .single();
 
-    if (messageError) {
-      console.error('Error saving user message:', messageError);
-      throw new Error(`Failed to save user message: ${messageError.message}`);
-    }
+    if (messageError) throw messageError;
 
-    // Check if we have any roles to process
-    if (!conversationChain || conversationChain.length === 0) {
-      console.error('No roles assigned to handle the message');
-      return new Response(
-        JSON.stringify({ 
-          error: 'No roles assigned to this thread. Please add at least one role before sending messages.' 
-        }), 
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    // Create embedding for memory storage
+    if (taggedRoleId) {
+      try {
+        console.log('Creating embedding for memory:', content);
+        const { data: embedding, error: embeddingError } = await supabase.functions.invoke(
+          'create-embedding',
+          {
+            body: { content }
+          }
+        );
+
+        if (embeddingError) throw embeddingError;
+
+        // Store in role_memories with embedding
+        const { error: memoryError } = await supabase
+          .from('role_memories')
+          .insert({
+            role_id: taggedRoleId,
+            content,
+            embedding: embedding.vector,
+            context_type: 'conversation',
+            metadata: {
+              thread_id: threadId,
+              message_id: userMessage.id,
+              timestamp: new Date().toISOString()
+            }
+          });
+
+        if (memoryError) {
+          console.error('Error storing memory:', memoryError);
+          throw memoryError;
         }
-      );
+
+        console.log('Successfully stored memory with embedding');
+      } catch (error) {
+        console.error('Error in memory storage:', error);
+        // Continue execution even if memory storage fails
+      }
     }
 
-    // Generate a new chain ID for this conversation
-    const chainId = crypto.randomUUID();
-    
-    // Process each role in the chain
+    // Process the message with OpenAI
+    let openaiThreadId = thread.openai_thread_id;
+    if (!openaiThreadId) {
+      const openaiThread = await openai.beta.threads.create({
+        metadata: { thread_id: threadId }
+      });
+      openaiThreadId = openaiThread.id;
+      
+      await supabase
+        .from('threads')
+        .update({ openai_thread_id: openaiThreadId })
+        .eq('id', threadId);
+    }
+
+    // Add message to OpenAI thread
+    await openai.beta.threads.messages.create(
+      openaiThreadId,
+      {
+        role: 'user',
+        content,
+        metadata: { source_message_id: threadId }
+      }
+    );
+
+    // Process responses for each role in the conversation chain
     for (const { role_id, chain_order } of conversationChain) {
       try {
         // Get role details
@@ -143,103 +126,81 @@ serve(async (req) => {
           .eq('id', role_id)
           .single();
 
-        if (roleError) {
-          console.error('Error fetching role:', roleError);
+        if (roleError) throw roleError;
+        if (!role?.assistant_id) continue;
+
+        // Retrieve relevant memories for context
+        const { data: relevantMemories } = await supabase.rpc(
+          'get_similar_memories',
+          {
+            p_embedding: embedding.vector,
+            p_match_threshold: 0.7,
+            p_match_count: 5,
+            p_role_id: role_id
+          }
+        );
+
+        let memoryContext = '';
+        if (relevantMemories && relevantMemories.length > 0) {
+          memoryContext = 'Relevant context from my memory:\n' + 
+            relevantMemories.map(m => m.content).join('\n');
+        }
+
+        // Run assistant with memory context
+        const run = await openai.beta.threads.runs.create(
+          openaiThreadId,
+          {
+            assistant_id: role.assistant_id,
+            instructions: `${role.instructions}\n\n${memoryContext}`
+          }
+        );
+
+        // Wait for completion
+        let runStatus = await openai.beta.threads.runs.retrieve(
+          openaiThreadId,
+          run.id
+        );
+
+        while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          runStatus = await openai.beta.threads.runs.retrieve(
+            openaiThreadId,
+            run.id
+          );
+        }
+
+        if (runStatus.status !== 'completed') {
+          console.error('Assistant run failed:', runStatus);
           continue;
         }
 
-        if (!role?.assistant_id) {
-          console.error('Role assistant not found for role:', role_id);
-          continue;
-        }
-
-        // Run assistant with explicit headers
-        try {
-          console.log('Running assistant for role:', role.name);
-          const run = await openai.beta.threads.runs.create(
-            openaiThreadId,
-            {
-              assistant_id: role.assistant_id,
-              instructions: role.instructions
-            },
-            {
-              headers: {
-                'OpenAI-Beta': 'assistants=v2'
-              }
-            }
-          );
-
-          // Wait for completion
-          let runStatus = await openai.beta.threads.runs.retrieve(
-            openaiThreadId,
-            run.id,
-            {
-              headers: {
-                'OpenAI-Beta': 'assistants=v2'
-              }
-            }
-          );
-
-          while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
-            console.log(`Run status for ${role.name}:`, runStatus.status);
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            runStatus = await openai.beta.threads.runs.retrieve(
-              openaiThreadId,
-              run.id,
-              {
-                headers: {
-                  'OpenAI-Beta': 'assistants=v2'
-                }
-              }
-            );
+        // Get assistant's response
+        const messages = await openai.beta.threads.messages.list(
+          openaiThreadId,
+          {
+            order: 'desc',
+            limit: 1
           }
+        );
+        
+        const lastMessage = messages.data[0];
+        const responseContent = lastMessage.content[0].text.value;
 
-          if (runStatus.status !== 'completed') {
-            console.error('Assistant run failed:', runStatus);
-            continue;
-          }
+        // Save assistant's response
+        await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role_id,
+            content: responseContent,
+            chain_id: crypto.randomUUID(),
+            chain_order: chain_order,
+            reply_to_message_id: userMessage.id,
+            openai_message_id: lastMessage.id,
+          });
 
-          // Get assistant's response with explicit headers
-          const messages = await openai.beta.threads.messages.list(
-            openaiThreadId,
-            {
-              order: 'desc',
-              limit: 1
-            },
-            {
-              headers: {
-                'OpenAI-Beta': 'assistants=v2'
-              }
-            }
-          );
-          
-          const lastMessage = messages.data[0];
-          const responseContent = lastMessage.content[0].text.value;
-
-          // Save assistant's response
-          const { error: responseError } = await supabase
-            .from('messages')
-            .insert({
-              thread_id: threadId,
-              role_id: role_id,
-              content: responseContent,
-              chain_id: chainId,
-              chain_order: chain_order,
-              reply_to_message_id: userMessage.id,
-              openai_message_id: lastMessage.id,
-            });
-
-          if (responseError) {
-            console.error('Error saving assistant response:', responseError);
-            continue;
-          }
-
-        } catch (error) {
-          console.error('Error processing role response:', error);
-          continue;
-        }
       } catch (error) {
-        console.error('Error in role processing loop:', error);
+        console.error('Error processing role response:', error);
         continue;
       }
     }
@@ -249,12 +210,14 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error('Error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'An unknown error occurred',
-      details: error instanceof Error ? error.stack : undefined
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'An unknown error occurred',
+        details: error instanceof Error ? error.stack : undefined
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
