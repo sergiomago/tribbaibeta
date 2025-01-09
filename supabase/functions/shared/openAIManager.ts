@@ -23,6 +23,7 @@ export class OpenAIManager {
     content: string,
     metadata: Record<string, unknown>
   ) {
+    console.log('Adding message to thread:', { threadId, content });
     return await this.openai.beta.threads.messages.create(threadId, {
       role: 'user',
       content,
@@ -35,10 +36,14 @@ export class OpenAIManager {
       throw new Error('No assistant ID configured for role');
     }
 
+    console.log('Running assistant:', { threadId, roleId: role.id, assistantId: role.assistant_id });
+    
     const run = await this.openai.beta.threads.runs.create(threadId, {
       assistant_id: role.assistant_id,
       instructions: `${role.instructions}\n\n${memoryContext}`
     });
+
+    console.log('Run created:', run.id);
 
     let runStatus = await this.openai.beta.threads.runs.retrieve(
       threadId,
@@ -46,6 +51,7 @@ export class OpenAIManager {
     );
 
     while (!['completed', 'failed', 'cancelled', 'expired'].includes(runStatus.status)) {
+      console.log('Run status:', runStatus.status);
       await new Promise(resolve => setTimeout(resolve, 1000));
       runStatus = await this.openai.beta.threads.runs.retrieve(
         threadId,
@@ -54,8 +60,11 @@ export class OpenAIManager {
     }
 
     if (runStatus.status !== 'completed') {
+      console.error('Run failed:', runStatus);
       throw new Error(`Assistant run failed with status: ${runStatus.status}`);
     }
+
+    console.log('Run completed, retrieving messages');
 
     const messages = await this.openai.beta.threads.messages.list(
       threadId,
