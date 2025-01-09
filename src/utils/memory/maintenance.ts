@@ -1,6 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata } from "./types";
-import { MemoryScoring } from "./scoring";
 
 export class MemoryMaintenance {
   private static readonly MIN_IMPORTANCE_SCORE = 0.3;

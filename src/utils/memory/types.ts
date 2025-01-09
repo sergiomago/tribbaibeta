@@ -1,19 +1,15 @@
-import { Json } from "@/integrations/supabase/types";
-
-export interface MemoryMetadata extends Record<string, Json> {
-  thread_id: string;
-  timestamp: string;
-  topic?: string;
-  relevance_score?: number;
-  interaction_count?: number;
-  last_accessed?: string;
-  context_length?: number;
-  expires_at?: string;
-  consolidated?: boolean;
-  importance_score?: number;
-}
-
 export interface Memory {
   content: string;
   metadata: MemoryMetadata;
+}
+
+export interface MemoryMetadata {
+  topic?: string;
+  timestamp: string;
+  expires_at?: string;
+  importance_score?: number;
+  consolidated?: boolean;
+  interaction_count?: number;
+  context_type?: string;
+  relevance_score?: number;
 }
