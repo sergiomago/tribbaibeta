@@ -29,7 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const roleFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
   alias: z.string().optional(),
-  tag: z.string().optional(),
+  tag: z.string().min(1, "Tag is required"),
   description: z.string().optional(),
   instructions: z.string().min(1, "Instructions are required"),
   model: z.enum(["gpt-4o", "gpt-4o-mini"]),
@@ -84,7 +84,7 @@ const Index = () => {
         const roleData = {
           name: values.name,
           alias: values.alias || null,
-          tag: values.tag || null,
+          tag: values.tag,
           description: values.description || null,
           instructions: values.instructions,
           model: values.model,
@@ -162,9 +162,9 @@ const Index = () => {
                 name="tag"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Tag (Optional)</FormLabel>
+                    <FormLabel>Tag</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter tag" {...field} />
+                      <Input placeholder="Enter tag (e.g., @analyst)" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -274,11 +274,9 @@ const Index = () => {
                       Alias: {role.alias}
                     </p>
                   )}
-                  {role.tag && (
-                    <span className="inline-block px-2 py-1 text-xs bg-primary/10 text-primary rounded-full mt-2">
-                      {role.tag}
-                    </span>
-                  )}
+                  <span className="inline-block px-2 py-1 text-xs bg-primary/10 text-primary rounded-full mt-2">
+                    {role.tag}
+                  </span>
                   {role.description && (
                     <p className="mt-2 text-sm text-muted-foreground">
                       {role.description}
