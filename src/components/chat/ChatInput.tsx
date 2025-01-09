@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { createRoleManager } from "@/utils/RoleManager";
 
 interface ChatInputProps {
   threadId: string;
@@ -19,11 +20,19 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
 
     setIsSending(true);
     try {
+      const roleManager = createRoleManager(threadId);
+      const taggedRoleId = extractTaggedRoleId(message);
+      
+      // Get the conversation chain based on tagged role
+      const chain = await roleManager.getConversationChain(taggedRoleId);
+      console.log("Conversation chain:", chain);
+
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId,
           content: message,
-          taggedRoleId: extractTaggedRoleId(message),
+          taggedRoleId,
+          conversationChain: chain
         },
       });
 
