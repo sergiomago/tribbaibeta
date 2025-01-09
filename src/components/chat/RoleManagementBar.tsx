@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { X, Plus } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
+import { RoleSelectionDialog } from "./RoleSelectionDialog";
 
 interface RoleTagProps {
   role: Tables<"roles">;
@@ -21,25 +22,18 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: roles } = useQuery({
-    queryKey: ["roles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("roles").select("*");
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
       const { data, error } = await supabase
         .from("thread_roles")
-        .select("role_id")
+        .select(`
+          role:roles (*)
+        `)
         .eq("thread_id", threadId);
       if (error) throw error;
-      return data.map(tr => tr.role_id);
+      return data.map(tr => tr.role);
     },
     enabled: !!threadId,
   });
@@ -50,19 +44,17 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         throw new Error("No thread selected");
       }
       
-      // Check if role is already assigned
-      if (threadRoles?.includes(roleId)) {
-        throw new Error("Role is already assigned to this thread");
-      }
-
-      const { error } = await supabase.from("thread_roles").insert({
-        thread_id: threadId,
-        role_id: roleId,
-      });
+      const { error } = await supabase
+        .from("thread_roles")
+        .insert({
+          thread_id: threadId,
+          role_id: roleId,
+        });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
       toast({
         title: "Success",
         description: "Role added to thread",
@@ -90,7 +82,8 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
       toast({
         title: "Success",
         description: "Role removed from thread",
@@ -105,13 +98,6 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     },
   });
 
-  const handleAddRole = async () => {
-    // This will be replaced with a proper role selection dialog
-    if (roles && roles.length > 0) {
-      addRoleToThread.mutate(roles[0].id);
-    }
-  };
-
   return (
     <div className="border-b p-4 flex-shrink-0">
       <div className="flex items-center justify-between mb-2">
@@ -121,18 +107,14 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Chat title..."
         />
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleAddRole}
+        <RoleSelectionDialog
+          threadId={threadId}
+          onRoleSelected={(roleId) => addRoleToThread.mutate(roleId)}
           disabled={!threadId}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Role
-        </Button>
+        />
       </div>
       <div className="flex gap-2 flex-wrap">
-        {roles?.map((role) => (
+        {threadRoles?.map((role) => (
           <RoleTag
             key={role.id}
             role={role}
