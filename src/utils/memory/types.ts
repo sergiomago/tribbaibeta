@@ -23,7 +23,7 @@ export interface Memory {
   relevanceScore?: number;
 }
 
-export type DatabaseMemory = {
+export interface DatabaseMemory {
   id: string;
   role_id: string;
   content: string;
@@ -37,3 +37,14 @@ export type DatabaseMemory = {
   context_relevance?: number;
   topic_vector?: string;
 }
+
+export type JsonMetadata = Json & MemoryMetadata;
+
+// Helper functions for type conversion
+export const toJsonMetadata = (metadata: MemoryMetadata): Json => {
+  return metadata as Json;
+};
+
+export const fromJsonMetadata = (json: Json): MemoryMetadata => {
+  return json as MemoryMetadata;
+};

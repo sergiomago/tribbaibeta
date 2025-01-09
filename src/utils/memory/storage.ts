@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata, Memory, DatabaseMemory } from "./types";
+import { MemoryMetadata, Memory, toJsonMetadata, fromJsonMetadata } from "./types";
 
 export class MemoryStorage {
   private static readonly BATCH_SIZE = 50;
@@ -39,7 +39,7 @@ export class MemoryStorage {
           content,
           embedding: JSON.stringify(embedding),
           context_type: contextType,
-          metadata
+          metadata: toJsonMetadata(metadata)
         });
 
       if (error) throw error;
@@ -72,7 +72,7 @@ export class MemoryStorage {
       if (fetchError) throw fetchError;
       if (!memory) continue;
 
-      const currentMetadata = memory.metadata as MemoryMetadata;
+      const currentMetadata = fromJsonMetadata(memory.metadata);
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
         timestamp: currentMetadata.timestamp || Date.now(),
@@ -82,7 +82,7 @@ export class MemoryStorage {
 
       const { error: updateError } = await supabase
         .from('role_memories')
-        .update({ metadata: newMetadata })
+        .update({ metadata: toJsonMetadata(newMetadata) })
         .eq('id', id);
 
       if (updateError) throw updateError;

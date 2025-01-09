@@ -1,4 +1,4 @@
-import * as MemoryMaintenance from "./memory/maintenance";
+import * as maintenance from "./memory/maintenance";
 import { consolidateMemories } from "./memory/consolidation";
 import { MemoryStorage } from "./memory/storage";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,18 +21,18 @@ export class LlongtermManager {
     // Run initial cleanup
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    await MemoryMaintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
+    await maintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
     await consolidateMemories(this.roleId);
     
     // Schedule periodic maintenance
     setInterval(async () => {
-      await MemoryMaintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
+      await maintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
       await consolidateMemories(this.roleId);
     }, 24 * 60 * 60 * 1000); // Run daily
   }
 
-  async storeMemory(content: string, contextType: string = 'conversation', topic?: string) {
-    await MemoryStorage.storeMemory(this.roleId, content, contextType, topic);
+  async storeMemory(content: string, contextType: string = 'conversation') {
+    await MemoryStorage.storeMemory(this.roleId, content, contextType);
     // Clear cache when new memory is stored
     this.memoryCache.clear();
   }

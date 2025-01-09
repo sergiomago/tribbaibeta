@@ -1,4 +1,4 @@
-import { MemoryMetadata, JsonMetadata } from './types';
+import { MemoryMetadata, toJsonMetadata } from './types';
 import { supabase } from '@/integrations/supabase/client';
 
 export async function updateMemoryMetadata(
@@ -9,7 +9,7 @@ export async function updateMemoryMetadata(
     const { error } = await supabase
       .from('role_memories')
       .update({
-        metadata: metadata as JsonMetadata,
+        metadata: toJsonMetadata(metadata),
         updated_at: new Date().toISOString()
       })
       .eq('id', memoryId);
