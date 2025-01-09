@@ -15,8 +15,8 @@ interface MemoryMetadata extends Record<string, Json> {
 export class LlongtermManager {
   private roleId: string;
   private threadId: string;
-  private readonly TTL_DAYS = 30; // Default memory expiration
-  private readonly MAX_CONTEXT_LENGTH = 4000; // Maximum context length
+  private readonly TTL_DAYS = 30;
+  private readonly MAX_CONTEXT_LENGTH = 4000;
   private readonly MIN_RELEVANCE_SCORE = 0.6;
 
   constructor(roleId: string, threadId: string) {
@@ -25,7 +25,6 @@ export class LlongtermManager {
   }
 
   private calculateContextWindow(content: string): number {
-    // Dynamically adjust context window based on content length
     const baseLength = 5;
     const contentLength = content.length;
     if (contentLength > this.MAX_CONTEXT_LENGTH) {
@@ -65,7 +64,6 @@ export class LlongtermManager {
       const { data } = await response.json();
       const embedding = data[0].embedding;
 
-      // Enhanced metadata
       const metadata: MemoryMetadata = {
         thread_id: this.threadId,
         timestamp: new Date().toISOString(),
@@ -75,7 +73,6 @@ export class LlongtermManager {
         interaction_count: 1
       };
 
-      // Store in Supabase with enhanced metadata
       const { error } = await supabase
         .from('role_memories')
         .insert({
@@ -98,10 +95,8 @@ export class LlongtermManager {
     try {
       console.log('Retrieving similar memories for content:', content);
       
-      // Dynamic context window
       const adjustedMatchCount = this.calculateContextWindow(content);
       
-      // Get embedding from Llongterm
       const response = await fetch('https://api.llongterm.com/v1/embeddings', {
         method: 'POST',
         headers: {
@@ -121,7 +116,6 @@ export class LlongtermManager {
       const { data } = await response.json();
       const embedding = data[0].embedding;
 
-      // Query similar memories with relevance threshold
       const { data: memories, error } = await supabase
         .rpc('get_similar_memories', {
           p_embedding: embedding,
@@ -132,10 +126,8 @@ export class LlongtermManager {
 
       if (error) throw error;
 
-      // Update interaction counts for retrieved memories
       if (memories && memories.length > 0) {
-        const memoryIds = memories.map(m => m.id);
-        await this.updateMemoryInteractions(memoryIds);
+        await this.updateMemoryInteractions(memories.map(m => m.id));
       }
 
       console.log(`Retrieved ${memories?.length || 0} similar memories`);
@@ -150,9 +142,9 @@ export class LlongtermManager {
     try {
       const { error } = await supabase
         .from('role_memories')
-        .update({ 
+        .update({
           metadata: {
-            interaction_count: `(COALESCE((metadata->>'interaction_count')::int, 0) + 1)`,
+            interaction_count: '(COALESCE((metadata->>"interaction_count")::int, 0) + 1)',
             last_accessed: new Date().toISOString()
           }
         })
