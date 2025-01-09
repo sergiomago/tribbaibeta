@@ -18,6 +18,7 @@ export class MemoryConsolidation {
       for (const memory of memories) {
         const similarMemories = await this.getSimilarMemories(
           memory.content,
+          roleId,
           this.CONSOLIDATION_THRESHOLD,
           5
         );
@@ -53,7 +54,7 @@ export class MemoryConsolidation {
     }
   }
 
-  private static async getSimilarMemories(content: string, threshold: number, limit: number) {
+  private static async getSimilarMemories(content: string, roleId: string, threshold: number, limit: number) {
     try {
       const response = await fetch('https://api.llongterm.com/v1/embeddings', {
         method: 'POST',
@@ -76,7 +77,8 @@ export class MemoryConsolidation {
         .rpc('get_similar_memories', {
           p_embedding: embedding,
           p_match_threshold: threshold,
-          p_match_count: limit
+          p_match_count: limit,
+          p_role_id: roleId
         });
 
       if (error) throw error;

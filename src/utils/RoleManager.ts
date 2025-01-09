@@ -51,7 +51,7 @@ export class RoleManager {
 
   async getRoleMemories(roleId: string, content: string) {
     const llongtermManager = createLlongtermManager(roleId, this.threadId);
-    return await llongtermManager.getSimilarMemories(content);
+    return await llongtermManager.getMemories(content);
   }
 }
 

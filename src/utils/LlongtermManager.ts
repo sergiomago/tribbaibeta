@@ -28,6 +28,21 @@ export class LlongtermManager {
     await MemoryStorage.storeMemory(this.roleId, content, contextType, topic);
   }
 
+  async getMemories(content: string) {
+    const { data: memories, error } = await supabase.rpc(
+      'get_similar_memories',
+      {
+        p_embedding: content,
+        p_match_threshold: 0.7,
+        p_match_count: 5,
+        p_role_id: this.roleId
+      }
+    );
+
+    if (error) throw error;
+    return memories;
+  }
+
   async updateMemoryInteractions(memoryIds: string[]) {
     await MemoryStorage.updateMemoryInteractions(memoryIds);
   }
