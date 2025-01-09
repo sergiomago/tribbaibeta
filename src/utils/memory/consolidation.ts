@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata } from "./types";
+import { MemoryMetadata, JsonMetadata } from "./types";
 
 export class MemoryConsolidation {
   private static readonly CONSOLIDATION_THRESHOLD = 0.85;
@@ -33,15 +33,15 @@ export class MemoryConsolidation {
           await this.storeMemory(
             combinedContent,
             'consolidated',
-            (memory.metadata as MemoryMetadata).topic
+            (memory.metadata as unknown as MemoryMetadata).topic
           );
 
           // Mark original memories as consolidated
           const memoryIds = similarMemories.map(m => m.id);
-          const updateMetadata: Partial<MemoryMetadata> = {
+          const updateMetadata: JsonMetadata = {
             consolidated: true,
             timestamp: new Date().toISOString()
-          };
+          } as JsonMetadata;
 
           await supabase
             .from('role_memories')

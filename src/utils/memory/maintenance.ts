@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata } from "./types";
+import { MemoryMetadata, JsonMetadata } from "./types";
 import { MemoryScoring } from "./scoring";
 
 export class MemoryMaintenance {
@@ -22,14 +22,14 @@ export class MemoryMaintenance {
       if (importantMemories && importantMemories.length > 0) {
         for (const memory of importantMemories) {
           const currentMetadata = memory.metadata as unknown as MemoryMetadata;
-          const newMetadata: MemoryMetadata = {
+          const newMetadata: JsonMetadata = {
             ...currentMetadata,
             expires_at: this.getExpirationDate(),
             importance_score: MemoryScoring.calculateImportanceScore({
               content: memory.content,
               metadata: currentMetadata
             })
-          };
+          } as JsonMetadata;
 
           await supabase
             .from('role_memories')
