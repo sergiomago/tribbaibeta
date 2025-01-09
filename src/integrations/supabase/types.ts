@@ -15,7 +15,10 @@ export type Database = {
           created_at: string
           id: string
           openai_message_id: string | null
+          reply_to_message_id: string | null
+          response_order: number | null
           role_id: string | null
+          tagged_role_id: string | null
           thread_id: string
         }
         Insert: {
@@ -23,7 +26,10 @@ export type Database = {
           created_at?: string
           id?: string
           openai_message_id?: string | null
+          reply_to_message_id?: string | null
+          response_order?: number | null
           role_id?: string | null
+          tagged_role_id?: string | null
           thread_id: string
         }
         Update: {
@@ -31,13 +37,30 @@ export type Database = {
           created_at?: string
           id?: string
           openai_message_id?: string | null
+          reply_to_message_id?: string | null
+          response_order?: number | null
           role_id?: string | null
+          tagged_role_id?: string | null
           thread_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "messages_role_id_fkey"
             columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_tagged_role_id_fkey"
+            columns: ["tagged_role_id"]
             isOneToOne: false
             referencedRelation: "roles"
             referencedColumns: ["id"]
@@ -182,7 +205,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_next_responding_role: {
+        Args: {
+          thread_id: string
+          current_order: number
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
