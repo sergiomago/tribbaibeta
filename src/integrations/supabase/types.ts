@@ -9,6 +9,48 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          openai_message_id: string | null
+          role_id: string | null
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          openai_message_id?: string | null
+          role_id?: string | null
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          openai_message_id?: string | null
+          role_id?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -30,6 +72,108 @@ export type Database = {
           id?: string
           updated_at?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      roles: {
+        Row: {
+          alias: string | null
+          assistant_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          instructions: string
+          model: string
+          name: string
+          tag: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          alias?: string | null
+          assistant_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          instructions: string
+          model?: string
+          name: string
+          tag?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          alias?: string | null
+          assistant_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          instructions?: string
+          model?: string
+          name?: string
+          tag?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      thread_roles: {
+        Row: {
+          created_at: string
+          role_id: string
+          thread_id: string
+        }
+        Insert: {
+          created_at?: string
+          role_id: string
+          thread_id: string
+        }
+        Update: {
+          created_at?: string
+          role_id?: string
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_roles_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      threads: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          openai_thread_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          openai_thread_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          openai_thread_id?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
