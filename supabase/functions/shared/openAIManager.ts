@@ -1,11 +1,16 @@
-import OpenAI from "https://esm.sh/openai@4.26.0";
+import OpenAI from "https://esm.sh/openai@4.28.0";
 import { Role } from "./types.ts";
 
 export class OpenAIManager {
   private openai: OpenAI;
 
   constructor(apiKey: string) {
-    this.openai = new OpenAI({ apiKey });
+    this.openai = new OpenAI({ 
+      apiKey,
+      defaultHeaders: {
+        'OpenAI-Beta': 'assistants=v2'
+      }
+    });
   }
 
   async createThread(): Promise<string> {
