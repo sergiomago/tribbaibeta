@@ -81,12 +81,13 @@ export async function consolidateMemories(roleId: string): Promise<void> {
         .insert({
           role_id: roleId,
           content: summary,
+          context_type: 'consolidated',
           metadata: {
             timestamp: oldestTimestamp,
             consolidated: true,
             source_count: group.length,
             source_ids: group.map(m => m.id)
-          },
+          } as JsonMetadata,
           embedding: await createEmbedding(summary)
         });
 

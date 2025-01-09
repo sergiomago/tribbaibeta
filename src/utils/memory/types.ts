@@ -3,7 +3,14 @@ export interface MemoryMetadata {
   source?: string;
   context?: string;
   relevance?: number;
-  [key: string]: any; // Allow additional properties for flexibility
+  interaction_count?: number;
+  importance_score?: number;
+  consolidated?: boolean;
+  context_type?: string;
+  expires_at?: string;
+  last_accessed?: string;
+  source_count?: number;
+  source_ids?: string[];
 }
 
 export type JsonMetadata = {

@@ -26,7 +26,7 @@ export class MemoryStorage {
       const embedding = data[0].embedding;
 
       const metadata: MemoryMetadata = {
-        timestamp: new Date().toISOString(),
+        timestamp: Date.now(),
         topic,
         context_length: content.length,
         expires_at: this.getExpirationDate(),
@@ -43,7 +43,7 @@ export class MemoryStorage {
           content,
           embedding,
           context_type: contextType,
-          metadata: metadata as unknown as JsonMetadata
+          metadata: metadata as JsonMetadata
         });
 
       if (error) throw error;
@@ -78,20 +78,16 @@ export class MemoryStorage {
 
       if (!memory) continue;
 
-      const currentMetadata = memory.metadata as unknown as MemoryMetadata;
+      const currentMetadata = memory.metadata as MemoryMetadata;
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
         interaction_count: (currentMetadata.interaction_count || 0) + 1,
-        last_accessed: new Date().toISOString(),
-        importance_score: MemoryScoring.calculateImportanceScore({
-          content: memory.content,
-          metadata: currentMetadata
-        })
+        last_accessed: new Date().toISOString()
       };
 
       const { error: updateError } = await supabase
         .from('role_memories')
-        .update({ metadata: newMetadata as unknown as JsonMetadata })
+        .update({ metadata: newMetadata as JsonMetadata })
         .eq('id', id);
 
       if (updateError) throw updateError;

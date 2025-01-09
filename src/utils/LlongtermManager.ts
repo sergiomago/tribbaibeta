@@ -1,5 +1,5 @@
-import { MemoryMaintenance } from "./memory/maintenance";
-import { MemoryConsolidation } from "./memory/consolidation";
+import * as MemoryMaintenance from "./memory/maintenance";
+import { consolidateMemories } from "./memory/consolidation";
 import { MemoryStorage } from "./memory/storage";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -19,13 +19,15 @@ export class LlongtermManager {
 
   private async initializeAutomatedManagement() {
     // Run initial cleanup
-    await MemoryMaintenance.pruneExpiredMemories(this.roleId);
-    await MemoryConsolidation.consolidateMemories(this.roleId);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    await MemoryMaintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
+    await consolidateMemories(this.roleId);
     
     // Schedule periodic maintenance
     setInterval(async () => {
-      await MemoryMaintenance.pruneExpiredMemories(this.roleId);
-      await MemoryConsolidation.consolidateMemories(this.roleId);
+      await MemoryMaintenance.clearOldMemories(this.roleId, thirtyDaysAgo);
+      await consolidateMemories(this.roleId);
     }, 24 * 60 * 60 * 1000); // Run daily
   }
 
