@@ -30,11 +30,31 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     },
   });
 
+  const { data: threadRoles } = useQuery({
+    queryKey: ["thread-roles", threadId],
+    queryFn: async () => {
+      if (!threadId) return [];
+      const { data, error } = await supabase
+        .from("thread_roles")
+        .select("role_id")
+        .eq("thread_id", threadId);
+      if (error) throw error;
+      return data.map(tr => tr.role_id);
+    },
+    enabled: !!threadId,
+  });
+
   const addRoleToThread = useMutation({
     mutationFn: async (roleId: string) => {
       if (!threadId) {
         throw new Error("No thread selected");
       }
+      
+      // Check if role is already assigned
+      if (threadRoles?.includes(roleId)) {
+        throw new Error("Role is already assigned to this thread");
+      }
+
       const { error } = await supabase.from("thread_roles").insert({
         thread_id: threadId,
         role_id: roleId,
