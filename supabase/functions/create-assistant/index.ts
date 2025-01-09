@@ -24,7 +24,7 @@ serve(async (req) => {
       headers: {
         'Authorization': `Bearer ${openAIApiKey}`,
         'Content-Type': 'application/json',
-        'OpenAI-Beta': 'assistants=v1',
+        'OpenAI-Beta': 'assistants=v2',
       },
       body: JSON.stringify({
         name,

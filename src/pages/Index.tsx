@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const roleFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -40,6 +41,7 @@ const Index = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
+  const { user } = useAuth();
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
@@ -64,6 +66,8 @@ const Index = () => {
 
   const createRole = useMutation({
     mutationFn: async (values: RoleFormValues) => {
+      if (!user) throw new Error("User not authenticated");
+      
       setIsCreating(true);
       try {
         // Create OpenAI Assistant via Edge Function
@@ -77,12 +81,11 @@ const Index = () => {
         if (assistantError) throw assistantError;
 
         // Store role in database
-        const { data, error } = await supabase.from("roles").insert([
-          {
-            ...values,
-            assistant_id: assistantData.assistant_id,
-          },
-        ]);
+        const { data, error } = await supabase.from("roles").insert({
+          ...values,
+          user_id: user.id,
+          assistant_id: assistantData.assistant_id,
+        });
 
         if (error) throw error;
         return data;
@@ -290,6 +293,6 @@ const Index = () => {
       </div>
     </div>
   );
-};
+});
 
 export default Index;
