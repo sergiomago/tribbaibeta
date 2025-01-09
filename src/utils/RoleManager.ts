@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createMemoryManager } from "./MemoryManager";
+import { createLlongtermManager } from "./LlongtermManager";
 
 export class RoleManager {
   private threadId: string;
@@ -45,13 +46,19 @@ export class RoleManager {
   }
 
   async storeRoleMemory(roleId: string, content: string) {
+    // Store in both systems for now
     const memoryManager = createMemoryManager(roleId, this.threadId);
-    await memoryManager.storeMemory(content);
+    const llongtermManager = createLlongtermManager(roleId, this.threadId);
+    
+    await Promise.all([
+      memoryManager.storeMemory(content),
+      llongtermManager.storeMemory(content)
+    ]);
   }
 
-  async getRoleMemories(roleId: string, limit: number = 10) {
-    const memoryManager = createMemoryManager(roleId, this.threadId);
-    return await memoryManager.retrieveMemories(limit);
+  async getRoleMemories(roleId: string, query: string, limit: number = 5) {
+    const llongtermManager = createLlongtermManager(roleId, this.threadId);
+    return await llongtermManager.retrieveRelevantMemories(query, limit);
   }
 }
 
