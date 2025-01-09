@@ -16,11 +16,26 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
-    // Create a new thread in OpenAI
-    const thread = await openai.beta.threads.create();
+    // Create a new thread in OpenAI with v2 headers
+    const thread = await fetch('https://api.openai.com/v1/threads', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Content-Type': 'application/json',
+        'OpenAI-Beta': 'assistants=v2'
+      },
+      body: JSON.stringify({})
+    });
+
+    const threadData = await thread.json();
+    console.log('Thread created:', threadData);
+
+    if (!thread.ok) {
+      throw new Error(`Failed to create thread: ${threadData.error?.message || 'Unknown error'}`);
+    }
 
     return new Response(
-      JSON.stringify({ id: thread.id }),
+      JSON.stringify({ id: threadData.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
