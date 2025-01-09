@@ -46,9 +46,9 @@ export class LlongtermManager {
     const recencyWeight = 0.3;
     const relevanceWeight = 0.3;
 
-    const interactions = (memory.metadata.interaction_count as number) || 0;
+    const interactions = memory.metadata.interaction_count || 0;
     const lastAccessed = memory.metadata.last_accessed ? new Date(memory.metadata.last_accessed) : new Date(0);
-    const relevance = (memory.metadata.relevance_score as number) || 0;
+    const relevance = memory.metadata.relevance_score || 0;
 
     const recencyScore = Math.exp(-Math.max(0, Date.now() - lastAccessed.getTime()) / (30 * 24 * 60 * 60 * 1000));
     const interactionScore = Math.min(1, interactions / 10);
@@ -158,19 +158,19 @@ export class LlongtermManager {
           await this.storeMemory(
             combinedContent,
             'consolidated',
-            memory.metadata?.topic
+            (memory.metadata as MemoryMetadata).topic
           );
 
           // Mark original memories as consolidated
           const memoryIds = similarMemories.map(m => m.id);
+          const updateMetadata: Partial<MemoryMetadata> = {
+            consolidated: true,
+            timestamp: new Date().toISOString()
+          };
+
           await supabase
             .from('role_memories')
-            .update({
-              metadata: {
-                consolidated: true,
-                consolidated_at: new Date().toISOString()
-              }
-            })
+            .update({ metadata: updateMetadata })
             .in('id', memoryIds);
         }
       }
@@ -196,10 +196,14 @@ export class LlongtermManager {
       // Extend TTL for important memories
       if (importantMemories && importantMemories.length > 0) {
         for (const memory of importantMemories) {
-          const newMetadata = {
-            ...memory.metadata,
+          const currentMetadata = memory.metadata as MemoryMetadata;
+          const newMetadata: MemoryMetadata = {
+            ...currentMetadata,
             expires_at: this.getExpirationDate(),
-            importance_score: this.calculateImportanceScore(memory)
+            importance_score: this.calculateImportanceScore({
+              content: memory.content,
+              metadata: currentMetadata
+            })
           };
 
           await supabase
@@ -274,18 +278,28 @@ export class LlongtermManager {
 
   private async updateMemoryInteractions(memoryIds: string[]) {
     try {
-      const { error } = await supabase
-        .from('role_memories')
-        .update({
-          metadata: {
-            interaction_count: '(COALESCE((metadata->>"interaction_count")::int, 0) + 1)',
-            last_accessed: new Date().toISOString()
-          }
-        })
-        .in('id', memoryIds);
+      for (const id of memoryIds) {
+        const { data: memory, error: fetchError } = await supabase
+          .from('role_memories')
+          .select('metadata')
+          .eq('id', id)
+          .single();
 
-      if (error) {
-        console.error('Error updating memory interactions:', error);
+        if (fetchError) throw fetchError;
+
+        const currentMetadata = memory.metadata as MemoryMetadata;
+        const newMetadata: MemoryMetadata = {
+          ...currentMetadata,
+          interaction_count: (currentMetadata.interaction_count || 0) + 1,
+          last_accessed: new Date().toISOString()
+        };
+
+        const { error: updateError } = await supabase
+          .from('role_memories')
+          .update({ metadata: newMetadata })
+          .eq('id', id);
+
+        if (updateError) throw updateError;
       }
     } catch (error) {
       console.error('Error in updateMemoryInteractions:', error);
