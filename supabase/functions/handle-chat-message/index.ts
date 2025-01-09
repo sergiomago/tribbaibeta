@@ -129,29 +129,12 @@ serve(async (req) => {
         if (roleError) throw roleError;
         if (!role?.assistant_id) continue;
 
-        // Retrieve relevant memories for context
-        const { data: relevantMemories } = await supabase.rpc(
-          'get_similar_memories',
-          {
-            p_embedding: embedding.vector,
-            p_match_threshold: 0.7,
-            p_match_count: 5,
-            p_role_id: role_id
-          }
-        );
-
-        let memoryContext = '';
-        if (relevantMemories && relevantMemories.length > 0) {
-          memoryContext = 'Relevant context from my memory:\n' + 
-            relevantMemories.map(m => m.content).join('\n');
-        }
-
-        // Run assistant with memory context
+        // Run assistant
         const run = await openai.beta.threads.runs.create(
           openaiThreadId,
           {
             assistant_id: role.assistant_id,
-            instructions: `${role.instructions}\n\n${memoryContext}`
+            instructions: role.instructions
           }
         );
 
