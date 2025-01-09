@@ -13,27 +13,27 @@ export class OpenAIManager {
     return thread.id;
   }
 
-  async addMessageToThread(threadId: string, content: string, metadata: Record<string, unknown>) {
-    return await this.openai.beta.threads.messages.create(
-      threadId,
-      {
-        role: 'user',
-        content,
-        metadata
-      }
-    );
+  async addMessageToThread(
+    threadId: string,
+    content: string,
+    metadata: Record<string, unknown>
+  ) {
+    return await this.openai.beta.threads.messages.create(threadId, {
+      role: 'user',
+      content,
+      metadata
+    });
   }
 
   async runAssistant(threadId: string, role: Role, memoryContext: string) {
-    if (!role.assistant_id) throw new Error('No assistant ID configured for role');
+    if (!role.assistant_id) {
+      throw new Error('No assistant ID configured for role');
+    }
 
-    const run = await this.openai.beta.threads.runs.create(
-      threadId,
-      {
-        assistant_id: role.assistant_id,
-        instructions: `${role.instructions}\n\n${memoryContext}`
-      }
-    );
+    const run = await this.openai.beta.threads.runs.create(threadId, {
+      assistant_id: role.assistant_id,
+      instructions: `${role.instructions}\n\n${memoryContext}`
+    });
 
     let runStatus = await this.openai.beta.threads.runs.retrieve(
       threadId,
