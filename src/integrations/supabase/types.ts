@@ -11,6 +11,8 @@ export type Database = {
     Tables: {
       messages: {
         Row: {
+          chain_id: string | null
+          chain_order: number | null
           content: string
           created_at: string
           id: string
@@ -22,6 +24,8 @@ export type Database = {
           thread_id: string
         }
         Insert: {
+          chain_id?: string | null
+          chain_order?: number | null
           content: string
           created_at?: string
           id?: string
@@ -33,6 +37,8 @@ export type Database = {
           thread_id: string
         }
         Update: {
+          chain_id?: string | null
+          chain_order?: number | null
           content?: string
           created_at?: string
           id?: string
@@ -67,6 +73,48 @@ export type Database = {
           },
           {
             foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages_memory: {
+        Row: {
+          content: string
+          context_type: string
+          created_at: string
+          id: string
+          role_id: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          content: string
+          context_type: string
+          created_at?: string
+          id?: string
+          role_id?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          content?: string
+          context_type?: string
+          created_at?: string
+          id?: string
+          role_id?: string | null
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_memory_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_memory_thread_id_fkey"
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "threads"
@@ -205,6 +253,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_conversation_chain: {
+        Args: {
+          p_thread_id: string
+          p_tagged_role_id?: string
+        }
+        Returns: {
+          role_id: string
+          chain_order: number
+        }[]
+      }
       get_next_responding_role: {
         Args: {
           thread_id: string

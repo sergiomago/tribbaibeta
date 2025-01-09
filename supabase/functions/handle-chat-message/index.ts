@@ -26,11 +26,12 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { threadId, content, taggedRoleId } = await req.json();
+    console.log('Processing message for thread:', threadId, 'with content:', content);
 
-    // Get thread details and roles
+    // Get thread details
     const { data: thread } = await supabase
       .from('threads')
-      .select('*, thread_roles(role_id)')
+      .select('*')
       .eq('id', threadId)
       .single();
 
@@ -56,7 +57,7 @@ serve(async (req) => {
     });
 
     // Save user message to database
-    const { data: message } = await supabase
+    const { data: userMessage } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
@@ -66,33 +67,63 @@ serve(async (req) => {
       .select()
       .single();
 
-    let currentOrder = 1;
-    let nextRoleId = taggedRoleId;
+    // Get conversation chain (either tagged role or all roles in random order)
+    const { data: conversationChain } = await supabase.rpc(
+      'get_conversation_chain',
+      { 
+        p_thread_id: threadId,
+        p_tagged_role_id: taggedRoleId
+      }
+    );
 
-    // If no role is tagged, get the first role to respond
-    if (!taggedRoleId) {
-      const { data: nextRole } = await supabase.rpc(
-        'get_next_responding_role',
-        { thread_id: threadId, current_order: currentOrder }
-      );
-      nextRoleId = nextRole;
-    }
+    console.log('Conversation chain:', conversationChain);
 
-    while (nextRoleId) {
+    // Generate a new chain ID for this conversation
+    const chainId = crypto.randomUUID();
+    
+    // Process each role in the chain
+    for (const { role_id, chain_order } of conversationChain) {
       // Get role details
       const { data: role } = await supabase
         .from('roles')
         .select('*')
-        .eq('id', nextRoleId)
+        .eq('id', role_id)
         .single();
 
       if (!role?.assistant_id) {
-        throw new Error('Role assistant not found');
+        console.error('Role assistant not found for role:', role_id);
+        continue;
       }
 
-      // Run assistant
+      // Get role's memory
+      const { data: roleMemory } = await supabase
+        .from('messages_memory')
+        .select('content')
+        .eq('role_id', role_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      // Prepare context from memory
+      const memoryContext = roleMemory
+        ? `Previous relevant context: ${roleMemory.map(m => m.content).join('\n')}`
+        : '';
+
+      // Get previous messages in the chain
+      const { data: previousMessages } = await supabase
+        .from('messages')
+        .select('content, role_id')
+        .eq('chain_id', chainId)
+        .order('chain_order', { ascending: true });
+
+      // Prepare conversation context
+      const conversationContext = previousMessages
+        ? `Previous responses in this conversation:\n${previousMessages.map(m => m.content).join('\n')}`
+        : '';
+
+      // Run assistant with memory and conversation context
       const run = await openai.beta.threads.runs.create(openaiThreadId, {
         assistant_id: role.assistant_id,
+        instructions: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`,
       });
 
       // Wait for completion
@@ -103,6 +134,7 @@ serve(async (req) => {
 
       while (runStatus.status !== 'completed') {
         if (runStatus.status === 'failed') {
+          console.error('Assistant run failed for role:', role_id);
           throw new Error('Assistant run failed');
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -121,38 +153,34 @@ serve(async (req) => {
         .from('messages')
         .insert({
           thread_id: threadId,
-          role_id: nextRoleId,
+          role_id: role_id,
           content: lastMessage.content[0].text.value,
-          response_order: currentOrder,
-          reply_to_message_id: message.id,
+          chain_id: chainId,
+          chain_order: chain_order,
+          reply_to_message_id: userMessage.id,
           openai_message_id: lastMessage.id,
         })
         .select()
         .single();
 
+      // Update role's memory
+      await supabase
+        .from('messages_memory')
+        .insert({
+          role_id: role_id,
+          content: lastMessage.content[0].text.value,
+          context_type: 'thread',
+          thread_id: threadId,
+        });
+
       // Check if the assistant tagged another role
       const taggedRole = extractTaggedRole(lastMessage.content[0].text.value);
       
       if (taggedRole) {
-        // Get the tagged role ID
-        const { data: nextTaggedRole } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('tag', taggedRole)
-          .single();
-          
-        nextRoleId = nextTaggedRole?.id;
-      } else if (!taggedRoleId) {
-        // If no role was initially tagged, get the next role in order
-        currentOrder++;
-        const { data: nextRole } = await supabase.rpc(
-          'get_next_responding_role',
-          { thread_id: threadId, current_order: currentOrder }
-        );
-        nextRoleId = nextRole;
-      } else {
-        // If a role was tagged and no new role was tagged, end the chain
-        nextRoleId = null;
+        // If a role was tagged, stop the current chain and start a new one
+        // with only the tagged role
+        console.log('Role tagged another role:', taggedRole);
+        break;
       }
     }
 
