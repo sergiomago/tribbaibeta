@@ -5,11 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
 import { RoleList } from "@/components/roles/RoleList";
-import { Button } from "@/components/ui/button";
-import { PlusCircle, Search } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { AppSidebar } from "@/components/AppSidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { AppNavbar } from "@/components/AppNavbar";
 import { ChatLayout } from "@/components/chat/ChatLayout";
 
 const Index = () => {
@@ -93,14 +89,12 @@ const Index = () => {
   );
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
-        <AppSidebar />
-        <main className="flex-1">
-          <ChatLayout />
-        </main>
-      </div>
-    </SidebarProvider>
+    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+      <AppNavbar />
+      <main className="flex-1">
+        <ChatLayout />
+      </main>
+    </div>
   );
 };
 

@@ -1,20 +1,18 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageSquare, Plus, Search, Users } from "lucide-react";
+import { MessageSquare, Plus, Search, X } from "lucide-react";
 import {
   ResizableHandle,
   ResizablePanel,
-  ResizablePanel as ResizablePanelPrimitive,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 
 export function ChatLayout() {
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
-  const [rolePanelSize, setRolePanelSize] = useState(25);
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-2rem)]">
+    <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-3.5rem)]">
       {/* Chat List Sidebar */}
       <ResizablePanel
         defaultSize={chatSidebarSize}
@@ -35,7 +33,7 @@ export function ChatLayout() {
           <div className="flex-1 space-y-2">
             <ChatListItem
               title="Project Discussion"
-              type="team"
+              type="individual"
               active={true}
               lastMessage="Let's analyze the requirements..."
               timestamp="2m ago"
@@ -46,7 +44,6 @@ export function ChatLayout() {
               lastMessage="The implementation looks good..."
               timestamp="1h ago"
             />
-            {/* Add more chat items here */}
           </div>
         </div>
       </ResizablePanel>
@@ -54,11 +51,26 @@ export function ChatLayout() {
       <ResizableHandle />
 
       {/* Main Chat Area */}
-      <ResizablePanel defaultSize={100 - chatSidebarSize - rolePanelSize}>
+      <ResizablePanel defaultSize={100 - chatSidebarSize}>
         <div className="flex h-full flex-col">
+          {/* Role Management Bar */}
           <div className="border-b p-4">
-            <h3 className="text-lg font-semibold">Project Discussion</h3>
-            <p className="text-sm text-muted-foreground">3 roles active</p>
+            <div className="flex items-center justify-between mb-2">
+              <Input
+                className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
+                defaultValue="Project Discussion"
+                placeholder="Chat title..."
+              />
+              <Button variant="outline" size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Role
+              </Button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <RoleTag name="Developer" tag="dev" />
+              <RoleTag name="Product Manager" tag="pm" />
+              <RoleTag name="Designer" tag="design" />
+            </div>
           </div>
           <div className="flex-1 overflow-auto p-4">
             {/* Chat messages will go here */}
@@ -71,34 +83,13 @@ export function ChatLayout() {
           </div>
         </div>
       </ResizablePanel>
-
-      <ResizableHandle />
-
-      {/* Role Management Panel */}
-      <ResizablePanel
-        defaultSize={rolePanelSize}
-        onResize={(size) => setRolePanelSize(size)}
-        className="min-w-[250px]"
-      >
-        <div className="flex h-full flex-col gap-4 border-l p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Roles</h2>
-            <Button variant="ghost" size="icon">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          <div className="flex-1 space-y-2">
-            {/* Role list will go here */}
-          </div>
-        </div>
-      </ResizablePanel>
     </ResizablePanelGroup>
   );
 }
 
 interface ChatListItemProps {
   title: string;
-  type: "team" | "individual";
+  type: "individual";
   lastMessage?: string;
   timestamp?: string;
   active?: boolean;
@@ -106,7 +97,6 @@ interface ChatListItemProps {
 
 function ChatListItem({
   title,
-  type,
   lastMessage,
   timestamp,
   active,
@@ -118,11 +108,7 @@ function ChatListItem({
       }`}
     >
       <div className="flex items-center gap-3">
-        {type === "team" ? (
-          <Users className="h-5 w-5 text-primary" />
-        ) : (
-          <MessageSquare className="h-5 w-5 text-primary" />
-        )}
+        <MessageSquare className="h-5 w-5 text-primary" />
         <div className="flex-1 overflow-hidden">
           <h4 className="font-medium">{title}</h4>
           {lastMessage && (
@@ -136,5 +122,22 @@ function ChatListItem({
         )}
       </div>
     </button>
+  );
+}
+
+interface RoleTagProps {
+  name: string;
+  tag: string;
+}
+
+function RoleTag({ name, tag }: RoleTagProps) {
+  return (
+    <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm">
+      <span className="font-medium text-primary">{name}</span>
+      <span className="text-xs text-gray-500">@{tag}</span>
+      <button className="ml-1 rounded-full hover:bg-primary/20 p-1">
+        <X className="h-3 w-3 text-primary" />
+      </button>
+    </div>
   );
 }
