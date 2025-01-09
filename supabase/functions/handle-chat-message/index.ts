@@ -17,7 +17,7 @@ serve(async (req) => {
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
       defaultHeaders: {
-        'OpenAI-Beta': 'assistants=v2'  // Setting v2 API header
+        'OpenAI-Beta': 'assistants=v2'
       }
     });
 
@@ -51,7 +51,7 @@ serve(async (req) => {
     }
 
     // Add user message to OpenAI thread
-    await openai.beta.threads.messages.create(openaiThreadId, {
+    const openaiMessage = await openai.beta.threads.messages.create(openaiThreadId, {
       role: 'user',
       content,
     });
@@ -63,6 +63,7 @@ serve(async (req) => {
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
+        openai_message_id: openaiMessage.id
       })
       .select()
       .single();
@@ -110,68 +111,76 @@ serve(async (req) => {
         ? `Previous responses in this conversation:\n${previousMessages.map(m => m.content).join('\n')}`
         : '';
 
-      // Run assistant with memory and conversation context
-      const run = await openai.beta.threads.runs.create(openaiThreadId, {
-        assistant_id: role.assistant_id,
-        instructions: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`,
-      });
+      try {
+        // Run assistant with memory and conversation context
+        const run = await openai.beta.threads.runs.create(openaiThreadId, {
+          assistant_id: role.assistant_id,
+          instructions: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`,
+        });
 
-      // Wait for completion
-      let runStatus = await openai.beta.threads.runs.retrieve(
-        openaiThreadId,
-        run.id
-      );
-
-      while (runStatus.status !== 'completed') {
-        if (runStatus.status === 'failed') {
-          console.error('Assistant run failed for role:', role_id);
-          throw new Error('Assistant run failed');
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        runStatus = await openai.beta.threads.runs.retrieve(
+        // Wait for completion
+        let runStatus = await openai.beta.threads.runs.retrieve(
           openaiThreadId,
           run.id
         );
-      }
 
-      // Get assistant's response
-      const messages = await openai.beta.threads.messages.list(openaiThreadId);
-      const lastMessage = messages.data[0];
-      const responseContent = lastMessage.content[0].text.value;
+        while (runStatus.status !== 'completed') {
+          if (runStatus.status === 'failed' || runStatus.status === 'cancelled' || runStatus.status === 'expired') {
+            console.error('Assistant run failed:', runStatus);
+            throw new Error(`Assistant run ${runStatus.status}`);
+          }
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          runStatus = await openai.beta.threads.runs.retrieve(
+            openaiThreadId,
+            run.id
+          );
+        }
 
-      // Store response in role's memory
-      await supabase
-        .from('messages_memory')
-        .insert({
-          role_id: role_id,
-          thread_id: threadId,
-          content: responseContent,
-          context_type: 'conversation'
+        // Get assistant's response
+        const messages = await openai.beta.threads.messages.list(openaiThreadId, {
+          order: 'desc',
+          limit: 1
         });
+        
+        const lastMessage = messages.data[0];
+        const responseContent = lastMessage.content[0].text.value;
 
-      // Save assistant's response
-      const { data: responseMessage } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          role_id: role_id,
-          content: responseContent,
-          chain_id: chainId,
-          chain_order: chain_order,
-          reply_to_message_id: userMessage.id,
-          openai_message_id: lastMessage.id,
-        })
-        .select()
-        .single();
+        // Store response in role's memory
+        await supabase
+          .from('messages_memory')
+          .insert({
+            role_id: role_id,
+            thread_id: threadId,
+            content: responseContent,
+            context_type: 'conversation'
+          });
 
-      // Check if the assistant tagged another role
-      const taggedRole = extractTaggedRole(responseContent);
-      
-      if (taggedRole) {
-        // If a role was tagged, stop the current chain and start a new one
-        // with only the tagged role
-        console.log('Role tagged another role:', taggedRole);
-        break;
+        // Save assistant's response
+        const { data: responseMessage } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role_id,
+            content: responseContent,
+            chain_id: chainId,
+            chain_order: chain_order,
+            reply_to_message_id: userMessage.id,
+            openai_message_id: lastMessage.id,
+          })
+          .select()
+          .single();
+
+        // Check if the assistant tagged another role
+        const taggedRole = extractTaggedRole(responseContent);
+        
+        if (taggedRole) {
+          // If a role was tagged, stop the current chain
+          console.log('Role tagged another role:', taggedRole);
+          break;
+        }
+      } catch (error) {
+        console.error('Error processing role response:', error);
+        throw error;
       }
     }
 
