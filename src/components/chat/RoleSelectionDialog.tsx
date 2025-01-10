@@ -30,12 +30,11 @@ export function RoleSelectionDialog({
   const queryClient = useQueryClient();
   const { addRoleToThread, removeRoleFromThread } = useRoleMutations();
 
-  const { data: availableRoles, refetch: refetchRoles } = useQuery({
+  const { data: availableRoles } = useQuery({
     queryKey: ["available-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
       
-      // Get all roles and their assignment status
       const { data: roles } = await supabase
         .from("roles")
         .select("*");
@@ -56,10 +55,7 @@ export function RoleSelectionDialog({
   });
 
   const handleRoleToggle = async (roleId: string, isAssigned: boolean) => {
-    if (!threadId || !roleId) {
-      console.error("Missing threadId or roleId");
-      return;
-    }
+    if (!threadId || !roleId) return;
 
     try {
       if (isAssigned) {
@@ -75,9 +71,10 @@ export function RoleSelectionDialog({
           description: "Role has been added to the conversation.",
         });
       }
+      
       // Invalidate both queries to ensure UI updates
-      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
-      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
+      await queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
+      await queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
     } catch (error) {
       console.error("Error toggling role:", error);
       toast({

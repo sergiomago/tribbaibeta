@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { RoleTag } from "./RoleTag";
@@ -15,6 +15,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   const { updateThreadName } = useThreadMutations();
   const { addRoleToThread, removeRoleFromThread } = useRoleMutations();
   const [title, setTitle] = useState("");
+  const queryClient = useQueryClient();
 
   const { data: thread } = useQuery({
     queryKey: ["thread", threadId],
@@ -38,11 +39,16 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
       const { data, error } = await supabase
         .from("thread_roles")
         .select(`
-          role:roles (*)
+          role:roles (
+            id,
+            name,
+            tag,
+            description
+          )
         `)
         .eq("thread_id", threadId);
       if (error) throw error;
-      return data.map(tr => tr.role);
+      return data?.map(tr => tr.role) || [];
     },
     enabled: !!threadId,
   });
@@ -67,6 +73,14 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     if (e.key === "Enter") {
       e.preventDefault();
       handleTitleUpdate();
+    }
+  };
+
+  const handleRoleRemove = async (roleId: string) => {
+    if (threadId) {
+      await removeRoleFromThread.mutateAsync({ threadId, roleId });
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
     }
   };
 
@@ -96,11 +110,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           <RoleTag
             key={role.id}
             role={role}
-            onRemove={() => {
-              if (threadId) {
-                removeRoleFromThread.mutate({ threadId, roleId: role.id });
-              }
-            }}
+            onRemove={() => handleRoleRemove(role.id)}
           />
         ))}
         {threadRoles?.length === 0 && (
