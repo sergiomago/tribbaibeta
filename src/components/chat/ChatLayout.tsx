@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { Loader2 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -100,7 +101,7 @@ export function ChatLayout() {
     enabled: !!currentThreadId,
   });
 
-  const { data: messages, refetch: refetchMessages } = useQuery({
+  const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", currentThreadId],
     queryFn: async () => {
       if (!currentThreadId) return [];
@@ -118,7 +119,6 @@ export function ChatLayout() {
     enabled: !!currentThreadId,
   });
 
-  // Subscribe to new messages
   useEffect(() => {
     if (!currentThreadId) return;
 
@@ -172,39 +172,54 @@ export function ChatLayout() {
 
           <ScrollArea className="flex-1 p-4">
             <div className="space-y-4 max-w-4xl mx-auto">
-              {messages?.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex gap-3 ${
-                    message.role_id 
-                      ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 shadow-sm" 
-                      : "bg-primary/5 rounded-lg p-4"
-                  } animate-fade-in`}
-                >
-                  {message.role && (
-                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
-                      <span className="text-xs font-semibold">
-                        {message.role.tag}
-                      </span>
-                    </Avatar>
-                  )}
-                  <div className="flex-1">
+              {isLoadingMessages ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+              ) : messages?.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No messages yet. Start the conversation!
+                </div>
+              ) : (
+                messages?.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex gap-3 ${
+                      message.role_id 
+                        ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow" 
+                        : "bg-primary/5 rounded-lg p-4"
+                    } animate-fade-in`}
+                  >
                     {message.role && (
-                      <div className="font-semibold text-sm text-primary mb-1">
-                        {message.role.name}
-                      </div>
+                      <Avatar className="h-8 w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
+                        <span className="text-xs font-semibold">
+                          {message.role.tag}
+                        </span>
+                      </Avatar>
                     )}
-                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                      {message.content}
+                    <div className="flex-1">
+                      {message.role && (
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="font-semibold text-sm text-primary">
+                            {message.role.name}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(message.created_at).toLocaleTimeString()}
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                        {message.content}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </ScrollArea>
 
           {currentThreadId ? (
-            <ChatInput threadId={currentThreadId} onMessageSent={handleMessageSent} />
+            <ChatInput threadId={currentThreadId} onMessageSent={refetchMessages} />
           ) : (
             <div className="border-t p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-center text-muted-foreground">
               Select or create a thread to start chatting
