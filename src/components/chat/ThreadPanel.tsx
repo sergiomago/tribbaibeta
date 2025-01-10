@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThreadListItem } from "./ThreadListItem";
@@ -16,6 +16,7 @@ interface ThreadPanelProps {
 
 export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelProps) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [newThreadName, setNewThreadName] = useState("");
   const [threadToDelete, setThreadToDelete] = useState<string | null>(null);
@@ -73,7 +74,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [queryClient]);
 
   return (
     <div className="h-full flex flex-col border-r">
