@@ -16,8 +16,10 @@ export function useRoleMutations() {
         });
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
+    onSuccess: (_, { threadId }) => {
+      // Invalidate both queries
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
       toast({
         title: "Success",
         description: "Role added to thread",
@@ -41,8 +43,10 @@ export function useRoleMutations() {
         .eq("role_id", roleId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
+    onSuccess: (_, { threadId }) => {
+      // Invalidate both queries
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
       toast({
         title: "Success",
         description: "Role removed from thread",
