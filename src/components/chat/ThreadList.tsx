@@ -32,14 +32,14 @@ export function ThreadList({
       const { data, error } = await supabase
         .from("threads")
         .select("*")
-        .order("created_at", { ascending: false }); // Changed from last_opened to created_at
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
 
   return (
-    <ScrollArea className="flex-1">
+    <ScrollArea className="h-full">
       <div className="p-2 space-y-2">
         {threads?.map((thread) => (
           <ThreadListItem
