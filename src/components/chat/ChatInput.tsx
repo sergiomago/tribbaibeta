@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { createRoleManager } from "@/utils/RoleManager";
 
 interface ChatInputProps {
   threadId: string;
@@ -20,45 +19,11 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
 
     setIsSending(true);
     try {
-      const roleManager = createRoleManager(threadId);
-      const taggedRoleTag = extractRoleTag(message);
-      
-      // Get role ID from tag if a role was tagged
-      let taggedRoleId = null;
-      if (taggedRoleTag) {
-        const { data: roleData, error: roleError } = await supabase
-          .from("roles")
-          .select("id")
-          .eq("tag", taggedRoleTag)
-          .maybeSingle();
-          
-        if (roleError) {
-          console.error("Error finding role:", roleError);
-          throw new Error("Failed to look up role. Please try again.");
-        }
-        
-        if (!roleData) {
-          throw new Error(`No role found with tag @${taggedRoleTag}`);
-        }
-        
-        taggedRoleId = roleData.id;
-      }
-      
-      // Get the conversation chain based on tagged role
-      const chain = await roleManager.getConversationChain(taggedRoleId);
-      console.log("Conversation chain:", chain);
-
-      // Store the message in role's memory if it's tagged
-      if (taggedRoleId) {
-        await roleManager.storeRoleMemory(taggedRoleId, message);
-      }
-
+      console.log('Sending message:', { threadId, content: message });
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId,
           content: message,
-          taggedRoleId,
-          conversationChain: chain
         },
       });
 
@@ -102,9 +67,4 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
       </div>
     </div>
   );
-}
-
-function extractRoleTag(message: string): string | null {
-  const match = message.match(/@(\w+)/);
-  return match ? match[1] : null;
 }
