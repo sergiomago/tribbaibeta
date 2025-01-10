@@ -17,9 +17,10 @@ type RoleCardProps = {
   role: Tables<"roles">;
   onDelete: (id: string) => void;
   onStartChat: (id: string) => void;
+  onEdit: (id: string) => void;
 };
 
-export const RoleCard = ({ role, onDelete, onStartChat }: RoleCardProps) => {
+export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
@@ -58,6 +59,14 @@ export const RoleCard = ({ role, onDelete, onStartChat }: RoleCardProps) => {
           >
             <Trash className="mr-2 h-3 w-3" />
             Delete
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => onEdit(role.id)}
+          >
+            <Edit className="mr-2 h-3 w-3" />
+            Edit
           </Button>
           <Button 
             variant="default" 
