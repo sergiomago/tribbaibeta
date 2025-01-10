@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -7,7 +8,7 @@ import {
 import { ChatSidebar } from "./ChatSidebar";
 import { RoleManagementBar } from "./RoleManagementBar";
 import { ChatInput } from "./ChatInput";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
@@ -26,9 +27,56 @@ interface Message {
 }
 
 export function ChatLayout() {
+  const [searchParams] = useSearchParams();
+  const roleId = searchParams.get('role');
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const createThreadWithRole = useMutation({
+    mutationFn: async (roleId: string) => {
+      // Create a new thread
+      const { data: thread, error: threadError } = await supabase
+        .from("threads")
+        .insert({ name: "New Chat" })
+        .select()
+        .single();
+
+      if (threadError) throw threadError;
+
+      // Add the role to the thread
+      const { error: roleError } = await supabase
+        .from("thread_roles")
+        .insert({ thread_id: thread.id, role_id: roleId });
+
+      if (roleError) throw roleError;
+
+      return thread;
+    },
+    onSuccess: (thread) => {
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
+      setCurrentThreadId(thread.id);
+      toast({
+        title: "Chat created",
+        description: "New chat started with the selected role",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to create chat: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle role parameter on mount
+  useEffect(() => {
+    if (roleId && !currentThreadId) {
+      createThreadWithRole.mutate(roleId);
+    }
+  }, [roleId]);
 
   const { data: thread } = useQuery({
     queryKey: ["thread", currentThreadId],
