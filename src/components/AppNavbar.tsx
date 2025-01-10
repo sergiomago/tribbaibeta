@@ -29,8 +29,11 @@ export function AppNavbar() {
     <nav className="border-b border-border/5 bg-white dark:bg-gray-800">
       <div className="flex h-14 items-center justify-between px-6">
         <div className="flex items-center gap-8">
-          <Link to="/" className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
-            Chatrolando
+          <Link to="/" className="flex items-center gap-2">
+            <img src="/logomoving.gif" alt="Tribbai Logo" className="h-8" />
+            <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
+              Tribbai
+            </span>
           </Link>
           <div className="flex items-center gap-4">
             {menuItems.map((item) => (
