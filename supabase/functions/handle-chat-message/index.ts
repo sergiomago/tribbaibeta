@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 
 const corsHeaders = {
@@ -18,24 +17,13 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Received request:', { threadId, content, taggedRoleId });
 
     // Get thread details and roles
-    const { data: thread, error: threadError } = await supabase
-      .from('threads')
-      .select('*')
-      .eq('id', threadId)
-      .single();
-
-    if (threadError) {
-      console.error('Error fetching thread:', threadError);
-      throw new Error(`Failed to fetch thread: ${threadError.message}`);
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Save user message
     const { data: userMessage, error: messageError } = await supabase
@@ -50,7 +38,7 @@ serve(async (req) => {
 
     if (messageError) {
       console.error('Error saving user message:', messageError);
-      throw new Error(`Failed to save user message: ${messageError.message}`);
+      throw messageError;
     }
 
     // Get conversation chain (roles that should respond)
@@ -62,8 +50,10 @@ serve(async (req) => {
 
     if (chainError) {
       console.error('Error getting conversation chain:', chainError);
-      throw new Error(`Failed to get conversation chain: ${chainError.message}`);
+      throw chainError;
     }
+
+    console.log('Conversation chain:', chain);
 
     // Process each role in the chain
     for (const { role_id, chain_order } of chain) {
@@ -74,7 +64,10 @@ serve(async (req) => {
         .eq('id', role_id)
         .single();
 
-      if (!role) continue;
+      if (!role) {
+        console.error('Role not found:', role_id);
+        continue;
+      }
 
       // Get relevant memories for context
       const { data: memories } = await supabase
@@ -94,34 +87,30 @@ serve(async (req) => {
         .limit(10);
 
       // Prepare conversation context
+      const memoryContext = memories?.length 
+        ? `Relevant context from your memory: ${memories.map(m => m.content).join(' | ')}`
+        : '';
+
       const conversationHistory = history?.reverse().map(msg => ({
         role: msg.role ? 'assistant' : 'user',
         name: msg.role?.tag || undefined,
         content: msg.content
       })) || [];
 
-      // Add memory context if available
-      const memoryContext = memories?.length 
-        ? `Relevant context from your memory: ${memories.map(m => m.content).join(' | ')}`
-        : '';
-
-      // Create messages array for chat completion
-      const messages = [
-        {
-          role: 'system',
-          content: `${role.instructions}\n\n${memoryContext}`
-        },
-        ...conversationHistory,
-        {
-          role: 'user',
-          content
-        }
-      ];
-
       // Generate response using chat completion
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
-        messages,
+        messages: [
+          {
+            role: 'system',
+            content: `${role.instructions}\n\n${memoryContext}`
+          },
+          ...conversationHistory,
+          {
+            role: 'user',
+            content
+          }
+        ],
       });
 
       const responseContent = completion.choices[0].message.content;
@@ -139,7 +128,7 @@ serve(async (req) => {
 
       if (responseError) {
         console.error('Error saving response:', responseError);
-        throw new Error(`Failed to save response: ${responseError.message}`);
+        throw responseError;
       }
 
       // Store response in role's memory
@@ -165,7 +154,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in handle-chat-message:', error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : 'An unknown error occurred',
       details: error instanceof Error ? error.stack : undefined
