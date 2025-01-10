@@ -12,6 +12,7 @@ interface ThreadListProps {
   onEditSubmit: (threadId: string) => void;
   onNameChange: (name: string) => void;
   onDeleteClick: (threadId: string) => void;
+  isCollapsed?: boolean;
 }
 
 export function ThreadList({
@@ -23,6 +24,7 @@ export function ThreadList({
   onEditSubmit,
   onNameChange,
   onDeleteClick,
+  isCollapsed = false,
 }: ThreadListProps) {
   const { data: threads } = useQuery({
     queryKey: ["threads"],
@@ -30,7 +32,7 @@ export function ThreadList({
       const { data, error } = await supabase
         .from("threads")
         .select("*")
-        .order("last_opened", { ascending: false });
+        .order("created_at", { ascending: false }); // Changed from last_opened to created_at
       if (error) throw error;
       return data;
     },
@@ -51,6 +53,7 @@ export function ThreadList({
             onEditSubmit={onEditSubmit}
             onNameChange={onNameChange}
             onDeleteClick={onDeleteClick}
+            isCollapsed={isCollapsed}
           />
         ))}
       </div>

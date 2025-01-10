@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { MessageSquare, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface ThreadListItemProps {
   thread: {
@@ -17,6 +18,7 @@ interface ThreadListItemProps {
   onEditSubmit: (threadId: string) => void;
   onNameChange: (name: string) => void;
   onDeleteClick: (threadId: string) => void;
+  isCollapsed?: boolean;
 }
 
 export function ThreadListItem({
@@ -29,12 +31,14 @@ export function ThreadListItem({
   onEditSubmit,
   onNameChange,
   onDeleteClick,
+  isCollapsed = false,
 }: ThreadListItemProps) {
   return (
     <div
-      className={`group rounded-lg transition-colors ${
+      className={cn(
+        "group rounded-lg transition-colors",
         isSelected ? "bg-primary/10 text-primary" : "hover:bg-muted"
-      }`}
+      )}
     >
       <div className="p-3">
         <div className="flex items-center justify-between">
@@ -45,6 +49,7 @@ export function ThreadListItem({
                   e.preventDefault();
                   onEditSubmit(thread.id);
                 }}
+                className={cn(isCollapsed && "hidden")}
               >
                 <Input
                   value={newName}
@@ -60,33 +65,37 @@ export function ThreadListItem({
                 className="flex items-center gap-2 w-full text-left"
               >
                 <MessageSquare className="h-4 w-4 shrink-0" />
-                <span className="font-medium truncate">{thread.name}</span>
+                {!isCollapsed && (
+                  <span className="font-medium truncate">{thread.name}</span>
+                )}
               </button>
             )}
-            {thread.last_opened && (
+            {thread.last_opened && !isCollapsed && (
               <div className="text-xs text-muted-foreground mt-1">
                 {format(new Date(thread.last_opened), "MMM d, yyyy")}
               </div>
             )}
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onEditStart(thread)}
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive"
-              onClick={() => onDeleteClick(thread.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+          {!isCollapsed && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => onEditStart(thread)}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive"
+                onClick={() => onDeleteClick(thread.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>
