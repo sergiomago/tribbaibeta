@@ -1,7 +1,7 @@
 import { AppNavbar } from "@/components/AppNavbar";
 import { ChatLayout } from "@/components/chat/ChatLayout";
 
-const Index = () => {
+const Chats = () => {
   return (
     <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
       <AppNavbar />
@@ -12,4 +12,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default Chats;
