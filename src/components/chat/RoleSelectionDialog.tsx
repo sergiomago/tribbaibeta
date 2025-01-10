@@ -8,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -27,78 +27,81 @@ export function RoleSelectionDialog({
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  const { data: availableRoles } = useQuery({
-    queryKey: ["available-roles", threadId],
+  const { data: allRoles } = useQuery({
+    queryKey: ["roles"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("roles")
+        .select("*");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: threadRoles } = useQuery({
+    queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
-      
-      // First get the IDs of roles already assigned to this thread
-      const { data: assignedRoles } = await supabase
+      const { data, error } = await supabase
         .from("thread_roles")
         .select("role_id")
         .eq("thread_id", threadId);
-
-      const assignedRoleIds = assignedRoles?.map(tr => tr.role_id) || [];
-
-      // If there are no assigned roles, just return all roles
-      if (assignedRoleIds.length === 0) {
-        const { data, error } = await supabase
-          .from("roles")
-          .select("*");
-        if (error) throw error;
-        return data;
-      }
-
-      // Otherwise, get all roles that aren't in the assigned list
-      const { data, error } = await supabase
-        .from("roles")
-        .select("*")
-        .not("id", "in", `(${assignedRoleIds.join(",")})`);
-
       if (error) throw error;
-      return data;
+      return data.map(tr => tr.role_id);
     },
     enabled: !!threadId,
   });
 
-  const handleRoleSelect = async (roleId: string) => {
+  const handleRoleToggle = async (roleId: string) => {
     if (!threadId) return;
 
     try {
-      // First check if the role is already assigned
-      const { data: existingRole, error } = await supabase
-        .from("thread_roles")
-        .select("*")
-        .eq("thread_id", threadId)
-        .eq("role_id", roleId)
-        .maybeSingle();
+      const isRoleAssigned = threadRoles?.includes(roleId);
 
-      if (error) {
-        console.error("Error checking role assignment:", error);
+      if (isRoleAssigned) {
+        // Remove role
+        const { error } = await supabase
+          .from("thread_roles")
+          .delete()
+          .eq("thread_id", threadId)
+          .eq("role_id", roleId);
+
+        if (error) throw error;
+
         toast({
-          title: "Error",
-          description: "Failed to check role assignment.",
-          variant: "destructive",
+          title: "Role removed",
+          description: "Role has been removed from the conversation.",
         });
-        return;
-      }
+      } else {
+        // Add role
+        const { error: checkError } = await supabase
+          .from("thread_roles")
+          .select("*")
+          .eq("thread_id", threadId)
+          .eq("role_id", roleId)
+          .maybeSingle();
 
-      if (existingRole) {
+        if (checkError) {
+          console.error("Error checking role assignment:", checkError);
+          toast({
+            title: "Error",
+            description: "Failed to check role assignment.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        onRoleSelected(roleId);
         toast({
-          title: "Role already assigned",
-          description: "This role is already part of the conversation.",
-          variant: "destructive",
+          title: "Role added",
+          description: "Role has been added to the conversation.",
         });
-        return;
       }
-
-      onRoleSelected(roleId);
-      setOpen(false);
     } catch (error) {
-      console.error("Error checking role assignment:", error);
+      console.error("Error toggling role:", error);
       toast({
         title: "Error",
-        description: "Failed to add role to conversation.",
+        description: "Failed to update role in conversation.",
         variant: "destructive",
       });
     }
@@ -118,26 +121,39 @@ export function RoleSelectionDialog({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Select a Role</DialogTitle>
+          <DialogTitle>Select Roles</DialogTitle>
         </DialogHeader>
         <ScrollArea className="max-h-[300px] mt-4">
           <div className="space-y-2">
-            {availableRoles?.map((role) => (
-              <Button
-                key={role.id}
-                variant="outline"
-                className="w-full justify-start"
-                onClick={() => handleRoleSelect(role.id)}
-              >
-                <div className="flex flex-col items-start">
-                  <span className="font-medium">{role.name}</span>
-                  <span className="text-xs text-muted-foreground">@{role.tag}</span>
+            {allRoles?.map((role) => {
+              const isAssigned = threadRoles?.includes(role.id);
+              return (
+                <div
+                  key={role.id}
+                  className="flex items-center justify-between p-2 rounded-md hover:bg-accent"
+                >
+                  <div className="flex flex-col">
+                    <span className="font-medium">{role.name}</span>
+                    <span className="text-xs text-muted-foreground">@{role.tag}</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleRoleToggle(role.id)}
+                    className={isAssigned ? "text-destructive hover:text-destructive" : "text-primary hover:text-primary"}
+                  >
+                    {isAssigned ? (
+                      <X className="h-4 w-4" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-              </Button>
-            ))}
-            {availableRoles?.length === 0 && (
+              );
+            })}
+            {allRoles?.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No available roles to add
+                No roles available
               </p>
             )}
           </div>
