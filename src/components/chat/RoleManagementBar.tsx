@@ -43,7 +43,13 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
             id,
             name,
             tag,
-            description
+            description,
+            alias,
+            instructions,
+            model,
+            created_at,
+            updated_at,
+            user_id
           )
         `)
         .eq("thread_id", threadId);
