@@ -88,6 +88,11 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
               addRoleToThread.mutate({ threadId, roleId });
             }
           }}
+          onRoleRemoved={(roleId) => {
+            if (threadId) {
+              removeRoleFromThread.mutate({ threadId, roleId });
+            }
+          }}
           disabled={!threadId}
         />
       </div>
