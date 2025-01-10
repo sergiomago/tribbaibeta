@@ -6,11 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Tables } from "@/integrations/supabase/types";
 import { Plus } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
 const Roles = () => {
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const { data: roles, isLoading } = useQuery({
     queryKey: ['roles'],
@@ -33,57 +31,16 @@ const Roles = () => {
     
     if (error) {
       console.error('Error deleting role:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete role: " + error.message,
-        variant: "destructive",
-      });
     }
   };
 
-  const handleStartChat = async (roleId: string) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        throw new Error("User not authenticated");
-      }
-
-      // Create a new thread
-      const { data: thread, error: threadError } = await supabase
-        .from('threads')
-        .insert({
-          name: "New Chat",
-          user_id: user.id
-        })
-        .select()
-        .single();
-
-      if (threadError) throw threadError;
-
-      // Add the role to the thread
-      const { error: roleError } = await supabase
-        .from('thread_roles')
-        .insert({
-          thread_id: thread.id,
-          role_id: roleId,
-        });
-
-      if (roleError) throw roleError;
-
-      // Navigate to the new chat
-      navigate(`/chats/${thread.id}`);
-    } catch (error) {
-      console.error('Error starting chat:', error);
-      toast({
-        title: "Error",
-        description: "Failed to start chat: " + (error as Error).message,
-        variant: "destructive",
-      });
-    }
+  const handleStartChat = (id: string) => {
+    navigate(`/chats?role=${id}`);
   };
 
   const handleEdit = (id: string) => {
-    navigate(`/roles/edit/${id}`);
+    // TODO: Implement edit functionality
+    console.log('Edit role:', id);
   };
 
   return (
