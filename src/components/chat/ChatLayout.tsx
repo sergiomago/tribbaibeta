@@ -24,10 +24,6 @@ export function ChatLayout() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", currentThreadId],
     queryFn: async () => {
@@ -74,6 +70,10 @@ export function ChatLayout() {
     };
   }, [currentThreadId, refetchMessages]);
 
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
@@ -81,7 +81,7 @@ export function ChatLayout() {
   return (
     <ResizablePanelGroup 
       direction="horizontal" 
-      className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800"
+      className="h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800"
     >
       <ResizablePanel
         defaultSize={chatSidebarSize}
@@ -113,16 +113,18 @@ export function ChatLayout() {
       <ResizableHandle className="w-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" />
 
       <ResizablePanel defaultSize={100 - chatSidebarSize} className="min-w-[300px]">
-        <div className="flex flex-col h-[calc(100vh-4rem)]">
+        <div className="flex flex-col h-full">
           <RoleManagementBar threadId={currentThreadId} />
-
-          <ScrollArea className="flex-1">
-            <MessageList
-              messages={messages}
-              isLoading={isLoadingMessages}
-              messagesEndRef={messagesEndRef}
-            />
-          </ScrollArea>
+          
+          <div className="flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <MessageList
+                messages={messages}
+                isLoading={isLoadingMessages}
+                messagesEndRef={messagesEndRef}
+              />
+            </ScrollArea>
+          </div>
 
           {currentThreadId ? (
             <ChatInput 
