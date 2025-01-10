@@ -1,12 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Tables } from "@/integrations/supabase/types";
-import { Edit, MessageCircle } from "lucide-react";
+import { Edit, MessageCircle, Trash } from "lucide-react";
 
 type RoleCardProps = {
   role: Tables<"roles">;
+  onEdit?: (role: Tables<"roles">) => void;
+  onDelete?: (role: Tables<"roles">) => void;
 };
 
-export const RoleCard = ({ role }: RoleCardProps) => {
+export const RoleCard = ({ role, onEdit, onDelete }: RoleCardProps) => {
   return (
     <div className="group relative rounded-lg border bg-white/50 p-4 transition-all hover:bg-white hover:shadow-lg dark:bg-gray-800/50 dark:hover:bg-gray-800">
       <div className="flex items-start justify-between">
@@ -36,9 +38,21 @@ export const RoleCard = ({ role }: RoleCardProps) => {
           {role.model}
         </span>
         <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit?.(role)}
+          >
             <Edit className="mr-2 h-3 w-3" />
             Edit
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => onDelete?.(role)}
+          >
+            <Trash className="mr-2 h-3 w-3" />
+            Delete
           </Button>
           <Button variant="default" size="sm">
             <MessageCircle className="mr-2 h-3 w-3" />
