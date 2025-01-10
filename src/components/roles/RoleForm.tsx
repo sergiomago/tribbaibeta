@@ -35,18 +35,19 @@ export type RoleFormValues = z.infer<typeof roleFormSchema>;
 type RoleFormProps = {
   onSubmit: (values: RoleFormValues) => void;
   isCreating: boolean;
+  defaultValues?: Partial<RoleFormValues>;
 };
 
-export const RoleForm = ({ onSubmit, isCreating }: RoleFormProps) => {
+export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps) => {
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
     defaultValues: {
-      name: "",
-      alias: "",
-      tag: "",
-      description: "",
-      instructions: "",
-      model: "gpt-4o-mini",
+      name: defaultValues?.name ?? "",
+      alias: defaultValues?.alias ?? "",
+      tag: defaultValues?.tag ?? "",
+      description: defaultValues?.description ?? "",
+      instructions: defaultValues?.instructions ?? "",
+      model: defaultValues?.model ?? "gpt-4o-mini",
     },
   });
 
