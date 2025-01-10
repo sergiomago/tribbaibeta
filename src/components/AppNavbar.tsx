@@ -30,7 +30,7 @@ export function AppNavbar() {
       <div className="flex h-14 items-center justify-between px-6">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2">
-            <img src="/logomoving.gif" alt="Tribbai Logo" className="h-8" />
+            <img src="/Logotribbai.png" alt="Tribbai Logo" className="h-8" />
             <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600">
               Tribbai
             </span>

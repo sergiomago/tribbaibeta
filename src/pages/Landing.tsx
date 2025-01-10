@@ -12,7 +12,7 @@ const Landing = () => {
             loop
             muted
             playsInline
-            className="w-64 mb-8"
+            className="w-64 mb-8 mix-blend-luminosity"
           >
             <source src="/Logomoving.mp4" type="video/mp4" />
             <img src="/Tribbailogo.png" alt="Tribbai Logo" className="w-64" />
