@@ -10,6 +10,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Index from "@/pages/Index";
 import Roles from "@/pages/Roles";
+import CreateRole from "@/pages/CreateRole";
 import Chats from "@/pages/Chats";
 import Settings from "@/pages/Settings";
 
@@ -31,6 +32,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Roles />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/roles/create"
+              element={
+                <ProtectedRoute>
+                  <CreateRole />
                 </ProtectedRoute>
               }
             />
