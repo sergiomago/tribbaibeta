@@ -66,12 +66,22 @@ export function RoleSelectionDialog({
 
     try {
       // First check if the role is already assigned
-      const { data: existingRole } = await supabase
+      const { data: existingRole, error } = await supabase
         .from("thread_roles")
         .select("*")
         .eq("thread_id", threadId)
         .eq("role_id", roleId)
-        .single();
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error checking role assignment:", error);
+        toast({
+          title: "Error",
+          description: "Failed to check role assignment.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (existingRole) {
         toast({
