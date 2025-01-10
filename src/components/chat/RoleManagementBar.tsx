@@ -24,25 +24,21 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         .from("threads")
         .select("name")
         .eq("id", threadId)
-        .maybeSingle();
+        .single();
       if (error) throw error;
       return data;
     },
     enabled: !!threadId,
   });
 
-  const { data: threadRoles, isLoading: isLoadingRoles } = useQuery({
+  const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
       const { data, error } = await supabase
         .from("thread_roles")
         .select(`
-          role:roles (
-            id,
-            name,
-            tag
-          )
+          role:roles (*)
         `)
         .eq("thread_id", threadId);
       if (error) throw error;
@@ -74,14 +70,9 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     }
   };
 
-  const handleRemoveRole = (roleId: string) => {
-    if (!threadId) return;
-    removeRoleFromThread.mutate({ threadId, roleId });
-  };
-
   return (
     <div className="border-b p-4 flex-shrink-0">
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <Input
           className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
           value={title}
@@ -101,17 +92,18 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         />
       </div>
       <div className="flex gap-2 flex-wrap">
-        {isLoadingRoles ? (
-          <div className="text-sm text-muted-foreground">Loading roles...</div>
-        ) : threadRoles && threadRoles.length > 0 ? (
-          threadRoles.map((role) => (
-            <RoleTag
-              key={role.id}
-              role={role}
-              onRemove={() => handleRemoveRole(role.id)}
-            />
-          ))
-        ) : (
+        {threadRoles?.map((role) => (
+          <RoleTag
+            key={role.id}
+            role={role}
+            onRemove={() => {
+              if (threadId) {
+                removeRoleFromThread.mutate({ threadId, roleId: role.id });
+              }
+            }}
+          />
+        ))}
+        {threadRoles?.length === 0 && (
           <div className="text-sm text-muted-foreground">
             No roles assigned. Add roles to start chatting.
           </div>
