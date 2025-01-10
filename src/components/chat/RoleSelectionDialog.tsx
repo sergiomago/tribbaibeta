@@ -73,24 +73,6 @@ export function RoleSelectionDialog({
           description: "Role has been removed from the conversation.",
         });
       } else {
-        // Add role
-        const { error: checkError } = await supabase
-          .from("thread_roles")
-          .select("*")
-          .eq("thread_id", threadId)
-          .eq("role_id", roleId)
-          .maybeSingle();
-
-        if (checkError) {
-          console.error("Error checking role assignment:", checkError);
-          toast({
-            title: "Error",
-            description: "Failed to check role assignment.",
-            variant: "destructive",
-          });
-          return;
-        }
-
         onRoleSelected(roleId);
         toast({
           title: "Role added",
