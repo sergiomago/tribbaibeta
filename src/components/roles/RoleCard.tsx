@@ -32,7 +32,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
           </h3>
           {role.alias && (
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              @{role.alias}
+              {role.alias}
             </p>
           )}
         </div>
