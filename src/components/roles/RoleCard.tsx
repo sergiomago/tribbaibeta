@@ -24,14 +24,14 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
-    <div className="group relative rounded-xl border border-border bg-background/50 backdrop-blur-sm p-6 transition-all hover:shadow-lg hover:bg-background dark:hover:bg-background/80">
+    <div className="group relative rounded-xl border border-gray-800 bg-gray-900/50 backdrop-blur-sm p-6 transition-all hover:bg-gray-800/50">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-semibold text-foreground">
+          <h3 className="font-semibold text-gray-100">
             {role.name}
           </h3>
           {role.alias && (
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-sm text-gray-400">
               {role.alias}
             </p>
           )}
@@ -42,13 +42,13 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
       </div>
 
       {role.description && (
-        <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
+        <p className="mt-2 text-sm text-gray-400 line-clamp-2">
           {role.description}
         </p>
       )}
 
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-gray-500">
           {role.model}
         </span>
         <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
@@ -56,7 +56,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
             variant="outline" 
             size="sm"
             onClick={() => setShowDeleteDialog(true)}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-800"
           >
             <Trash className="mr-2 h-3 w-3" />
             Delete
@@ -65,7 +65,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
             variant="outline" 
             size="sm"
             onClick={() => onEdit(role.id)}
-            className="text-primary hover:text-primary hover:bg-primary/5"
+            className="text-primary hover:text-primary hover:bg-primary/5 border-gray-800"
           >
             <Edit className="mr-2 h-3 w-3" />
             Edit
@@ -82,7 +82,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-gray-900 border-gray-800">
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -91,7 +91,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="border-gray-800">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 onDelete(role.id);

@@ -173,7 +173,7 @@ const Roles = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white">
+    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-gray-900 to-gray-800 dark:from-gray-900 dark:to-gray-800">
       <AppNavbar />
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
@@ -204,7 +204,7 @@ const Roles = () => {
             if (!open) setEditingRole(null);
           }}
         >
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[600px] bg-gray-900/95 backdrop-blur-lg border-gray-800">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-primary">
                 {editingRole ? "Edit Role" : "Create New Role"}
