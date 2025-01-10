@@ -19,7 +19,7 @@ const CreateRole = () => {
     try {
       const { error } = await supabase
         .from('roles')
-        .insert([{ ...values, user_id: session.user.id }]);
+        .insert({ ...values, user_id: session.user.id });
 
       if (error) throw error;
 
