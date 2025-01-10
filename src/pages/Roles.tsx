@@ -104,6 +104,14 @@ const Roles = () => {
     navigate(`/chats?role=${roleId}`);
   };
 
+  const handleEdit = (roleId: string) => {
+    // For now, we'll just show a toast. You can implement the edit functionality later
+    toast({
+      title: "Edit Role",
+      description: `Editing role with ID: ${roleId}`,
+    });
+  };
+
   const handleSubmit = (values: RoleFormValues) => {
     createRole.mutate(values);
   };
@@ -127,6 +135,7 @@ const Roles = () => {
           isLoading={isLoadingRoles}
           onDelete={(id) => deleteRole.mutate(id)}
           onStartChat={handleStartChat}
+          onEdit={handleEdit}
         />
 
         <Dialog open={showForm} onOpenChange={setShowForm}>
