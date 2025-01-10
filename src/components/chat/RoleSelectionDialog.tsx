@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,6 +26,7 @@ export function RoleSelectionDialog({
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const { data: allRoles } = useQuery({
     queryKey: ["roles"],
@@ -53,8 +54,9 @@ export function RoleSelectionDialog({
   });
 
   const handleRoleToggle = async (roleId: string) => {
-    if (!threadId) return;
+    if (!threadId || isProcessing) return;
 
+    setIsProcessing(true);
     try {
       const isRoleAssigned = threadRoles?.includes(roleId);
 
@@ -80,8 +82,7 @@ export function RoleSelectionDialog({
         });
       }
       
-      // Refetch thread roles to update the UI
-      refetchThreadRoles();
+      await refetchThreadRoles();
     } catch (error) {
       console.error("Error toggling role:", error);
       toast({
@@ -89,6 +90,8 @@ export function RoleSelectionDialog({
         description: "Failed to update role in conversation.",
         variant: "destructive",
       });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -99,12 +102,13 @@ export function RoleSelectionDialog({
           variant="outline" 
           size="sm"
           disabled={disabled}
+          className="gap-2"
         >
-          <Plus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4" />
           Add Role
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Select Roles</DialogTitle>
         </DialogHeader>
@@ -115,17 +119,18 @@ export function RoleSelectionDialog({
               return (
                 <div
                   key={role.id}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-accent"
+                  className="flex items-center justify-between p-3 rounded-md hover:bg-accent transition-colors"
                 >
                   <div className="flex flex-col">
                     <span className="font-medium">{role.name}</span>
                     <span className="text-xs text-muted-foreground">@{role.tag}</span>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant={isAssigned ? "destructive" : "default"}
                     size="icon"
                     onClick={() => handleRoleToggle(role.id)}
-                    className={isAssigned ? "text-destructive hover:text-destructive" : "text-primary hover:text-primary"}
+                    disabled={isProcessing}
+                    className="shrink-0"
                   >
                     {isAssigned ? (
                       <X className="h-4 w-4" />
