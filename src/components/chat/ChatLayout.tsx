@@ -36,10 +36,17 @@ export function ChatLayout() {
 
   const createThreadWithRole = useMutation({
     mutationFn: async (roleId: string) => {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!user) throw new Error("Not authenticated");
+
       // Create a new thread
       const { data: thread, error: threadError } = await supabase
         .from("threads")
-        .insert({ name: "New Chat" })
+        .insert({ 
+          name: "New Chat",
+          user_id: user.id 
+        })
         .select()
         .single();
 
