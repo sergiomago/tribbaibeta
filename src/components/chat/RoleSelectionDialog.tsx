@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, X } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -27,6 +27,7 @@ export function RoleSelectionDialog({
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: allRoles } = useQuery({
     queryKey: ["roles"],
@@ -39,7 +40,7 @@ export function RoleSelectionDialog({
     },
   });
 
-  const { data: threadRoles, refetch: refetchThreadRoles } = useQuery({
+  const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
@@ -70,19 +71,29 @@ export function RoleSelectionDialog({
 
         if (error) throw error;
 
+        // Optimistically update the UI
+        queryClient.setQueryData(["thread-roles", threadId], (old: any) => 
+          old?.filter((id: string) => id !== roleId)
+        );
+
         toast({
           title: "Role removed",
           description: "Role has been removed from the conversation.",
         });
       } else {
         onRoleSelected(roleId);
+        // Optimistically update the UI
+        queryClient.setQueryData(["thread-roles", threadId], (old: any) => 
+          [...(old || []), roleId]
+        );
+        
         toast({
           title: "Role added",
           description: "Role has been added to the conversation.",
         });
       }
       
-      await refetchThreadRoles();
+      await queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
     } catch (error) {
       console.error("Error toggling role:", error);
       toast({

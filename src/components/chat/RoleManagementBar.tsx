@@ -37,9 +37,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
       if (!threadId) return [];
       const { data, error } = await supabase
         .from("thread_roles")
-        .select(`
-          role:roles (*)
-        `)
+        .select("role:roles (id, name, tag)")
         .eq("thread_id", threadId);
       if (error) throw error;
       return data.map(tr => tr.role);
