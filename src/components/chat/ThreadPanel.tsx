@@ -1,23 +1,13 @@
 import { useEffect, useState } from "react";
-import { Plus, MessageSquare, Pencil, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
-import { format } from "date-fns";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Input } from "@/components/ui/input";
+import { ThreadListItem } from "./ThreadListItem";
+import { DeleteThreadDialog } from "./DeleteThreadDialog";
 
 interface ThreadPanelProps {
   selectedThreadId: string | null;
@@ -141,6 +131,28 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
     }
   };
 
+  // Subscribe to thread name changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('thread-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'threads',
+        },
+        (payload) => {
+          queryClient.invalidateQueries({ queryKey: ["threads"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   return (
     <div className="h-full flex flex-col border-r">
       <div className="p-4 border-b">
@@ -156,92 +168,27 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-2">
           {threads?.map((thread) => (
-            <div
+            <ThreadListItem
               key={thread.id}
-              className={`group rounded-lg transition-colors ${
-                selectedThreadId === thread.id
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-muted"
-              }`}
-            >
-              <div className="p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1 min-w-0">
-                    {editingThreadId === thread.id ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleEditSubmit(thread.id);
-                        }}
-                      >
-                        <Input
-                          value={newThreadName}
-                          onChange={(e) => setNewThreadName(e.target.value)}
-                          onBlur={() => handleEditSubmit(thread.id)}
-                          autoFocus
-                          className="h-7"
-                        />
-                      </form>
-                    ) : (
-                      <button
-                        onClick={() => onThreadSelect(thread.id)}
-                        className="flex items-center gap-2 w-full text-left"
-                      >
-                        <MessageSquare className="h-4 w-4 shrink-0" />
-                        <span className="font-medium truncate">{thread.name}</span>
-                      </button>
-                    )}
-                    {thread.last_opened && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(thread.last_opened), "MMM d, yyyy")}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleEditStart(thread)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive"
-                      onClick={() => setThreadToDelete(thread.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
+              thread={thread}
+              isSelected={selectedThreadId === thread.id}
+              isEditing={editingThreadId === thread.id}
+              newName={newThreadName}
+              onSelect={onThreadSelect}
+              onEditStart={handleEditStart}
+              onEditSubmit={handleEditSubmit}
+              onNameChange={setNewThreadName}
+              onDeleteClick={setThreadToDelete}
+            />
           ))}
         </div>
       </ScrollArea>
 
-      <AlertDialog open={!!threadToDelete} onOpenChange={() => setThreadToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Chat</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this chat? This action cannot be undone and all messages
-              will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => threadToDelete && deleteThread.mutate(threadToDelete)}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteThreadDialog
+        isOpen={!!threadToDelete}
+        onClose={() => setThreadToDelete(null)}
+        onConfirm={() => threadToDelete && deleteThread.mutate(threadToDelete)}
+      />
     </div>
   );
 }

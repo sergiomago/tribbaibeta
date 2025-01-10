@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,9 +18,31 @@ interface RoleManagementBarProps {
 }
 
 export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
-  const [title, setTitle] = useState("Project Discussion");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: thread } = useQuery({
+    queryKey: ["thread", threadId],
+    queryFn: async () => {
+      if (!threadId) return null;
+      const { data, error } = await supabase
+        .from("threads")
+        .select("name")
+        .eq("id", threadId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!threadId,
+  });
+
+  const [title, setTitle] = useState(thread?.name || "");
+
+  useEffect(() => {
+    if (thread?.name) {
+      setTitle(thread.name);
+    }
+  }, [thread?.name]);
 
   const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
@@ -37,6 +59,51 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     },
     enabled: !!threadId,
   });
+
+  const updateThreadTitle = useMutation({
+    mutationFn: async (name: string) => {
+      if (!threadId) throw new Error("No thread selected");
+      const { error } = await supabase
+        .from("threads")
+        .update({ name })
+        .eq("id", threadId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["threads"] });
+      queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
+      toast({
+        title: "Success",
+        description: "Chat title updated",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update chat title: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.target.value);
+  };
+
+  const handleTitleBlur = () => {
+    if (title.trim() && title !== thread?.name) {
+      updateThreadTitle.mutate(title.trim());
+    }
+  };
+
+  const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (title.trim() && title !== thread?.name) {
+        updateThreadTitle.mutate(title.trim());
+      }
+    }
+  };
 
   const addRoleToThread = useMutation({
     mutationFn: async (roleId: string) => {
@@ -104,7 +171,9 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         <Input
           className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={handleTitleChange}
+          onBlur={handleTitleBlur}
+          onKeyDown={handleTitleKeyDown}
           placeholder="Chat title..."
         />
         <RoleSelectionDialog
