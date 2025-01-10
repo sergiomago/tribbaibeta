@@ -234,7 +234,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              variant="destructive"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => threadToDelete && deleteThread.mutate(threadToDelete)}
             >
               Delete
