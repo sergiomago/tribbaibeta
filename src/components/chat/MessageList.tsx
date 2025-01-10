@@ -55,13 +55,13 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
             <div
               key={message.id}
               id={message.id}
-              className={`flex gap-3 max-w-[80%] animate-fade-in transition-colors duration-300 rounded-lg ${
+              className={`flex gap-3 max-w-[80%] transition-all duration-300 rounded-lg ${
                 message.role_id 
                   ? "mr-auto" // AI message aligned left
                   : "ml-auto flex-row-reverse" // User message aligned right
               } ${
                 highlightedMessageId === message.id 
-                  ? "bg-primary/5"
+                  ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
                   : ""
               }`}
             >
@@ -96,7 +96,7 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
             </div>
           ))
         )}
-        <div ref={messagesEndRef} /> {/* Scroll anchor */}
+        <div ref={messagesEndRef} />
       </div>
     </ScrollArea>
   );
