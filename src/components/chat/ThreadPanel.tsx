@@ -17,7 +17,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [newThreadName, setNewThreadName] = useState("");
   const [threadToDelete, setThreadToDelete] = useState<string | null>(null);
-  const { createThread, deleteThread } = useThreadMutations();
+  const { createThread, updateThreadName, deleteThread } = useThreadMutations();
 
   // Subscribe to thread changes
   useThreadSubscription();
