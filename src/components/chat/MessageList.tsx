@@ -1,6 +1,8 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
 import { Loader2 } from "lucide-react";
+import { ThreadSearch } from "./ThreadSearch";
+import { useState } from "react";
 
 interface Message {
   id: string;
@@ -21,8 +23,24 @@ interface MessageListProps {
 }
 
 export function MessageList({ messages, isLoading, messagesEndRef }: MessageListProps) {
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+
+  const scrollToMessage = (messageId: string) => {
+    setHighlightedMessageId(messageId);
+    const messageElement = document.getElementById(messageId);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  };
+
   return (
     <ScrollArea className="h-full">
+      <div className="sticky top-0 z-10">
+        <ThreadSearch 
+          messages={messages || []} 
+          onMatchFound={scrollToMessage}
+        />
+      </div>
       <div className="space-y-4 max-w-4xl mx-auto p-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
@@ -41,6 +59,10 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
                 message.role_id 
                   ? "mr-auto" // AI message aligned left
                   : "ml-auto flex-row-reverse" // User message aligned right
+              } ${
+                highlightedMessageId === message.id 
+                  ? "bg-primary/5"
+                  : ""
               }`}
             >
               {message.role && (
