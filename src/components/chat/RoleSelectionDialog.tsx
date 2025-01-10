@@ -8,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, UserPlus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,7 +21,7 @@ interface RoleSelectionDialogProps {
 export function RoleSelectionDialog({ 
   threadId, 
   onRoleSelected,
-  disabled
+  disabled 
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -68,7 +68,7 @@ export function RoleSelectionDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button 
-          variant="outline"
+          variant="outline" 
           size="sm"
           disabled={disabled}
         >

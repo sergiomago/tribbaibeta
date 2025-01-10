@@ -8,6 +8,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface ChatSidebarProps {
+  defaultSize: number;
+  onResize: (size: number) => void;
   onThreadSelect: (threadId: string) => void;
 }
 
