@@ -44,7 +44,7 @@ const EditRole = () => {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to update role: " + error.message,
+        description: "Failed to update role: " + (error as Error).message,
         variant: "destructive",
       });
     },
@@ -61,14 +61,25 @@ const EditRole = () => {
     );
   }
 
+  if (!role) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <AppNavbar />
+        <div className="flex-1 flex items-center justify-center">
+          <p className="text-lg text-gray-600">Role not found</p>
+        </div>
+      </div>
+    );
+  }
+
   const formValues: RoleFormValues = {
-    id: role?.id,
-    name: role?.name || "",
-    alias: role?.alias || "",
-    tag: role?.tag || "",
-    description: role?.description || "",
-    instructions: role?.instructions || "",
-    model: (role?.model === "gpt-4o" || role?.model === "gpt-4o-mini") ? role.model : "gpt-4o",
+    id: role.id,
+    name: role.name,
+    alias: role.alias || "",
+    tag: role.tag,
+    description: role.description || "",
+    instructions: role.instructions,
+    model: role.model === "gpt-4o" || role.model === "gpt-4o-mini" ? role.model : "gpt-4o",
   };
 
   return (

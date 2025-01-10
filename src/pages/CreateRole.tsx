@@ -1,60 +1,55 @@
 import { AppNavbar } from "@/components/AppNavbar";
-import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
-import { useToast } from "@/hooks/use-toast";
+import { RoleForm } from "@/components/roles/RoleForm";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
+import { RoleFormValues } from "@/components/roles/RoleForm";
+import { useMutation } from "@tanstack/react-query";
 
 const CreateRole = () => {
-  const { toast } = useToast();
-  const { session } = useAuth();
   const navigate = useNavigate();
-  const [isCreating, setIsCreating] = useState(false);
+  const { toast } = useToast();
 
-  const handleSubmit = async (values: RoleFormValues) => {
-    if (!session?.user.id) return;
-    
-    setIsCreating(true);
-    try {
+  const createRole = useMutation({
+    mutationFn: async (values: RoleFormValues) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       const { error } = await supabase
         .from('roles')
         .insert({
-          name: values.name,
-          alias: values.alias,
-          tag: values.tag,
-          description: values.description,
-          instructions: values.instructions,
-          model: values.model,
-          user_id: session.user.id
+          ...values,
+          user_id: user.id,
         });
 
       if (error) throw error;
-
+    },
+    onSuccess: () => {
       toast({
         title: "Success",
         description: "Role created successfully",
       });
-      
       navigate('/roles');
-    } catch (error) {
+    },
+    onError: (error) => {
       toast({
         title: "Error",
-        description: `Failed to create role: ${error.message}`,
+        description: "Failed to create role: " + (error as Error).message,
         variant: "destructive",
       });
-    } finally {
-      setIsCreating(false);
-    }
-  };
+    },
+  });
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen flex flex-col">
       <AppNavbar />
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6">Create New Role</h1>
-          <RoleForm onSubmit={handleSubmit} isCreating={isCreating} />
+          <h1 className="text-2xl font-bold mb-6">Create Role</h1>
+          <RoleForm
+            onSubmit={(values) => createRole.mutate(values)}
+            isCreating={createRole.isPending}
+          />
         </div>
       </main>
     </div>
