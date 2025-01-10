@@ -24,14 +24,14 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
-    <div className="group relative rounded-lg border bg-white/50 p-4 transition-all hover:bg-white hover:shadow-lg dark:bg-gray-800/50 dark:hover:bg-gray-800">
+    <div className="group relative rounded-xl border border-gray-200 bg-white/50 backdrop-blur-sm p-6 transition-all hover:shadow-lg hover:bg-white">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-semibold text-gray-900 dark:text-white">
+          <h3 className="font-semibold text-gray-900">
             {role.name}
           </h3>
           {role.alias && (
-            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            <p className="mt-1 text-sm text-gray-600">
               {role.alias}
             </p>
           )}
@@ -42,13 +42,13 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
       </div>
 
       {role.description && (
-        <p className="mt-2 text-sm text-gray-600 line-clamp-2 dark:text-gray-400">
+        <p className="mt-2 text-sm text-gray-600 line-clamp-2">
           {role.description}
         </p>
       )}
 
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs text-gray-500 dark:text-gray-400">
+        <span className="text-xs text-gray-500">
           {role.model}
         </span>
         <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
@@ -56,6 +56,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
             variant="outline" 
             size="sm"
             onClick={() => setShowDeleteDialog(true)}
+            className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
           >
             <Trash className="mr-2 h-3 w-3" />
             Delete
@@ -64,14 +65,15 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
             variant="outline" 
             size="sm"
             onClick={() => onEdit(role.id)}
+            className="text-primary hover:text-primary-hover hover:bg-primary/5 border-primary/20"
           >
             <Edit className="mr-2 h-3 w-3" />
             Edit
           </Button>
           <Button 
-            variant="default" 
             size="sm"
             onClick={() => onStartChat(role.id)}
+            className="bg-gradient-primary text-white hover:opacity-90"
           >
             <MessageCircle className="mr-2 h-3 w-3" />
             Chat
@@ -95,6 +97,7 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
                 onDelete(role.id);
                 setShowDeleteDialog(false);
               }}
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
               Delete
             </AlertDialogAction>

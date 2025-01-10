@@ -13,6 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 const Roles = () => {
   const { toast } = useToast();
@@ -171,17 +173,20 @@ const Roles = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white">
       <AppNavbar />
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Roles</h1>
-          <button
+          <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-primary">
+            Roles
+          </h1>
+          <Button
             onClick={() => setShowForm(true)}
-            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90"
+            className="bg-gradient-primary text-white hover:opacity-90 transition-all duration-300"
           >
+            <Plus className="h-4 w-4 mr-2" />
             Create Role
-          </button>
+          </Button>
         </div>
 
         <RoleList 
@@ -199,9 +204,9 @@ const Roles = () => {
             if (!open) setEditingRole(null);
           }}
         >
-          <DialogContent>
+          <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
-              <DialogTitle>
+              <DialogTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-primary">
                 {editingRole ? "Edit Role" : "Create New Role"}
               </DialogTitle>
             </DialogHeader>

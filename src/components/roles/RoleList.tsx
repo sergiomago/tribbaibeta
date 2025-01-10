@@ -13,22 +13,24 @@ type RoleListProps = {
 export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: RoleListProps) => {
   if (isLoading) {
     return (
-      <div className="flex justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!roles?.length) {
     return (
-      <p className="text-center text-muted-foreground">
-        No roles created yet. Create your first role using the form.
-      </p>
+      <div className="text-center py-12">
+        <p className="text-lg text-gray-600">
+          No roles created yet. Create your first role using the button above.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {roles.map((role) => (
         <RoleCard 
           key={role.id} 
