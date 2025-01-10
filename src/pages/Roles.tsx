@@ -8,7 +8,7 @@ import { Tables } from "@/integrations/supabase/types";
 import { Plus } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useState } from "react";
-import { RoleForm } from "@/components/roles/RoleForm";
+import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
 import { useToast } from "@/hooks/use-toast";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
@@ -88,11 +88,32 @@ const Roles = () => {
     }
   };
 
-  const handleUpdateRole = async (values: any) => {
+  const convertToFormValues = (role: Tables<"roles">): RoleFormValues => {
+    return {
+      id: role.id,
+      name: role.name,
+      alias: role.alias || undefined,
+      tag: role.tag,
+      description: role.description || "",
+      instructions: role.instructions,
+      model: (role.model === "gpt-4o" || role.model === "gpt-4o-mini") 
+        ? role.model 
+        : "gpt-4o" // fallback to default if invalid
+    };
+  };
+
+  const handleUpdateRole = async (values: RoleFormValues) => {
     try {
       const { error } = await supabase
         .from('roles')
-        .update(values)
+        .update({
+          name: values.name,
+          alias: values.alias,
+          tag: values.tag,
+          description: values.description,
+          instructions: values.instructions,
+          model: values.model,
+        })
         .eq('id', values.id);
 
       if (error) throw error;
@@ -141,7 +162,7 @@ const Roles = () => {
             <RoleForm
               onSubmit={handleUpdateRole}
               isCreating={false}
-              defaultValues={editingRole}
+              defaultValues={convertToFormValues(editingRole)}
             />
           )}
         </DialogContent>
