@@ -39,7 +39,7 @@ const Landing = () => {
             <Link to="/signup">
               <Button 
                 size="lg" 
-                className="bg-gradient-primary hover:opacity-90 text-white hover:scale-105 transition-all duration-300"
+                className="bg-gradient-primary hover:opacity-90 text-white font-semibold hover:scale-105 transition-all duration-300"
               >
                 Get Started
               </Button>
@@ -48,7 +48,7 @@ const Landing = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-white/20 text-white hover:bg-white/10 hover:scale-105 transition-all duration-300"
+                className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white hover:scale-105 transition-all duration-300"
               >
                 Sign In
               </Button>
