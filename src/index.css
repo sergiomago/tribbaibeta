@@ -95,7 +95,7 @@
 
 @layer components {
   .glass {
-    @apply bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl;
+    @apply bg-white/5 backdrop-blur-lg border border-white/10 rounded-2xl;
   }
 }
 

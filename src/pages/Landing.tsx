@@ -4,7 +4,7 @@ import { Sparkles, MessageSquare, Zap } from "lucide-react";
 
 const Landing = () => {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0EA5E9] via-[#33C3F0] to-[#1EAEDB]">
+    <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#2A2F3C] to-[#403E43]">
       {/* Logo Section */}
       <div className="pt-8 flex justify-center animate-fade-in">
         <img 
@@ -18,7 +18,7 @@ const Landing = () => {
       <div className="container mx-auto px-4 pt-12 pb-16">
         <div className="flex flex-col items-center text-center">
           {/* Tag line */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-fade-in">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-in">
             <Sparkles className="w-4 h-4 text-white" />
             <span className="text-sm text-white">Revolutionizing team collaboration with AI</span>
           </div>
@@ -26,18 +26,20 @@ const Landing = () => {
           {/* Main heading */}
           <h1 className="text-6xl font-bold mb-6 text-white animate-in">
             Every Dream Needs a{" "}
-            <span className="text-[#D3E4FD] animate-pulse">Team!</span>
+            <span className="bg-gradient-to-r from-[#7E69AB] to-[#6E59A5] text-transparent bg-clip-text animate-pulse">
+              Team!
+            </span>
           </h1>
           
-          <p className="text-xl text-white/90 mb-8 max-w-2xl animate-fade-in">
+          <p className="text-xl text-white/90 mb-8 max-w-2xl animate-in">
             Collaborate with AI roles to strategize, plan, and execute your ideas.
           </p>
 
-          <div className="flex gap-4 animate-fade-in">
+          <div className="flex gap-4 animate-in">
             <Link to="/signup">
               <Button 
                 size="lg" 
-                className="bg-white text-[#0EA5E9] hover:bg-white/90 hover:scale-105 transition-all duration-300"
+                className="bg-gradient-to-r from-[#7E69AB] to-[#6E59A5] text-white hover:opacity-90 hover:scale-105 transition-all duration-300"
               >
                 Get Started
               </Button>
@@ -46,7 +48,7 @@ const Landing = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="border-white text-white hover:bg-white/10 hover:scale-105 transition-all duration-300"
+                className="border-white/20 text-white hover:bg-white/10 hover:scale-105 transition-all duration-300"
               >
                 Sign In
               </Button>
@@ -57,7 +59,7 @@ const Landing = () => {
 
       {/* How It Works Section */}
       <div className="container mx-auto px-4 py-16">
-        <h2 className="text-4xl font-bold text-center text-white mb-12 animate-fade-in">
+        <h2 className="text-4xl font-bold text-center text-white mb-12 animate-in">
           How It Works
         </h2>
         <div className="grid md:grid-cols-3 gap-8">
