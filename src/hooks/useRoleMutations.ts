@@ -8,6 +8,19 @@ export function useRoleMutations() {
 
   const addRoleToThread = useMutation({
     mutationFn: async ({ threadId, roleId }: { threadId: string; roleId: string }) => {
+      // First check if the role is already in the thread
+      const { data: existingRole } = await supabase
+        .from("thread_roles")
+        .select()
+        .eq("thread_id", threadId)
+        .eq("role_id", roleId)
+        .single();
+
+      if (existingRole) {
+        throw new Error("This role is already in the thread");
+      }
+
+      // If not, add the role
       const { error } = await supabase
         .from("thread_roles")
         .insert({
@@ -26,7 +39,7 @@ export function useRoleMutations() {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to add role: " + error.message,
+        description: error instanceof Error ? error.message : "Failed to add role",
         variant: "destructive",
       });
     },
