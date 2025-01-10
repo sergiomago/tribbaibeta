@@ -22,6 +22,7 @@ import {
 import { Loader2 } from "lucide-react";
 
 export const roleFormSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1, "Name is required"),
   alias: z.string().optional(),
   tag: z.string().min(1, "Tag is required"),

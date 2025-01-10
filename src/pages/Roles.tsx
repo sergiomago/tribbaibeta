@@ -145,20 +145,25 @@ const Roles = () => {
   const handleEdit = (roleId: string) => {
     const role = roles?.find(r => r.id === roleId);
     if (role) {
+      // Ensure model is of the correct type
+      const model = role.model === "gpt-4o" || role.model === "gpt-4o-mini" 
+        ? role.model 
+        : "gpt-4o-mini";
+
       setEditingRole({
+        id: role.id,
         name: role.name,
         alias: role.alias || "",
         tag: role.tag,
         description: role.description || "",
         instructions: role.instructions,
-        model: role.model,
-        id: role.id,
+        model: model,
       });
     }
   };
 
   const handleSubmit = (values: RoleFormValues) => {
-    if (editingRole) {
+    if (editingRole?.id) {
       updateRole.mutate({ ...values, id: editingRole.id });
     } else {
       createRole.mutate(values);
