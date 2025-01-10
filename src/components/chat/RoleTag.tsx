@@ -1,8 +1,11 @@
 import { X } from "lucide-react";
-import { Tables } from "@/integrations/supabase/types";
 
 interface RoleTagProps {
-  role: Tables<"roles">;
+  role: {
+    id: string;
+    name: string;
+    tag: string;
+  };
   onRemove: () => void;
 }
 
