@@ -22,8 +22,8 @@ interface MessageListProps {
 
 export function MessageList({ messages, isLoading, messagesEndRef }: MessageListProps) {
   return (
-    <ScrollArea className="flex-1 p-4">
-      <div className="space-y-4 max-w-4xl mx-auto">
+    <ScrollArea className="h-full">
+      <div className="space-y-4 max-w-4xl mx-auto p-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />

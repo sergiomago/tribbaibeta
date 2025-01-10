@@ -14,7 +14,6 @@ import { ThreadPanel } from "./ThreadPanel";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
@@ -81,7 +80,7 @@ export function ChatLayout() {
   return (
     <ResizablePanelGroup 
       direction="horizontal" 
-      className="h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800"
+      className="h-full"
     >
       <ResizablePanel
         defaultSize={chatSidebarSize}
@@ -95,7 +94,7 @@ export function ChatLayout() {
           <Button
             variant="ghost"
             size="icon"
-            className="self-end m-2"
+            className="shrink-0 m-2"
             onClick={toggleSidebar}
           >
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
@@ -113,17 +112,17 @@ export function ChatLayout() {
       <ResizableHandle className="w-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" />
 
       <ResizablePanel defaultSize={100 - chatSidebarSize} className="min-w-[300px]">
-        <div className="flex flex-col h-full">
+        <div className="h-full flex flex-col">
           <RoleManagementBar threadId={currentThreadId} />
           
-          <div className="flex-1 overflow-hidden">
-            <ScrollArea className="h-full">
+          <div className="flex-1 overflow-hidden relative">
+            <div className="absolute inset-0">
               <MessageList
                 messages={messages}
                 isLoading={isLoadingMessages}
                 messagesEndRef={messagesEndRef}
               />
-            </ScrollArea>
+            </div>
           </div>
 
           {currentThreadId ? (

@@ -48,7 +48,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect, isCollapsed = fa
   return (
     <div className="h-full flex flex-col">
       <div className={cn(
-        "p-4 border-b",
+        "p-4 border-b shrink-0",
         isCollapsed && "p-2"
       )}>
         <Button
