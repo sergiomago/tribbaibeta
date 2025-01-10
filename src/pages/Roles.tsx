@@ -2,8 +2,27 @@ import { AppNavbar } from "@/components/AppNavbar";
 import { RoleList } from "@/components/roles/RoleList";
 import { Button } from "@/components/ui/button";
 import { settingsStore } from "@/stores/settingsStore";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { Tables } from "@/integrations/supabase/types";
 
 const Roles = () => {
+  const navigate = useNavigate();
+
+  const { data: roles, isLoading } = useQuery({
+    queryKey: ['roles'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('roles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data as Tables<"roles">[];
+    }
+  });
+
   const playNotificationSound = () => {
     const settings = settingsStore.getSettings();
     if (settings.soundEnabled) {
@@ -12,6 +31,26 @@ const Roles = () => {
         console.error("Error playing notification sound:", error);
       });
     }
+  };
+
+  const handleDelete = async (id: string) => {
+    const { error } = await supabase
+      .from('roles')
+      .delete()
+      .eq('id', id);
+    
+    if (error) {
+      console.error('Error deleting role:', error);
+    }
+  };
+
+  const handleStartChat = (id: string) => {
+    navigate(`/chats?role=${id}`);
+  };
+
+  const handleEdit = (id: string) => {
+    // TODO: Implement edit functionality
+    console.log('Edit role:', id);
   };
 
   return (
@@ -28,7 +67,13 @@ const Roles = () => {
             Test Sound
           </Button>
         </div>
-        <RoleList />
+        <RoleList 
+          roles={roles}
+          isLoading={isLoading}
+          onDelete={handleDelete}
+          onStartChat={handleStartChat}
+          onEdit={handleEdit}
+        />
       </main>
     </div>
   );
