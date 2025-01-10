@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, X } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
@@ -27,6 +27,7 @@ export function RoleSelectionDialog({
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { addRoleToThread, removeRoleFromThread } = useRoleMutations();
 
   const { data: availableRoles, refetch: refetchRoles } = useQuery({
@@ -74,7 +75,9 @@ export function RoleSelectionDialog({
           description: "Role has been added to the conversation.",
         });
       }
-      refetchRoles();
+      // Invalidate both queries to ensure UI updates
+      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
     } catch (error) {
       console.error("Error toggling role:", error);
       toast({
