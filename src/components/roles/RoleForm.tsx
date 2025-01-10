@@ -27,7 +27,7 @@ export const roleFormSchema = z.object({
   tag: z.string().min(1, "Tag is required"),
   description: z.string().optional(),
   instructions: z.string().min(1, "Instructions are required"),
-  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o-mini"),
+  model: z.enum(["gpt-4o", "gpt-4o-mini"]),
 });
 
 export type RoleFormValues = z.infer<typeof roleFormSchema>;
@@ -35,19 +35,18 @@ export type RoleFormValues = z.infer<typeof roleFormSchema>;
 type RoleFormProps = {
   onSubmit: (values: RoleFormValues) => void;
   isCreating: boolean;
-  defaultValues?: Partial<RoleFormValues>;
 };
 
-export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps) => {
+export const RoleForm = ({ onSubmit, isCreating }: RoleFormProps) => {
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
     defaultValues: {
-      name: defaultValues?.name ?? "",
-      alias: defaultValues?.alias ?? "",
-      tag: defaultValues?.tag ?? "",
-      description: defaultValues?.description ?? "",
-      instructions: defaultValues?.instructions ?? "",
-      model: defaultValues?.model ?? "gpt-4o-mini",
+      name: "",
+      alias: "",
+      tag: "",
+      description: "",
+      instructions: "",
+      model: "gpt-4o-mini",
     },
   });
 

@@ -9,7 +9,7 @@ export function AppNavbar() {
     {
       title: "Roles",
       icon: User,
-      url: "/roles",
+      url: "/",
     },
     {
       title: "Chats",
