@@ -14,7 +14,7 @@ export function useRoleMutations() {
         .select()
         .eq("thread_id", threadId)
         .eq("role_id", roleId)
-        .single();
+        .maybeSingle();
 
       if (existingRole) {
         throw new Error("This role is already in the thread");
