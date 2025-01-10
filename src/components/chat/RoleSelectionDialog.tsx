@@ -38,7 +38,7 @@ export function RoleSelectionDialog({
     },
   });
 
-  const { data: threadRoles } = useQuery({
+  const { data: threadRoles, refetch: refetchThreadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
@@ -79,6 +79,9 @@ export function RoleSelectionDialog({
           description: "Role has been added to the conversation.",
         });
       }
+      
+      // Refetch thread roles to update the UI
+      refetchThreadRoles();
     } catch (error) {
       console.error("Error toggling role:", error);
       toast({
