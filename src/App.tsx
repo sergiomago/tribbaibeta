@@ -3,6 +3,7 @@ import { AppNavbar } from "@/components/AppNavbar";
 import Chats from "@/pages/Chats";
 import Roles from "@/pages/Roles";
 import EditRole from "./pages/EditRole";
+import { RoleForm } from "@/components/roles/RoleForm";
 
 const App = () => {
   return (

@@ -43,11 +43,17 @@ const Roles = () => {
 
   const handleStartChat = async (roleId: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
       // Create a new thread
       const { data: thread, error: threadError } = await supabase
         .from('threads')
         .insert({
           name: "New Chat",
+          user_id: user.id
         })
         .select()
         .single();
@@ -70,7 +76,7 @@ const Roles = () => {
       console.error('Error starting chat:', error);
       toast({
         title: "Error",
-        description: "Failed to start chat: " + error.message,
+        description: "Failed to start chat: " + (error as Error).message,
         variant: "destructive",
       });
     }

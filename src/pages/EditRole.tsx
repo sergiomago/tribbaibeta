@@ -61,6 +61,16 @@ const EditRole = () => {
     );
   }
 
+  const formValues: RoleFormValues = {
+    id: role?.id,
+    name: role?.name || "",
+    alias: role?.alias || "",
+    tag: role?.tag || "",
+    description: role?.description || "",
+    instructions: role?.instructions || "",
+    model: (role?.model === "gpt-4o" || role?.model === "gpt-4o-mini") ? role.model : "gpt-4o",
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <AppNavbar />
@@ -68,7 +78,7 @@ const EditRole = () => {
         <div className="max-w-2xl mx-auto">
           <h1 className="text-2xl font-bold mb-6">Edit Role</h1>
           <RoleForm
-            defaultValues={role}
+            defaultValues={formValues}
             onSubmit={(values) => updateRole.mutate(values)}
             isCreating={updateRole.isPending}
           />
