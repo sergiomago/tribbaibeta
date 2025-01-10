@@ -19,14 +19,14 @@ const Landing = () => {
         <div className="flex flex-col items-center text-center">
           {/* Tag line */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-in">
-            <Sparkles className="w-4 h-4 text-white" />
+            <Sparkles className="w-4 h-4 text-primary-bright" />
             <span className="text-sm text-white">Revolutionizing team collaboration with AI</span>
           </div>
 
           {/* Main heading */}
           <h1 className="text-6xl font-bold mb-6 text-white animate-in">
             Every Dream Needs a{" "}
-            <span className="bg-gradient-to-r from-[#7E69AB] to-[#6E59A5] text-transparent bg-clip-text animate-pulse">
+            <span className="bg-gradient-to-r from-primary to-primary-hover text-transparent bg-clip-text animate-pulse">
               Team!
             </span>
           </h1>
@@ -39,7 +39,7 @@ const Landing = () => {
             <Link to="/signup">
               <Button 
                 size="lg" 
-                className="bg-gradient-to-r from-[#7E69AB] to-[#6E59A5] text-white hover:opacity-90 hover:scale-105 transition-all duration-300"
+                className="bg-gradient-primary hover:opacity-90 text-white hover:scale-105 transition-all duration-300"
               >
                 Get Started
               </Button>
@@ -65,8 +65,8 @@ const Landing = () => {
         <div className="grid md:grid-cols-3 gap-8">
           {/* Create AI Roles Card */}
           <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in">
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-6">
-              <Sparkles className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-full bg-primary-bright/20 flex items-center justify-center mb-6">
+              <Sparkles className="w-6 h-6 text-primary-bright" />
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Create AI Roles</h3>
             <p className="text-white/80">
@@ -76,8 +76,8 @@ const Landing = () => {
 
           {/* Start Conversations Card */}
           <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{ animationDelay: "150ms" }}>
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-6">
-              <MessageSquare className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-full bg-primary-bright/20 flex items-center justify-center mb-6">
+              <MessageSquare className="w-6 h-6 text-primary-bright" />
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Start Conversations</h3>
             <p className="text-white/80">
@@ -87,8 +87,8 @@ const Landing = () => {
 
           {/* Execute & Scale Card */}
           <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{ animationDelay: "300ms" }}>
-            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center mb-6">
-              <Zap className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 rounded-full bg-primary-bright/20 flex items-center justify-center mb-6">
+              <Zap className="w-6 h-6 text-primary-bright" />
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Execute & Scale</h3>
             <p className="text-white/80">
