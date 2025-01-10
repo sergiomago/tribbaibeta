@@ -1,9 +1,8 @@
-import { AppNavbar } from "@/components/AppNavbar";
-import { RoleForm } from "@/components/roles/RoleForm";
-import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { AppNavbar } from "@/components/AppNavbar";
+import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
+import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { RoleFormValues } from "@/components/roles/RoleForm";
 import { useMutation } from "@tanstack/react-query";
 
 const CreateRole = () => {
@@ -18,7 +17,12 @@ const CreateRole = () => {
       const { error } = await supabase
         .from('roles')
         .insert({
-          ...values,
+          name: values.name,
+          alias: values.alias || null,
+          tag: values.tag,
+          description: values.description,
+          instructions: values.instructions,
+          model: values.model,
           user_id: user.id,
         });
 
@@ -34,7 +38,7 @@ const CreateRole = () => {
     onError: (error) => {
       toast({
         title: "Error",
-        description: "Failed to create role: " + (error as Error).message,
+        description: `Failed to create role: ${error.message}`,
         variant: "destructive",
       });
     },
