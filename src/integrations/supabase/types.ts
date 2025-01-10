@@ -16,7 +16,6 @@ export type Database = {
           content: string
           created_at: string
           id: string
-          openai_message_id: string | null
           reply_to_message_id: string | null
           response_order: number | null
           role_id: string | null
@@ -29,7 +28,6 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
-          openai_message_id?: string | null
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
@@ -42,7 +40,6 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
-          openai_message_id?: string | null
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
@@ -202,7 +199,6 @@ export type Database = {
       roles: {
         Row: {
           alias: string | null
-          assistant_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -215,7 +211,6 @@ export type Database = {
         }
         Insert: {
           alias?: string | null
-          assistant_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -228,7 +223,6 @@ export type Database = {
         }
         Update: {
           alias?: string | null
-          assistant_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -279,7 +273,6 @@ export type Database = {
           created_at: string
           id: string
           name: string
-          openai_thread_id: string
           updated_at: string
           user_id: string
         }
@@ -287,7 +280,6 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
-          openai_thread_id: string
           updated_at?: string
           user_id: string
         }
@@ -295,7 +287,6 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
-          openai_thread_id?: string
           updated_at?: string
           user_id?: string
         }
