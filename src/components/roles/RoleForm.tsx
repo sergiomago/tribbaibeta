@@ -27,7 +27,7 @@ export const roleFormSchema = z.object({
   tag: z.string().min(1, "Tag is required"),
   description: z.string().optional(),
   instructions: z.string().min(1, "Instructions are required"),
-  model: z.enum(["gpt-4o", "gpt-4o-mini"]),
+  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o-mini"),
 });
 
 export type RoleFormValues = z.infer<typeof roleFormSchema>;
