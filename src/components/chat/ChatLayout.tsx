@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   ResizableHandle,
@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Message {
   id: string;
@@ -34,14 +35,17 @@ export function ChatLayout() {
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const { user } = useAuth();
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const createThreadWithRole = useMutation({
     mutationFn: async (roleId: string) => {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError) throw userError;
       if (!user) throw new Error("Not authenticated");
 
-      // Create a new thread
       const { data: thread, error: threadError } = await supabase
         .from("threads")
         .insert({ 
@@ -53,7 +57,6 @@ export function ChatLayout() {
 
       if (threadError) throw threadError;
 
-      // Add the role to the thread
       const { error: roleError } = await supabase
         .from("thread_roles")
         .insert({ thread_id: thread.id, role_id: roleId });
@@ -79,27 +82,11 @@ export function ChatLayout() {
     },
   });
 
-  // Handle role parameter on mount
   useEffect(() => {
     if (roleId && !currentThreadId) {
       createThreadWithRole.mutate(roleId);
     }
   }, [roleId]);
-
-  const { data: thread } = useQuery({
-    queryKey: ["thread", currentThreadId],
-    queryFn: async () => {
-      if (!currentThreadId) return null;
-      const { data, error } = await supabase
-        .from("threads")
-        .select("*")
-        .eq("id", currentThreadId)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!currentThreadId,
-  });
 
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", currentThreadId],
@@ -118,6 +105,11 @@ export function ChatLayout() {
     },
     enabled: !!currentThreadId,
   });
+
+  // Auto-scroll when messages change or thread changes
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, currentThreadId]);
 
   useEffect(() => {
     if (!currentThreadId) return;
@@ -142,10 +134,6 @@ export function ChatLayout() {
       supabase.removeChannel(channel);
     };
   }, [currentThreadId, refetchMessages]);
-
-  const handleMessageSent = () => {
-    refetchMessages();
-  };
 
   return (
     <ResizablePanelGroup 
@@ -184,11 +172,11 @@ export function ChatLayout() {
                 messages?.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex gap-3 ${
+                    className={`flex gap-3 max-w-[80%] animate-fade-in ${
                       message.role_id 
-                        ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow" 
-                        : "bg-primary/5 rounded-lg p-4"
-                    } animate-fade-in`}
+                        ? "mr-auto" // AI message aligned left
+                        : "ml-auto flex-row-reverse" // User message aligned right
+                    }`}
                   >
                     {message.role && (
                       <Avatar className="h-8 w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
@@ -197,7 +185,7 @@ export function ChatLayout() {
                         </span>
                       </Avatar>
                     )}
-                    <div className="flex-1">
+                    <div className={`flex-1 ${message.role_id ? "" : "text-right"}`}>
                       {message.role && (
                         <div className="flex items-center gap-2 mb-1">
                           <div className="font-semibold text-sm text-primary">
@@ -208,18 +196,28 @@ export function ChatLayout() {
                           </div>
                         </div>
                       )}
-                      <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                      <div 
+                        className={`text-sm whitespace-pre-wrap leading-relaxed p-4 rounded-lg ${
+                          message.role_id
+                            ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow"
+                            : "bg-primary/10 text-left"
+                        }`}
+                      >
                         {message.content}
                       </div>
                     </div>
                   </div>
                 ))
               )}
+              <div ref={messagesEndRef} /> {/* Scroll anchor */}
             </div>
           </ScrollArea>
 
           {currentThreadId ? (
-            <ChatInput threadId={currentThreadId} onMessageSent={refetchMessages} />
+            <ChatInput 
+              threadId={currentThreadId} 
+              onMessageSent={refetchMessages} 
+            />
           ) : (
             <div className="border-t p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-center text-muted-foreground">
               Select or create a thread to start chatting
