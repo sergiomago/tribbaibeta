@@ -7,9 +7,10 @@ type RoleListProps = {
   isLoading: boolean;
   onDelete: (id: string) => void;
   onStartChat: (id: string) => void;
+  onEdit: (id: string) => void;
 };
 
-export const RoleList = ({ roles, isLoading, onDelete, onStartChat }: RoleListProps) => {
+export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: RoleListProps) => {
   if (isLoading) {
     return (
       <div className="flex justify-center">
@@ -34,6 +35,7 @@ export const RoleList = ({ roles, isLoading, onDelete, onStartChat }: RoleListPr
           role={role} 
           onDelete={onDelete}
           onStartChat={onStartChat}
+          onEdit={onEdit}
         />
       ))}
     </div>
