@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import OpenAI from "https://esm.sh/openai@4.26.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,20 +11,10 @@ serve(async (req) => {
   }
 
   try {
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY'),
-    });
-
-    // Create a new thread using the OpenAI SDK
-    const thread = await openai.beta.threads.create();
-    console.log('Thread created:', thread);
-
-    if (!thread.id) {
-      throw new Error('Failed to create thread: No thread ID returned');
-    }
-
+    // We don't need to create an OpenAI thread anymore
+    // Just return a success response
     return new Response(
-      JSON.stringify({ id: thread.id }),
+      JSON.stringify({ success: true }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

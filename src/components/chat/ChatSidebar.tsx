@@ -35,22 +35,16 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
     mutationFn: async () => {
       if (!user) throw new Error("User not authenticated");
 
-      // First create an OpenAI thread
-      const { data: openAIThread, error: openAIError } = await supabase.functions.invoke(
-        "create-thread"
-      );
-      if (openAIError) throw openAIError;
-
-      // Then create the thread in our database
+      // Create the thread directly in our database
       const { data, error } = await supabase
         .from("threads")
         .insert({
           name: "New Thread",
-          openai_thread_id: openAIThread.id,
-          user_id: user.id, // Add the user_id here
+          user_id: user.id,
         })
         .select()
         .single();
+
       if (error) throw error;
       return data;
     },
