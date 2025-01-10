@@ -8,6 +8,10 @@ export function useRoleMutations() {
 
   const addRoleToThread = useMutation({
     mutationFn: async ({ threadId, roleId }: { threadId: string; roleId: string }) => {
+      if (!threadId || !roleId) {
+        throw new Error("Thread ID and Role ID are required");
+      }
+
       // First check if the role is already in the thread
       const { data: existingRole } = await supabase
         .from("thread_roles")
@@ -47,6 +51,10 @@ export function useRoleMutations() {
 
   const removeRoleFromThread = useMutation({
     mutationFn: async ({ threadId, roleId }: { threadId: string; roleId: string }) => {
+      if (!threadId || !roleId) {
+        throw new Error("Thread ID and Role ID are required");
+      }
+
       const { error } = await supabase
         .from("thread_roles")
         .delete()
