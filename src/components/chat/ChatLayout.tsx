@@ -41,7 +41,6 @@ export function ChatLayout() {
     enabled: !!currentThreadId,
   });
 
-  // Auto-scroll when messages change or thread changes
   useEffect(() => {
     scrollToBottom();
   }, [messages, currentThreadId]);
@@ -105,7 +104,7 @@ export function ChatLayout() {
             />
           ) : (
             <div className="border-t p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-center text-muted-foreground">
-              Select or create a thread to start chatting
+              Select or create a chat to start chatting
             </div>
           )}
         </div>
