@@ -1,25 +1,20 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
-import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
+import { RoleTag } from "./RoleTag";
 import { RoleSelectionDialog } from "./RoleSelectionDialog";
-
-interface RoleTagProps {
-  role: Tables<"roles">;
-  onRemove: (roleId: string) => void;
-}
+import { useRoleMutations } from "@/hooks/useRoleMutations";
+import { useThreadMutations } from "@/hooks/useThreadMutations";
 
 interface RoleManagementBarProps {
   threadId: string | null;
 }
 
 export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const { updateThreadName } = useThreadMutations();
+  const { addRoleToThread, removeRoleFromThread } = useRoleMutations();
+  const [title, setTitle] = useState("");
 
   const { data: thread } = useQuery({
     queryKey: ["thread", threadId],
@@ -35,14 +30,6 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     },
     enabled: !!threadId,
   });
-
-  const [title, setTitle] = useState(thread?.name || "");
-
-  useEffect(() => {
-    if (thread?.name) {
-      setTitle(thread.name);
-    }
-  }, [thread?.name]);
 
   const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
@@ -60,110 +47,28 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     enabled: !!threadId,
   });
 
-  const updateThreadTitle = useMutation({
-    mutationFn: async (name: string) => {
-      if (!threadId) throw new Error("No thread selected");
-      const { error } = await supabase
-        .from("threads")
-        .update({ name })
-        .eq("id", threadId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["threads"] });
-      queryClient.invalidateQueries({ queryKey: ["thread", threadId] });
-      toast({
-        title: "Success",
-        description: "Chat title updated",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to update chat title: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  useEffect(() => {
+    if (thread?.name) {
+      setTitle(thread.name);
+    }
+  }, [thread?.name]);
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setTitle(e.target.value);
   };
 
-  const handleTitleBlur = () => {
-    if (title.trim() && title !== thread?.name) {
-      updateThreadTitle.mutate(title.trim());
+  const handleTitleUpdate = () => {
+    if (threadId && title.trim() && title !== thread?.name) {
+      updateThreadName.mutate({ threadId, name: title.trim() });
     }
   };
 
   const handleTitleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (title.trim() && title !== thread?.name) {
-        updateThreadTitle.mutate(title.trim());
-      }
+      handleTitleUpdate();
     }
   };
-
-  const addRoleToThread = useMutation({
-    mutationFn: async (roleId: string) => {
-      if (!threadId) {
-        throw new Error("No thread selected");
-      }
-      
-      const { error } = await supabase
-        .from("thread_roles")
-        .insert({
-          thread_id: threadId,
-          role_id: roleId,
-        });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
-      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
-      toast({
-        title: "Success",
-        description: "Role added to thread",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to add role: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const removeRoleFromThread = useMutation({
-    mutationFn: async (roleId: string) => {
-      if (!threadId) {
-        throw new Error("No thread selected");
-      }
-      const { error } = await supabase
-        .from("thread_roles")
-        .delete()
-        .eq("thread_id", threadId)
-        .eq("role_id", roleId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["thread-roles", threadId] });
-      queryClient.invalidateQueries({ queryKey: ["available-roles", threadId] });
-      toast({
-        title: "Success",
-        description: "Role removed from thread",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to remove role: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
 
   return (
     <div className="border-b p-4 flex-shrink-0">
@@ -172,13 +77,17 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
           value={title}
           onChange={handleTitleChange}
-          onBlur={handleTitleBlur}
+          onBlur={handleTitleUpdate}
           onKeyDown={handleTitleKeyDown}
           placeholder="Chat title..."
         />
         <RoleSelectionDialog
           threadId={threadId}
-          onRoleSelected={(roleId) => addRoleToThread.mutate(roleId)}
+          onRoleSelected={(roleId) => {
+            if (threadId) {
+              addRoleToThread.mutate({ threadId, roleId });
+            }
+          }}
           disabled={!threadId}
         />
       </div>
@@ -187,7 +96,11 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           <RoleTag
             key={role.id}
             role={role}
-            onRemove={() => removeRoleFromThread.mutate(role.id)}
+            onRemove={() => {
+              if (threadId) {
+                removeRoleFromThread.mutate({ threadId, roleId: role.id });
+              }
+            }}
           />
         ))}
         {threadRoles?.length === 0 && (
@@ -196,21 +109,6 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function RoleTag({ role, onRemove }: RoleTagProps) {
-  return (
-    <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm">
-      <span className="font-medium text-primary">{role.name}</span>
-      <span className="text-xs text-gray-500">{role.tag}</span>
-      <button
-        className="ml-1 rounded-full hover:bg-primary/20 p-1"
-        onClick={() => onRemove(role.id)}
-      >
-        <X className="h-3 w-3 text-primary" />
-      </button>
     </div>
   );
 }

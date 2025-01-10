@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThreadListItem } from "./ThreadListItem";
 import { DeleteThreadDialog } from "./DeleteThreadDialog";
+import { useThreadMutations } from "@/hooks/useThreadMutations";
 
 interface ThreadPanelProps {
   selectedThreadId: string | null;
@@ -15,14 +15,13 @@ interface ThreadPanelProps {
 }
 
 export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelProps) {
-  const { toast } = useToast();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
   const [newThreadName, setNewThreadName] = useState("");
   const [threadToDelete, setThreadToDelete] = useState<string | null>(null);
+  const { createThread, updateThreadName, deleteThread } = useThreadMutations();
 
-  const { data: threads, isLoading } = useQuery({
+  const { data: threads } = useQuery({
     queryKey: ["threads"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -34,92 +33,6 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
     },
   });
 
-  const createThread = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("User not authenticated");
-
-      const { data, error } = await supabase
-        .from("threads")
-        .insert({
-          name: "New Chat",
-          user_id: user.id,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (newThread) => {
-      queryClient.invalidateQueries({ queryKey: ["threads"] });
-      onThreadSelect(newThread.id);
-      toast({
-        title: "Success",
-        description: "New chat created",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to create chat: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const updateThreadName = useMutation({
-    mutationFn: async ({ threadId, name }: { threadId: string; name: string }) => {
-      const { error } = await supabase
-        .from("threads")
-        .update({ name })
-        .eq("id", threadId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["threads"] });
-      setEditingThreadId(null);
-      toast({
-        title: "Success",
-        description: "Chat name updated",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to update chat name: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteThread = useMutation({
-    mutationFn: async (threadId: string) => {
-      const { error } = await supabase
-        .from("threads")
-        .delete()
-        .eq("id", threadId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["threads"] });
-      setThreadToDelete(null);
-      if (selectedThreadId === threadToDelete) {
-        onThreadSelect("");
-      }
-      toast({
-        title: "Success",
-        description: "Chat deleted",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to delete chat: " + error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleEditStart = (thread: any) => {
     setEditingThreadId(thread.id);
     setNewThreadName(thread.name);
@@ -128,10 +41,19 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
   const handleEditSubmit = (threadId: string) => {
     if (newThreadName.trim()) {
       updateThreadName.mutate({ threadId, name: newThreadName.trim() });
+      setEditingThreadId(null);
     }
   };
 
-  // Subscribe to thread name changes
+  const handleCreateThread = () => {
+    if (!user) return;
+    createThread.mutate(user.id, {
+      onSuccess: (newThread) => {
+        onThreadSelect(newThread.id);
+      },
+    });
+  };
+
   useEffect(() => {
     const channel = supabase
       .channel('thread-changes')
@@ -142,7 +64,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
           schema: 'public',
           table: 'threads',
         },
-        (payload) => {
+        () => {
           queryClient.invalidateQueries({ queryKey: ["threads"] });
         }
       )
@@ -151,14 +73,14 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [queryClient]);
+  }, []);
 
   return (
     <div className="h-full flex flex-col border-r">
       <div className="p-4 border-b">
         <Button
           className="w-full"
-          onClick={() => createThread.mutate()}
+          onClick={handleCreateThread}
           disabled={createThread.isPending}
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -187,7 +109,18 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect }: ThreadPanelPro
       <DeleteThreadDialog
         isOpen={!!threadToDelete}
         onClose={() => setThreadToDelete(null)}
-        onConfirm={() => threadToDelete && deleteThread.mutate(threadToDelete)}
+        onConfirm={() => {
+          if (threadToDelete) {
+            deleteThread.mutate(threadToDelete, {
+              onSuccess: () => {
+                if (selectedThreadId === threadToDelete) {
+                  onThreadSelect("");
+                }
+              },
+            });
+          }
+          setThreadToDelete(null);
+        }}
       />
     </div>
   );
