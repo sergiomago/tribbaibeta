@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface RoleSelectionDialogProps {
   threadId: string | null;
@@ -24,6 +25,7 @@ export function RoleSelectionDialog({
   disabled 
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
+  const { toast } = useToast();
 
   const { data: availableRoles } = useQuery({
     queryKey: ["available-roles", threadId],
@@ -59,9 +61,37 @@ export function RoleSelectionDialog({
     enabled: !!threadId,
   });
 
-  const handleRoleSelect = (roleId: string) => {
-    onRoleSelected(roleId);
-    setOpen(false);
+  const handleRoleSelect = async (roleId: string) => {
+    if (!threadId) return;
+
+    try {
+      // First check if the role is already assigned
+      const { data: existingRole } = await supabase
+        .from("thread_roles")
+        .select("*")
+        .eq("thread_id", threadId)
+        .eq("role_id", roleId)
+        .single();
+
+      if (existingRole) {
+        toast({
+          title: "Role already assigned",
+          description: "This role is already part of the conversation.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      onRoleSelected(roleId);
+      setOpen(false);
+    } catch (error) {
+      console.error("Error checking role assignment:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add role to conversation.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
