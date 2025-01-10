@@ -28,8 +28,8 @@ const Index = () => {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
-  const [roleToEdit, setRoleToEdit] = useState<any>(null);
-  const [roleToDelete, setRoleToDelete] = useState<any>(null);
+  const [roleToEdit, setRoleToEdit] = useState<RoleFormValues | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<RoleFormValues | null>(null);
   const { user } = useAuth();
 
   const { data: roles, isLoading: isLoadingRoles } = useQuery({
@@ -52,6 +52,9 @@ const Index = () => {
           .insert({
             ...values,
             user_id: user.id,
+            name: values.name,
+            instructions: values.instructions,
+            tag: values.tag,
           })
           .select()
           .single();
@@ -85,7 +88,12 @@ const Index = () => {
 
       const { data, error } = await supabase
         .from("roles")
-        .update(values)
+        .update({
+          ...values,
+          name: values.name,
+          instructions: values.instructions,
+          tag: values.tag,
+        })
         .eq("id", roleToEdit.id)
         .select()
         .single();
