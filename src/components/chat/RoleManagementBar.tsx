@@ -37,7 +37,13 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
       if (!threadId) return [];
       const { data, error } = await supabase
         .from("thread_roles")
-        .select("role:roles (id, name, tag)")
+        .select(`
+          role:roles (
+            id,
+            name,
+            tag
+          )
+        `)
         .eq("thread_id", threadId);
       if (error) throw error;
       return data.map(tr => tr.role);
@@ -70,7 +76,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
 
   return (
     <div className="border-b p-4 flex-shrink-0">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-3">
         <Input
           className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
           value={title}
