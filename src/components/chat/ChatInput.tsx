@@ -15,16 +15,23 @@ interface ChatInputProps {
 export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [showRoleWarning, setShowRoleWarning] = useState(false);
   const { toast } = useToast();
 
   const handleSend = async () => {
     if (!message.trim()) return;
-    if (!hasRoles) {
+    
+    if (!threadId) {
       toast({
-        title: "No roles assigned",
-        description: "Please add at least one role to the thread before sending messages.",
+        title: "Error",
+        description: "No chat thread selected.",
         variant: "destructive",
       });
+      return;
+    }
+
+    if (!hasRoles) {
+      setShowRoleWarning(true);
       return;
     }
 
@@ -41,6 +48,7 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
       if (error) throw error;
 
       setMessage("");
+      setShowRoleWarning(false);
       onMessageSent?.();
     } catch (error) {
       console.error("Error sending message:", error);
@@ -63,7 +71,7 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
 
   return (
     <div className="border-t p-4 bg-background mt-auto space-y-4">
-      {!hasRoles && (
+      {showRoleWarning && !hasRoles && (
         <Alert variant="destructive" className="mb-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
@@ -73,16 +81,16 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
       )}
       <div className="flex gap-2">
         <Input
-          placeholder={hasRoles ? "Type your message..." : "Add a role to start chatting..."}
+          placeholder="Type your message..."
           className="flex-1"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
-          disabled={isSending || !hasRoles}
+          disabled={isSending}
         />
         <Button 
           onClick={handleSend} 
-          disabled={isSending || !hasRoles}
+          disabled={isSending}
         >
           {isSending ? "Sending..." : "Send"}
         </Button>

@@ -113,7 +113,6 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           threadId={threadId}
           onRoleSelected={(roleId) => addRoleToThread.mutate(roleId)}
           disabled={!threadId}
-          isFirstRole={!hasRoles}
         />
       </div>
       <div className="flex gap-2 flex-wrap min-h-[32px]">
@@ -124,11 +123,6 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
             onRemove={() => removeRoleFromThread.mutate(role.id)}
           />
         ))}
-        {!hasRoles && threadId && (
-          <div className="text-sm text-muted-foreground flex items-center justify-center w-full py-2">
-            Add roles to start chatting
-          </div>
-        )}
       </div>
     </div>
   );
