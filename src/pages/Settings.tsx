@@ -1,5 +1,5 @@
 import { AppNavbar } from "@/components/AppNavbar";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -26,18 +26,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { settingsStore } from "@/stores/settingsStore";
 
 const Settings = () => {
   const { toast } = useToast();
   const { session } = useAuth();
   const [name, setName] = useState("");
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [fontSize, setFontSize] = useState("medium");
-  const [messageDisplay, setMessageDisplay] = useState("comfortable");
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [loading, setLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState(settingsStore.getSettings());
 
   // Load user profile data
   useEffect(() => {
@@ -56,6 +55,11 @@ const Settings = () => {
     };
     loadProfile();
   }, [session]);
+
+  const updateSettings = (newSettings: Partial<typeof settings>) => {
+    settingsStore.updateSettings(newSettings);
+    setSettings(settingsStore.getSettings());
+  };
 
   const handleUpdateProfile = async () => {
     if (!session?.user?.id) return;
@@ -104,184 +108,174 @@ const Settings = () => {
     setLoading(false);
   };
 
-  const handleDeleteAccount = async () => {
-    // In a real application, you would want to implement proper account deletion
-    toast({
-      title: "Coming Soon",
-      description: "Account deletion will be available soon",
-    });
-  };
-
-  const handleThemeChange = () => {
-    setIsDarkMode(!isDarkMode);
-    document.documentElement.classList.toggle("dark");
-    toast({
-      title: "Theme Updated",
-      description: `Switched to ${isDarkMode ? "light" : "dark"} mode`,
-    });
-  };
-
   const playNotificationSound = () => {
-    const audio = new Audio("/notification.mp3"); // You'll need to add this sound file
+    const audio = new Audio("/notification.mp3");
     audio.play();
   };
 
   return (
-    <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen flex flex-col w-full bg-background text-foreground">
       <AppNavbar />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Settings</h1>
+        <h1 className="text-2xl font-bold mb-6">Settings</h1>
         
-        <div className="space-y-6">
-          {/* Theme Preferences */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Appearance</CardTitle>
-              <CardDescription>
-                Customize how the application looks and feels
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Dark Theme</Label>
-                  <div className="text-sm text-muted-foreground">
-                    Switch between light and dark mode
+        <Tabs defaultValue="theme" className="space-y-6">
+          <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="theme">Theme</TabsTrigger>
+            <TabsTrigger value="chat">Chat</TabsTrigger>
+            <TabsTrigger value="account">Account</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="theme">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Dark Theme</Label>
+                    <div className="text-sm text-muted-foreground">
+                      Switch between light and dark mode
+                    </div>
                   </div>
+                  <Switch 
+                    checked={settings.isDarkMode}
+                    onCheckedChange={(checked) => updateSettings({ isDarkMode: checked })}
+                  />
                 </div>
-                <Switch checked={isDarkMode} onCheckedChange={handleThemeChange} />
-              </div>
-              
-              <div className="space-y-2">
-                <Label>Font Size</Label>
-                <Select value={fontSize} onValueChange={setFontSize}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select font size" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">Small</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="large">Large</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Message Display</Label>
-                <Select value={messageDisplay} onValueChange={setMessageDisplay}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select display mode" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="comfortable">Comfortable</SelectItem>
-                    <SelectItem value="compact">Compact</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Notifications</CardTitle>
-              <CardDescription>
-                Configure notification preferences
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>Sound Notifications</Label>
-                  <div className="text-sm text-muted-foreground">
-                    Play sound when AI responds
-                  </div>
+                
+                <div className="space-y-2">
+                  <Label>Font Size</Label>
+                  <Select 
+                    value={settings.fontSize}
+                    onValueChange={(value) => updateSettings({ fontSize: value as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select font size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Switch 
-                  checked={soundEnabled} 
-                  onCheckedChange={(checked) => {
-                    setSoundEnabled(checked);
-                    if (checked) playNotificationSound();
-                  }} 
-                />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-          {/* Account Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Account</CardTitle>
-              <CardDescription>
-                Manage your account settings
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Display Name</Label>
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your display name"
-                />
-              </div>
-              
-              <Button
-                onClick={handleUpdateProfile}
-                disabled={loading}
-              >
-                Update Profile
-              </Button>
+          <TabsContent value="chat">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label>Message Display</Label>
+                  <Select 
+                    value={settings.messageDisplay}
+                    onValueChange={(value) => updateSettings({ messageDisplay: value as any })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select display mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="comfortable">Comfortable</SelectItem>
+                      <SelectItem value="compact">Compact</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              <div className="space-y-2 pt-4">
-                <Label>Change Password</Label>
-                <Input
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Current password"
-                  className="mb-2"
-                />
-                <Input
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="New password"
-                />
+          <TabsContent value="account">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div className="space-y-2">
+                  <Label>Display Name</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your display name"
+                  />
+                </div>
+                
                 <Button
-                  onClick={handleChangePassword}
-                  disabled={loading || !currentPassword || !newPassword}
-                  className="mt-2"
+                  onClick={handleUpdateProfile}
+                  disabled={loading}
                 >
-                  Change Password
+                  Update Profile
                 </Button>
-              </div>
 
-              <div className="pt-4">
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive">Delete Account</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete your
-                        account and remove your data from our servers.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAccount}>
-                        Delete Account
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                <div className="space-y-2 pt-4">
+                  <Label>Change Password</Label>
+                  <Input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Current password"
+                    className="mb-2"
+                  />
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="New password"
+                  />
+                  <Button
+                    onClick={handleChangePassword}
+                    disabled={loading || !currentPassword || !newPassword}
+                    className="mt-2"
+                  >
+                    Change Password
+                  </Button>
+                </div>
+
+                <div className="pt-4">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive">Delete Account</Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete your
+                          account and remove your data from our servers.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction className="bg-red-600 hover:bg-red-700">
+                          Delete Account
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="notifications">
+            <Card>
+              <CardContent className="space-y-4 pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label>Sound Notifications</Label>
+                    <div className="text-sm text-muted-foreground">
+                      Play sound when AI responds
+                    </div>
+                  </div>
+                  <Switch 
+                    checked={settings.soundEnabled}
+                    onCheckedChange={(checked) => {
+                      updateSettings({ soundEnabled: checked });
+                      if (checked) playNotificationSound();
+                    }}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
