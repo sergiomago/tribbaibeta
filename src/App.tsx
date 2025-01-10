@@ -7,9 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
-import Roles from "@/pages/Roles";
-import Chats from "@/pages/Chats";
-import Settings from "@/pages/Settings";
+import Index from "@/pages/Index";
 
 const queryClient = new QueryClient();
 
@@ -27,35 +25,11 @@ const App = () => (
               path="/"
               element={
                 <ProtectedRoute>
-                  <Navigate to="/roles" replace />
+                  <Index />
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/roles"
-              element={
-                <ProtectedRoute>
-                  <Roles />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/chats"
-              element={
-                <ProtectedRoute>
-                  <Chats />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings"
-              element={
-                <ProtectedRoute>
-                  <Settings />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/roles" replace />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>

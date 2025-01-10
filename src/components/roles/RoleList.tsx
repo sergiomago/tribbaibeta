@@ -5,11 +5,9 @@ import { RoleCard } from "./RoleCard";
 type RoleListProps = {
   roles: Tables<"roles">[] | undefined;
   isLoading: boolean;
-  onEdit?: (role: Tables<"roles">) => void;
-  onDelete?: (role: Tables<"roles">) => void;
 };
 
-export const RoleList = ({ roles, isLoading, onEdit, onDelete }: RoleListProps) => {
+export const RoleList = ({ roles, isLoading }: RoleListProps) => {
   if (isLoading) {
     return (
       <div className="flex justify-center">
@@ -29,12 +27,7 @@ export const RoleList = ({ roles, isLoading, onEdit, onDelete }: RoleListProps) 
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {roles.map((role) => (
-        <RoleCard
-          key={role.id}
-          role={role}
-          onEdit={onEdit}
-          onDelete={onDelete}
-        />
+        <RoleCard key={role.id} role={role} />
       ))}
     </div>
   );

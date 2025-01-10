@@ -1,17 +1,15 @@
 import { LogOut, MessageSquare, Settings, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "./ui/button";
-import { Link, useLocation } from "react-router-dom";
 
 export function AppNavbar() {
   const { signOut } = useAuth();
-  const location = useLocation();
 
   const menuItems = [
     {
       title: "Roles",
       icon: User,
-      url: "/roles",
+      url: "/",
     },
     {
       title: "Chats",
@@ -34,18 +32,14 @@ export function AppNavbar() {
           </h2>
           <div className="flex items-center gap-4">
             {menuItems.map((item) => (
-              <Link
+              <a
                 key={item.title}
-                to={item.url}
-                className={`flex items-center gap-2 text-sm ${
-                  location.pathname === item.url
-                    ? "text-primary font-medium"
-                    : "text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-                }`}
+                href={item.url}
+                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
               >
                 <item.icon className="h-4 w-4" />
                 <span>{item.title}</span>
-              </Link>
+              </a>
             ))}
           </div>
         </div>
