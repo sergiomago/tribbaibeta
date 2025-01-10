@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery } from "@tanstack/react-query";
 
 interface ChatInputProps {
   threadId: string;
@@ -14,8 +15,35 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
 
+  // Query to check if thread has roles
+  const { data: threadRoles } = useQuery({
+    queryKey: ["thread-roles", threadId],
+    queryFn: async () => {
+      if (!threadId) return [];
+      const { data, error } = await supabase
+        .from("thread_roles")
+        .select(`
+          role:roles (*)
+        `)
+        .eq("thread_id", threadId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!threadId,
+  });
+
   const handleSend = async () => {
     if (!message.trim()) return;
+
+    // Check if thread has any roles
+    if (!threadRoles?.length) {
+      toast({
+        title: "No roles assigned",
+        description: "Please add at least one role to the chat before sending messages.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSending(true);
     try {
