@@ -24,7 +24,7 @@ export function SearchBar({ onResultSelect }: SearchBarProps) {
           content,
           thread_id,
           created_at,
-          role:roles(name)
+          roles!messages_role_id_fkey(name)
         `)
         .textSearch('search_vector', searchQuery)
         .limit(10);
@@ -72,7 +72,7 @@ export function SearchBar({ onResultSelect }: SearchBarProps) {
                   <div className="truncate">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">
-                        {result.role?.name || 'User'}
+                        {result.roles?.name || 'User'}
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {new Date(result.created_at).toLocaleDateString()}
