@@ -1,11 +1,11 @@
 import { AppNavbar } from "@/components/AppNavbar";
 import { RoleList } from "@/components/roles/RoleList";
 import { Button } from "@/components/ui/button";
-import { settingsStore } from "@/stores/settingsStore";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Tables } from "@/integrations/supabase/types";
+import { Plus } from "lucide-react";
 
 const Roles = () => {
   const navigate = useNavigate();
@@ -22,16 +22,6 @@ const Roles = () => {
       return data as Tables<"roles">[];
     }
   });
-
-  const playNotificationSound = () => {
-    const settings = settingsStore.getSettings();
-    if (settings.soundEnabled) {
-      const audio = new Audio("/notification.mp3");
-      audio.play().catch(error => {
-        console.error("Error playing notification sound:", error);
-      });
-    }
-  };
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase
@@ -60,11 +50,11 @@ const Roles = () => {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Roles</h1>
           <Button 
-            variant="outline" 
-            onClick={playNotificationSound}
-            className="ml-2"
+            onClick={() => navigate('/roles/create')}
+            className="gap-2"
           >
-            Test Sound
+            <Plus className="h-4 w-4" />
+            Create Role
           </Button>
         </div>
         <RoleList 
