@@ -148,12 +148,14 @@ export function ChatLayout() {
   };
 
   return (
-    <ResizablePanelGroup direction="horizontal" className="min-h-[calc(100vh-4rem)]">
-      {/* Chat List Sidebar */}
+    <ResizablePanelGroup 
+      direction="horizontal" 
+      className="min-h-[calc(100vh-4rem)] bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800"
+    >
       <ResizablePanel
         defaultSize={chatSidebarSize}
         onResize={(size) => setChatSidebarSize(size)}
-        className="min-w-[250px]"
+        className="min-w-[250px] border-r border-gray-200 dark:border-gray-700"
       >
         <ChatSidebar
           defaultSize={chatSidebarSize}
@@ -162,25 +164,25 @@ export function ChatLayout() {
         />
       </ResizablePanel>
 
-      <ResizableHandle />
+      <ResizableHandle className="w-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" />
 
-      {/* Main Chat Area */}
       <ResizablePanel defaultSize={100 - chatSidebarSize}>
         <div className="flex flex-col h-[calc(100vh-4rem)]">
           <RoleManagementBar threadId={currentThreadId} />
 
-          {/* Messages Container */}
           <ScrollArea className="flex-1 p-4">
-            <div className="space-y-4">
+            <div className="space-y-4 max-w-4xl mx-auto">
               {messages?.map((message) => (
                 <div
                   key={message.id}
                   className={`flex gap-3 ${
-                    message.role_id ? "bg-muted/50 rounded-lg p-4" : ""
-                  }`}
+                    message.role_id 
+                      ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm rounded-lg p-4 shadow-sm" 
+                      : "bg-primary/5 rounded-lg p-4"
+                  } animate-fade-in`}
                 >
                   {message.role && (
-                    <Avatar className="h-8 w-8">
+                    <Avatar className="h-8 w-8 bg-primary text-primary-foreground">
                       <span className="text-xs font-semibold">
                         {message.role.tag}
                       </span>
@@ -188,11 +190,13 @@ export function ChatLayout() {
                   )}
                   <div className="flex-1">
                     {message.role && (
-                      <div className="font-semibold text-sm text-muted-foreground mb-1">
+                      <div className="font-semibold text-sm text-primary mb-1">
                         {message.role.name}
                       </div>
                     )}
-                    <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                      {message.content}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -202,7 +206,7 @@ export function ChatLayout() {
           {currentThreadId ? (
             <ChatInput threadId={currentThreadId} onMessageSent={handleMessageSent} />
           ) : (
-            <div className="border-t p-4 bg-background text-center text-muted-foreground">
+            <div className="border-t p-4 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm text-center text-muted-foreground">
               Select or create a thread to start chatting
             </div>
           )}
