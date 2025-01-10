@@ -20,6 +20,7 @@ const Roles = () => {
   const navigate = useNavigate();
   const [isCreating, setIsCreating] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleFormValues | null>(null);
   const { user } = useAuth();
 
   const { data: roles, isLoading: isLoadingRoles } = useQuery({
@@ -76,6 +77,43 @@ const Roles = () => {
     },
   });
 
+  const updateRole = useMutation({
+    mutationFn: async (values: RoleFormValues & { id: string }) => {
+      const { id, ...updateData } = values;
+      const { data, error } = await supabase
+        .from("roles")
+        .update({
+          name: updateData.name,
+          alias: updateData.alias || null,
+          tag: updateData.tag,
+          description: updateData.description || null,
+          instructions: updateData.instructions,
+          model: updateData.model,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      toast({
+        title: "Success",
+        description: "Role updated successfully",
+      });
+      setEditingRole(null);
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to update role: " + error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteRole = useMutation({
     mutationFn: async (roleId: string) => {
       const { error } = await supabase
@@ -105,15 +143,26 @@ const Roles = () => {
   };
 
   const handleEdit = (roleId: string) => {
-    // For now, we'll just show a toast. You can implement the edit functionality later
-    toast({
-      title: "Edit Role",
-      description: `Editing role with ID: ${roleId}`,
-    });
+    const role = roles?.find(r => r.id === roleId);
+    if (role) {
+      setEditingRole({
+        name: role.name,
+        alias: role.alias || "",
+        tag: role.tag,
+        description: role.description || "",
+        instructions: role.instructions,
+        model: role.model,
+        id: role.id,
+      });
+    }
   };
 
   const handleSubmit = (values: RoleFormValues) => {
-    createRole.mutate(values);
+    if (editingRole) {
+      updateRole.mutate({ ...values, id: editingRole.id });
+    } else {
+      createRole.mutate(values);
+    }
   };
 
   return (
@@ -138,12 +187,24 @@ const Roles = () => {
           onEdit={handleEdit}
         />
 
-        <Dialog open={showForm} onOpenChange={setShowForm}>
+        <Dialog 
+          open={showForm || editingRole !== null} 
+          onOpenChange={(open) => {
+            setShowForm(open);
+            if (!open) setEditingRole(null);
+          }}
+        >
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New Role</DialogTitle>
+              <DialogTitle>
+                {editingRole ? "Edit Role" : "Create New Role"}
+              </DialogTitle>
             </DialogHeader>
-            <RoleForm onSubmit={handleSubmit} isCreating={isCreating} />
+            <RoleForm 
+              onSubmit={handleSubmit} 
+              isCreating={isCreating}
+              defaultValues={editingRole || undefined}
+            />
           </DialogContent>
         </Dialog>
       </main>

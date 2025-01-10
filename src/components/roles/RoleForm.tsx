@@ -35,12 +35,13 @@ export type RoleFormValues = z.infer<typeof roleFormSchema>;
 type RoleFormProps = {
   onSubmit: (values: RoleFormValues) => void;
   isCreating: boolean;
+  defaultValues?: RoleFormValues;
 };
 
-export const RoleForm = ({ onSubmit, isCreating }: RoleFormProps) => {
+export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps) => {
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
-    defaultValues: {
+    defaultValues: defaultValues || {
       name: "",
       alias: "",
       tag: "",
@@ -166,9 +167,7 @@ export const RoleForm = ({ onSubmit, isCreating }: RoleFormProps) => {
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Creating...
             </>
-          ) : (
-            "Create Role"
-          )}
+          ) : defaultValues ? "Update Role" : "Create Role"}
         </Button>
       </form>
     </Form>
