@@ -11,6 +11,9 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageList } from "./MessageList";
 import { ThreadPanel } from "./ThreadPanel";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
@@ -18,6 +21,7 @@ export function ChatLayout() {
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,6 +73,10 @@ export function ChatLayout() {
     };
   }, [currentThreadId, refetchMessages]);
 
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
   return (
     <ResizablePanelGroup 
       direction="horizontal" 
@@ -77,25 +85,43 @@ export function ChatLayout() {
       <ResizablePanel
         defaultSize={chatSidebarSize}
         onResize={(size) => setChatSidebarSize(size)}
-        className="min-w-[250px]"
+        className={cn(
+          "min-w-[50px] transition-all duration-300",
+          isSidebarCollapsed ? "!w-[50px] !min-w-[50px] !max-w-[50px]" : "min-w-[250px]"
+        )}
       >
-        <ThreadPanel
-          selectedThreadId={currentThreadId}
-          onThreadSelect={setCurrentThreadId}
-        />
+        <div className="h-full flex flex-col">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="self-end m-2"
+            onClick={toggleSidebar}
+          >
+            {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </Button>
+          <div className="flex-1 overflow-hidden">
+            <ThreadPanel
+              selectedThreadId={currentThreadId}
+              onThreadSelect={setCurrentThreadId}
+              isCollapsed={isSidebarCollapsed}
+            />
+          </div>
+        </div>
       </ResizablePanel>
 
       <ResizableHandle className="w-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" />
 
-      <ResizablePanel defaultSize={100 - chatSidebarSize}>
+      <ResizablePanel defaultSize={100 - chatSidebarSize} className="min-w-[300px]">
         <div className="flex flex-col h-[calc(100vh-4rem)]">
           <RoleManagementBar threadId={currentThreadId} />
 
-          <MessageList
-            messages={messages}
-            isLoading={isLoadingMessages}
-            messagesEndRef={messagesEndRef}
-          />
+          <div className="flex-1 overflow-hidden">
+            <MessageList
+              messages={messages}
+              isLoading={isLoadingMessages}
+              messagesEndRef={messagesEndRef}
+            />
+          </div>
 
           {currentThreadId ? (
             <ChatInput 
