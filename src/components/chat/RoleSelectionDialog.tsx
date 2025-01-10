@@ -55,7 +55,10 @@ export function RoleSelectionDialog({
   });
 
   const handleRoleToggle = async (roleId: string, isAssigned: boolean) => {
-    if (!threadId) return;
+    if (!threadId || !roleId) {
+      console.error("Missing threadId or roleId");
+      return;
+    }
 
     try {
       if (isAssigned) {
@@ -112,7 +115,7 @@ export function RoleSelectionDialog({
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => handleRoleToggle(role.id, role.isAssigned)}
+                  onClick={() => role.id && handleRoleToggle(role.id, role.isAssigned)}
                   className={role.isAssigned ? "text-destructive hover:text-destructive" : "text-primary hover:text-primary"}
                 >
                   {role.isAssigned ? (
