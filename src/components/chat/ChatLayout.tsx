@@ -24,7 +24,7 @@ export function ChatLayout() {
     enabled: !!selectedThreadId,
   });
 
-  const hasRoles = threadRoles && threadRoles.length > 0;
+  const hasRoles = !!threadRoles?.length;
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
@@ -36,13 +36,15 @@ export function ChatLayout() {
         <div className="flex-1 overflow-y-auto p-4">
           {/* Messages will go here */}
         </div>
-        <ChatInput 
-          threadId={selectedThreadId!} 
-          hasRoles={hasRoles}
-          onMessageSent={() => {
-            // Handle message sent
-          }} 
-        />
+        {selectedThreadId && (
+          <ChatInput 
+            threadId={selectedThreadId} 
+            hasRoles={hasRoles}
+            onMessageSent={() => {
+              // Handle message sent
+            }} 
+          />
+        )}
       </div>
     </div>
   );

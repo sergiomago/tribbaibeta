@@ -20,15 +20,6 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
 
   const handleSend = async () => {
     if (!message.trim()) return;
-    
-    if (!threadId) {
-      toast({
-        title: "Error",
-        description: "No chat thread selected.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     if (!hasRoles) {
       setShowRoleWarning(true);
@@ -37,7 +28,6 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
 
     setIsSending(true);
     try {
-      console.log('Sending message:', { threadId, content: message });
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId,
@@ -54,7 +44,7 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
       console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send message",
         variant: "destructive",
       });
     } finally {
@@ -72,7 +62,7 @@ export function ChatInput({ threadId, hasRoles, onMessageSent }: ChatInputProps)
   return (
     <div className="border-t p-4 bg-background mt-auto space-y-4">
       {showRoleWarning && !hasRoles && (
-        <Alert variant="destructive" className="mb-4">
+        <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Please add at least one role to start the conversation.
