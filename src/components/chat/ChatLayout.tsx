@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { MessageList } from "./MessageList";
 import { ThreadPanel } from "./ThreadPanel";
+import { SearchBar } from "./SearchBar";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,6 +23,7 @@ export function ChatLayout() {
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const messageListRef = useRef<HTMLDivElement>(null);
 
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", currentThreadId],
@@ -77,6 +79,21 @@ export function ChatLayout() {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  const handleSearchResultSelect = (threadId: string, messageId: string) => {
+    setCurrentThreadId(threadId);
+    // Wait for messages to load before scrolling
+    setTimeout(() => {
+      const messageElement = document.getElementById(messageId);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: "smooth" });
+        messageElement.classList.add("bg-primary/5");
+        setTimeout(() => {
+          messageElement.classList.remove("bg-primary/5");
+        }, 2000);
+      }
+    }, 100);
+  };
+
   return (
     <ResizablePanelGroup 
       direction="horizontal" 
@@ -99,6 +116,11 @@ export function ChatLayout() {
           >
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
+          {!isSidebarCollapsed && (
+            <div className="px-2">
+              <SearchBar onResultSelect={handleSearchResultSelect} />
+            </div>
+          )}
           <div className="flex-1 overflow-hidden">
             <ThreadPanel
               selectedThreadId={currentThreadId}
@@ -116,7 +138,7 @@ export function ChatLayout() {
           <RoleManagementBar threadId={currentThreadId} />
           
           <div className="flex-1 overflow-hidden relative">
-            <div className="absolute inset-0">
+            <div className="absolute inset-0" ref={messageListRef}>
               <MessageList
                 messages={messages}
                 isLoading={isLoadingMessages}

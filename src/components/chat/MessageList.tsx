@@ -36,7 +36,8 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
           messages?.map((message) => (
             <div
               key={message.id}
-              className={`flex gap-3 max-w-[80%] animate-fade-in ${
+              id={message.id}
+              className={`flex gap-3 max-w-[80%] animate-fade-in transition-colors duration-300 rounded-lg ${
                 message.role_id 
                   ? "mr-auto" // AI message aligned left
                   : "ml-auto flex-row-reverse" // User message aligned right

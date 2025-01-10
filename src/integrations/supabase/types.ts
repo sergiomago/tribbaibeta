@@ -19,6 +19,7 @@ export type Database = {
           reply_to_message_id: string | null
           response_order: number | null
           role_id: string | null
+          search_vector: unknown | null
           tagged_role_id: string | null
           thread_id: string
         }
@@ -31,6 +32,7 @@ export type Database = {
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
+          search_vector?: unknown | null
           tagged_role_id?: string | null
           thread_id: string
         }
@@ -43,6 +45,7 @@ export type Database = {
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
+          search_vector?: unknown | null
           tagged_role_id?: string | null
           thread_id?: string
         }
