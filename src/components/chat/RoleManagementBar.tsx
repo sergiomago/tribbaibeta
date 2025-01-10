@@ -24,14 +24,14 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         .from("threads")
         .select("name")
         .eq("id", threadId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
     enabled: !!threadId,
   });
 
-  const { data: threadRoles } = useQuery({
+  const { data: threadRoles, isLoading: isLoadingRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
       if (!threadId) return [];
@@ -74,6 +74,11 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     }
   };
 
+  const handleRemoveRole = (roleId: string) => {
+    if (!threadId) return;
+    removeRoleFromThread.mutate({ threadId, roleId });
+  };
+
   return (
     <div className="border-b p-4 flex-shrink-0">
       <div className="flex items-center justify-between mb-3">
@@ -96,18 +101,17 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         />
       </div>
       <div className="flex gap-2 flex-wrap">
-        {threadRoles?.map((role) => (
-          <RoleTag
-            key={role.id}
-            role={role}
-            onRemove={() => {
-              if (threadId) {
-                removeRoleFromThread.mutate({ threadId, roleId: role.id });
-              }
-            }}
-          />
-        ))}
-        {threadRoles?.length === 0 && (
+        {isLoadingRoles ? (
+          <div className="text-sm text-muted-foreground">Loading roles...</div>
+        ) : threadRoles && threadRoles.length > 0 ? (
+          threadRoles.map((role) => (
+            <RoleTag
+              key={role.id}
+              role={role}
+              onRemove={() => handleRemoveRole(role.id)}
+            />
+          ))
+        ) : (
           <div className="text-sm text-muted-foreground">
             No roles assigned. Add roles to start chatting.
           </div>

@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
 
 export function useRoleMutations() {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const addRoleToThread = useMutation({
@@ -12,7 +11,7 @@ export function useRoleMutations() {
         throw new Error("Thread ID and Role ID are required");
       }
 
-      // First check if the role is already in the thread
+      // Check if role already exists in thread
       const { data: existingRole } = await supabase
         .from("thread_roles")
         .select()
@@ -24,28 +23,21 @@ export function useRoleMutations() {
         throw new Error("This role is already in the thread");
       }
 
-      // If not, add the role
       const { error } = await supabase
         .from("thread_roles")
         .insert({
           thread_id: threadId,
           role_id: roleId,
         });
+
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
-      toast({
-        title: "Success",
-        description: "Role added to thread",
-      });
+      toast.success("Role added to thread");
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add role",
-        variant: "destructive",
-      });
+    onError: (error: Error) => {
+      toast.error(error.message);
     },
   });
 
@@ -60,21 +52,15 @@ export function useRoleMutations() {
         .delete()
         .eq("thread_id", threadId)
         .eq("role_id", roleId);
+
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["thread-roles"] });
-      toast({
-        title: "Success",
-        description: "Role removed from thread",
-      });
+      toast.success("Role removed from thread");
     },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to remove role: " + error.message,
-        variant: "destructive",
-      });
+    onError: (error: Error) => {
+      toast.error("Failed to remove role: " + error.message);
     },
   });
 
