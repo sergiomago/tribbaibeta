@@ -7,6 +7,7 @@ import { useThreadMutations } from "@/hooks/useThreadMutations";
 import { useThreadSubscription } from "@/hooks/useThreadSubscription";
 import { ThreadList } from "./ThreadList";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ThreadPanelProps {
   selectedThreadId: string | null;
@@ -67,17 +68,19 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect, isCollapsed = fa
         </Button>
       </div>
 
-      <ThreadList
-        selectedThreadId={selectedThreadId}
-        editingThreadId={editingThreadId}
-        newThreadName={newThreadName}
-        onThreadSelect={onThreadSelect}
-        onEditStart={handleEditStart}
-        onEditSubmit={handleEditSubmit}
-        onNameChange={setNewThreadName}
-        onDeleteClick={setThreadToDelete}
-        isCollapsed={isCollapsed}
-      />
+      <ScrollArea className="flex-1">
+        <ThreadList
+          selectedThreadId={selectedThreadId}
+          editingThreadId={editingThreadId}
+          newThreadName={newThreadName}
+          onThreadSelect={onThreadSelect}
+          onEditStart={handleEditStart}
+          onEditSubmit={handleEditSubmit}
+          onNameChange={setNewThreadName}
+          onDeleteClick={setThreadToDelete}
+          isCollapsed={isCollapsed}
+        />
+      </ScrollArea>
 
       <DeleteThreadDialog
         isOpen={!!threadToDelete}

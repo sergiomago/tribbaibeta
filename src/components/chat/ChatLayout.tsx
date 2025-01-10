@@ -14,6 +14,7 @@ import { ThreadPanel } from "./ThreadPanel";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
@@ -115,13 +116,13 @@ export function ChatLayout() {
         <div className="flex flex-col h-[calc(100vh-4rem)]">
           <RoleManagementBar threadId={currentThreadId} />
 
-          <div className="flex-1 overflow-hidden">
+          <ScrollArea className="flex-1">
             <MessageList
               messages={messages}
               isLoading={isLoadingMessages}
               messagesEndRef={messagesEndRef}
             />
-          </div>
+          </ScrollArea>
 
           {currentThreadId ? (
             <ChatInput 
