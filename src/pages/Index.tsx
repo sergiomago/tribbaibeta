@@ -50,7 +50,12 @@ const Index = () => {
         const { data, error } = await supabase
           .from("roles")
           .insert({
-            ...values,
+            name: values.name,
+            alias: values.alias || null,
+            tag: values.tag,
+            description: values.description || null,
+            instructions: values.instructions,
+            model: values.model,
             user_id: user.id,
           })
           .select()
@@ -85,7 +90,14 @@ const Index = () => {
 
       const { data, error } = await supabase
         .from("roles")
-        .update(values)
+        .update({
+          name: values.name,
+          alias: values.alias || null,
+          tag: values.tag,
+          description: values.description || null,
+          instructions: values.instructions,
+          model: values.model,
+        })
         .eq("id", roleToEdit.id)
         .select()
         .single();
