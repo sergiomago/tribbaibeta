@@ -8,7 +8,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus } from "lucide-react";
+import { Plus, UserPlus } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -16,12 +16,14 @@ interface RoleSelectionDialogProps {
   threadId: string | null;
   onRoleSelected: (roleId: string) => void;
   disabled?: boolean;
+  isFirstRole?: boolean;
 }
 
 export function RoleSelectionDialog({ 
   threadId, 
   onRoleSelected,
-  disabled 
+  disabled,
+  isFirstRole = false
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -68,12 +70,22 @@ export function RoleSelectionDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button 
-          variant="outline" 
+          variant={isFirstRole ? "default" : "outline"}
           size="sm"
           disabled={disabled}
+          className={isFirstRole ? "w-full gap-2" : undefined}
         >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Role
+          {isFirstRole ? (
+            <>
+              <UserPlus className="h-5 w-5" />
+              Add Your First Role
+            </>
+          ) : (
+            <>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Role
+            </>
+          )}
         </Button>
       </DialogTrigger>
       <DialogContent>

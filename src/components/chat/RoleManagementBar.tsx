@@ -98,6 +98,8 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
     },
   });
 
+  const hasRoles = threadRoles && threadRoles.length > 0;
+
   return (
     <div className="border-b p-4 flex-shrink-0">
       <div className="flex items-center justify-between mb-2">
@@ -111,9 +113,10 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           threadId={threadId}
           onRoleSelected={(roleId) => addRoleToThread.mutate(roleId)}
           disabled={!threadId}
+          isFirstRole={!hasRoles}
         />
       </div>
-      <div className="flex gap-2 flex-wrap">
+      <div className="flex gap-2 flex-wrap min-h-[32px]">
         {threadRoles?.map((role) => (
           <RoleTag
             key={role.id}
@@ -121,9 +124,9 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
             onRemove={() => removeRoleFromThread.mutate(role.id)}
           />
         ))}
-        {threadRoles?.length === 0 && (
-          <div className="text-sm text-muted-foreground">
-            No roles assigned. Add roles to start chatting.
+        {!hasRoles && threadId && (
+          <div className="text-sm text-muted-foreground flex items-center justify-center w-full py-2">
+            Add roles to start chatting
           </div>
         )}
       </div>
