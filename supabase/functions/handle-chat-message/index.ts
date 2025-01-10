@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,7 +21,7 @@ serve(async (req) => {
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Received request:', { threadId, content, taggedRoleId });
 
-    // Get thread details and roles
+    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -81,14 +82,18 @@ serve(async (req) => {
       // Get recent conversation history
       const { data: history } = await supabase
         .from('messages')
-        .select('content, role:roles(name, tag)')
+        .select(`
+          content,
+          role:roles(name, tag, instructions),
+          created_at
+        `)
         .eq('thread_id', threadId)
         .order('created_at', { ascending: false })
         .limit(10);
 
       // Prepare conversation context
       const memoryContext = memories?.length 
-        ? `Relevant context from your memory: ${memories.map(m => m.content).join(' | ')}`
+        ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
         : '';
 
       const conversationHistory = history?.reverse().map(msg => ({
@@ -141,7 +146,8 @@ serve(async (req) => {
           metadata: {
             thread_id: threadId,
             user_message: content,
-            timestamp: new Date().getTime()
+            timestamp: new Date().getTime(),
+            chain_order: chain_order
           }
         });
 
