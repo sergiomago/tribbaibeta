@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Tables } from "@/integrations/supabase/types";
-import { Plus } from "lucide-react";
+import { Plus, Grid, List, ArrowDown, ArrowUp, Calendar } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useState } from "react";
 import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
@@ -14,6 +14,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+type ViewMode = 'grid' | 'list';
+type SortOption = 'role-asc' | 'role-desc' | 'date-new' | 'date-old';
 
 const Roles = () => {
   const navigate = useNavigate();
@@ -23,6 +32,8 @@ const Roles = () => {
   const { createThread } = useThreadMutations();
   const { addRoleToThread } = useRoleMutations();
   const queryClient = useQueryClient();
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [sortOption, setSortOption] = useState<SortOption>('role-asc');
 
   const { data: roles, isLoading } = useQuery({
     queryKey: ['roles'],
@@ -37,6 +48,24 @@ const Roles = () => {
       return data as Tables<"roles">[];
     }
   });
+
+  const sortRoles = (rolesData: Tables<"roles">[]) => {
+    if (!rolesData) return [];
+    
+    const sorted = [...rolesData];
+    switch (sortOption) {
+      case 'role-asc':
+        return sorted.sort((a, b) => a.name.localeCompare(b.name));
+      case 'role-desc':
+        return sorted.sort((a, b) => b.name.localeCompare(a.name));
+      case 'date-new':
+        return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case 'date-old':
+        return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      default:
+        return sorted;
+    }
+  };
 
   const deleteRoleMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -143,13 +172,47 @@ const Roles = () => {
       <main className="flex-1 container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">Roles</h1>
-          <Button 
-            onClick={() => navigate('/roles/create')}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Role
-          </Button>
+          <div className="flex gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {sortOption === 'role-asc' && <ArrowUp className="mr-2" />}
+                  {sortOption === 'role-desc' && <ArrowDown className="mr-2" />}
+                  {sortOption === 'date-new' && <Calendar className="mr-2" />}
+                  {sortOption === 'date-old' && <Calendar className="mr-2" />}
+                  Sort by
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSortOption('role-asc')}>
+                  Role (A-Z)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortOption('role-desc')}>
+                  Role (Z-A)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortOption('date-new')}>
+                  Newest First
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortOption('date-old')}>
+                  Oldest First
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button 
+              variant="outline"
+              size="sm"
+              onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+            >
+              {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
+            </Button>
+            <Button 
+              onClick={() => navigate('/roles/create')}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Role
+            </Button>
+          </div>
         </div>
 
         <RolePackages />
@@ -157,11 +220,12 @@ const Roles = () => {
         <div className="mt-8">
           <h2 className="text-lg font-semibold mb-6">Your Roles</h2>
           <RoleList 
-            roles={roles}
+            roles={sortRoles(roles)}
             isLoading={isLoading}
             onDelete={handleDelete}
             onStartChat={handleStartChat}
             onEdit={handleEdit}
+            viewMode={viewMode}
           />
         </div>
       </main>

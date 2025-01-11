@@ -1,6 +1,7 @@
 import { Tables } from "@/integrations/supabase/types";
 import { Loader2 } from "lucide-react";
 import { UserRoleCard } from "./UserRoleCard";
+import { UserRoleListItem } from "./UserRoleListItem";
 
 type RoleListProps = {
   roles: Tables<"roles">[] | undefined;
@@ -8,9 +9,10 @@ type RoleListProps = {
   onDelete: (id: string) => Promise<void>;
   onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
+  viewMode: 'grid' | 'list';
 };
 
-export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: RoleListProps) => {
+export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit, viewMode }: RoleListProps) => {
   if (isLoading) {
     return (
       <div className="flex justify-center py-12">
@@ -25,6 +27,22 @@ export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: Ro
         <p className="text-lg text-gray-600 dark:text-gray-400">
           No roles created yet. Create your first role using the button above.
         </p>
+      </div>
+    );
+  }
+
+  if (viewMode === 'list') {
+    return (
+      <div className="space-y-2">
+        {roles.map((role) => (
+          <UserRoleListItem
+            key={role.id} 
+            role={role} 
+            onDelete={onDelete}
+            onStartChat={onStartChat}
+            onEdit={onEdit}
+          />
+        ))}
       </div>
     );
   }
