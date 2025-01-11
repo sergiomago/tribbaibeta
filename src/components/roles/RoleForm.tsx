@@ -17,10 +17,16 @@ import { Loader2, Wand2 } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export const roleFormSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Role name is required"),
   alias: z.string().optional(),
   tag: z.string().min(1, "Tag is required"),
   description: z.string().min(1, "Description is required"),
@@ -89,10 +95,19 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           name="name"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Name</FormLabel>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <FormLabel>Role</FormLabel>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Enter the primary role or function (e.g., 'Marketing Expert', 'Tech Lead')</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <FormControl>
                 <Input 
-                  placeholder="Enter role name" 
+                  placeholder="Enter the role title (e.g., 'Marketing Expert', 'Tech Lead')" 
                   {...field} 
                   onChange={(e) => {
                     field.onChange(e);
@@ -112,10 +127,19 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           name="alias"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Alias (Optional)</FormLabel>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <FormLabel>Alias Name</FormLabel>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>A creative, personified version of the role (e.g., 'Mark Expert', 'Tech Leader')</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div className="flex gap-2">
                 <FormControl>
-                  <Input placeholder="Enter alias" {...field} />
+                  <Input placeholder="Enter a personified name for this role" {...field} />
                 </FormControl>
                 <Button
                   type="button"
@@ -141,7 +165,16 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           name="tag"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Tag</FormLabel>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <FormLabel>Tag</FormLabel>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>A unique identifier used to mention this role in chats</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <div className="flex gap-2">
                 <FormControl>
                   <Input 
@@ -177,14 +210,26 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           name="description"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Description</FormLabel>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <FormLabel>Description</FormLabel>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Detailed overview of the role's expertise and responsibilities</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <FormControl>
                 <Textarea
-                  placeholder="Enter role description"
-                  className="h-20"
+                  placeholder="Describe the role's expertise, main responsibilities, and key areas of knowledge. Be specific about what makes this role unique and valuable."
+                  className="h-24"
                   {...field}
                 />
               </FormControl>
+              <FormDescription>
+                Provide a comprehensive description of what this role specializes in and what it can help with.
+              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
