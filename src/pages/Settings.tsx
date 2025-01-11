@@ -1,33 +1,13 @@
 import { AppNavbar } from "@/components/AppNavbar";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { settingsStore } from "@/stores/settingsStore";
+import { ThemeSettings } from "@/components/settings/ThemeSettings";
+import { ChatSettings } from "@/components/settings/ChatSettings";
+import { AccountSettings } from "@/components/settings/AccountSettings";
 
 const Settings = () => {
   const { toast } = useToast();
@@ -38,7 +18,6 @@ const Settings = () => {
   const [loading, setLoading] = useState(false);
   const [settings, setSettings] = useState(settingsStore.getSettings());
 
-  // Load user profile data
   useEffect(() => {
     const loadProfile = async () => {
       if (session?.user?.id) {
@@ -122,130 +101,25 @@ const Settings = () => {
           </TabsList>
 
           <TabsContent value="theme">
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Dark Theme</Label>
-                    <div className="text-sm text-muted-foreground">
-                      Switch between light and dark mode
-                    </div>
-                  </div>
-                  <Switch 
-                    checked={settings.isDarkMode}
-                    onCheckedChange={(checked) => updateSettings({ isDarkMode: checked })}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Font Size</Label>
-                  <Select 
-                    value={settings.fontSize}
-                    onValueChange={(value) => updateSettings({ fontSize: value as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select font size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="small">Small</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="large">Large</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+            <ThemeSettings settings={settings} updateSettings={updateSettings} />
           </TabsContent>
 
           <TabsContent value="chat">
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label>Message Display</Label>
-                  <Select 
-                    value={settings.messageDisplay}
-                    onValueChange={(value) => updateSettings({ messageDisplay: value as any })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select display mode" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="comfortable">Comfortable</SelectItem>
-                      <SelectItem value="compact">Compact</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+            <ChatSettings settings={settings} updateSettings={updateSettings} />
           </TabsContent>
 
           <TabsContent value="account">
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <div className="space-y-2">
-                  <Label>Display Name</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Your display name"
-                  />
-                </div>
-                
-                <Button
-                  onClick={handleUpdateProfile}
-                  disabled={loading}
-                >
-                  Update Profile
-                </Button>
-
-                <div className="space-y-2 pt-4">
-                  <Label>Change Password</Label>
-                  <Input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    placeholder="Current password"
-                    className="mb-2"
-                  />
-                  <Input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="New password"
-                  />
-                  <Button
-                    onClick={handleChangePassword}
-                    disabled={loading || !currentPassword || !newPassword}
-                    className="mt-2"
-                  >
-                    Change Password
-                  </Button>
-                </div>
-
-                <div className="pt-4">
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="destructive">Delete Account</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action cannot be undone. This will permanently delete your
-                          account and remove your data from our servers.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="bg-red-600 hover:bg-red-700">
-                          Delete Account
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </CardContent>
-            </Card>
+            <AccountSettings
+              name={name}
+              currentPassword={currentPassword}
+              newPassword={newPassword}
+              loading={loading}
+              setName={setName}
+              setCurrentPassword={setCurrentPassword}
+              setNewPassword={setNewPassword}
+              handleUpdateProfile={handleUpdateProfile}
+              handleChangePassword={handleChangePassword}
+            />
           </TabsContent>
         </Tabs>
       </main>
