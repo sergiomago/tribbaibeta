@@ -6,6 +6,7 @@ import { RoleTag } from "./RoleTag";
 import { RoleSelectionDialog } from "./RoleSelectionDialog";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
+import { Tables } from "@/integrations/supabase/types";
 
 interface RoleManagementBarProps {
   threadId: string | null;
@@ -42,7 +43,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         `)
         .eq("thread_id", threadId);
       if (error) throw error;
-      return data.map(tr => tr.role);
+      return data.map((tr: { role: Tables<"roles"> }) => tr.role);
     },
     enabled: !!threadId,
   });
