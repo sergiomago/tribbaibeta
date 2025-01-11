@@ -211,7 +211,9 @@ export type Database = {
           name: string
           package_name: string | null
           package_order: number | null
+          source: string
           tag: string
+          template_id: string | null
           updated_at: string
           user_id: string | null
         }
@@ -226,7 +228,9 @@ export type Database = {
           name: string
           package_name?: string | null
           package_order?: number | null
+          source?: string
           tag?: string
+          template_id?: string | null
           updated_at?: string
           user_id?: string | null
         }
@@ -241,11 +245,21 @@ export type Database = {
           name?: string
           package_name?: string | null
           package_order?: number | null
+          source?: string
           tag?: string
+          template_id?: string | null
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "roles_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       thread_roles: {
         Row: {
