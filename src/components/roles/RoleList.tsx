@@ -1,6 +1,6 @@
 import { Tables } from "@/integrations/supabase/types";
 import { Loader2 } from "lucide-react";
-import { RoleCard } from "./RoleCard";
+import { UserRoleCard } from "./UserRoleCard";
 
 type RoleListProps = {
   roles: Tables<"roles">[] | undefined;
@@ -32,7 +32,7 @@ export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: Ro
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {roles.map((role) => (
-        <RoleCard 
+        <UserRoleCard
           key={role.id} 
           role={role} 
           onDelete={onDelete}

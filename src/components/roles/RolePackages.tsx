@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Package, ChevronDown, ChevronRight } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { RoleCard } from "./RoleCard";
+import { TemplateRoleCard } from "./TemplateRoleCard";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
@@ -41,7 +41,9 @@ export function RolePackages() {
           instructions,
           model,
           user_id: user?.id,
-          is_template: false
+          is_template: false,
+          template_id: templateRole.id,
+          source: 'template'
         });
 
       if (error) throw error;
@@ -50,15 +52,6 @@ export function RolePackages() {
       queryClient.invalidateQueries({ queryKey: ["roles"] });
     },
   });
-
-  const packages = templateRoles?.reduce((acc, role) => {
-    if (!role.package_name) return acc;
-    if (!acc[role.package_name]) {
-      acc[role.package_name] = [];
-    }
-    acc[role.package_name].push(role);
-    return acc;
-  }, {} as Record<string, typeof templateRoles>);
 
   const handleUseTemplate = async (templateRole: any) => {
     if (!user) return;
@@ -78,6 +71,15 @@ export function RolePackages() {
       });
     }
   };
+
+  const packages = templateRoles?.reduce((acc, role) => {
+    if (!role.package_name) return acc;
+    if (!acc[role.package_name]) {
+      acc[role.package_name] = [];
+    }
+    acc[role.package_name].push(role);
+    return acc;
+  }, {} as Record<string, typeof templateRoles>);
 
   if (!packages || Object.keys(packages).length === 0) {
     return null;
@@ -111,21 +113,10 @@ export function RolePackages() {
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 {roles.map((role) => (
                   <div key={role.id} className="relative">
-                    <RoleCard
+                    <TemplateRoleCard
                       role={role}
-                      onDelete={() => {}}
-                      onStartChat={() => {}}
-                      onEdit={() => {}}
-                      isTemplate
+                      onUseTemplate={handleUseTemplate}
                     />
-                    <div className="absolute inset-x-0 bottom-4 px-6">
-                      <Button
-                        className="w-full bg-gradient-primary"
-                        onClick={() => handleUseTemplate(role)}
-                      >
-                        Use Template
-                      </Button>
-                    </div>
                   </div>
                 ))}
               </div>
@@ -135,4 +126,4 @@ export function RolePackages() {
       </div>
     </div>
   );
-}
+};
