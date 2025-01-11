@@ -26,33 +26,35 @@ export const UserRoleCard = ({ role, onDelete, onStartChat, onEdit }: UserRoleCa
 
   return (
     <BaseRoleCard role={role}>
-      <div className="mt-auto flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => setShowDeleteDialog(true)}
-          className="text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-200 dark:border-gray-800"
-        >
-          <Trash className="h-3 w-3 mr-2" />
-          Delete
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => onEdit(role.id)}
-          className="text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
-        >
-          <Edit className="h-3 w-3 mr-2" />
-          Edit
-        </Button>
-        <Button 
-          size="sm"
-          onClick={() => onStartChat(role.id)}
-          className="bg-gradient-primary text-primary-foreground hover:opacity-90"
-        >
-          <MessageCircle className="h-3 w-3 mr-2" />
-          Chat
-        </Button>
+      <div className="absolute inset-x-0 bottom-4 px-6">
+        <div className="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowDeleteDialog(true)}
+            className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-200 dark:border-gray-800"
+          >
+            <Trash className="h-3 w-3 mr-2" />
+            Delete
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => onEdit(role.id)}
+            className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
+          >
+            <Edit className="h-3 w-3 mr-2" />
+            Edit
+          </Button>
+          <Button 
+            size="sm"
+            onClick={() => onStartChat(role.id)}
+            className="flex-1 bg-gradient-primary text-primary-foreground hover:opacity-90"
+          >
+            <MessageCircle className="h-3 w-3 mr-2" />
+            Chat
+          </Button>
+        </div>
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
