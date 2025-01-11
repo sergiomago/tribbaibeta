@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Package, ChevronDown, ChevronRight } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { RoleCard } from "./RoleCard";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ export function RolePackages() {
   const [openPackages, setOpenPackages] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const { data: templateRoles } = useQuery({
     queryKey: ["template-roles"],
@@ -24,6 +25,29 @@ export function RolePackages() {
       
       if (error) throw error;
       return data;
+    },
+  });
+
+  const createRoleMutation = useMutation({
+    mutationFn: async (templateRole: any) => {
+      const { name, alias, tag, description, instructions, model } = templateRole;
+      const { error } = await supabase
+        .from("roles")
+        .insert({
+          name,
+          alias,
+          tag,
+          description,
+          instructions,
+          model,
+          user_id: user?.id,
+          is_template: false
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
     },
   });
 
@@ -40,25 +64,10 @@ export function RolePackages() {
     if (!user) return;
 
     try {
-      const { name, alias, tag, description, instructions, model } = templateRole;
-      const { error } = await supabase
-        .from("roles")
-        .insert({
-          name,
-          alias,
-          tag,
-          description,
-          instructions,
-          model,
-          user_id: user.id,
-          is_template: false
-        });
-
-      if (error) throw error;
-
+      await createRoleMutation.mutateAsync(templateRole);
       toast({
         title: "Success",
-        description: `Created new role from template: ${name}`,
+        description: `Created new role from template: ${templateRole.name}`,
       });
     } catch (error) {
       console.error("Error creating role from template:", error);

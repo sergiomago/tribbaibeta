@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Tables } from "@/integrations/supabase/types";
-import { Edit, MessageCircle, Trash } from "lucide-react";
+import { Edit, MessageCircle, Trash, ChevronDown, ChevronUp } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +23,7 @@ type RoleCardProps = {
 
 export const RoleCard = ({ role, onDelete, onStartChat, onEdit, isTemplate }: RoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div className="group relative rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm p-6 transition-all hover:bg-white/70 dark:hover:bg-gray-800/70 shadow-sm hover:shadow-md">
@@ -44,9 +45,26 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit, isTemplate }: Ro
         </div>
 
         {role.description && (
-          <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-4">
-            {role.description}
-          </p>
+          <div className="mb-4">
+            <p className={`text-sm text-gray-600 dark:text-gray-300 ${!isExpanded ? 'line-clamp-2' : ''}`}>
+              {role.description}
+            </p>
+            {role.description.length > 100 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1 h-auto p-0 text-xs text-primary hover:bg-transparent hover:text-primary/80"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? (
+                  <ChevronUp className="h-3 w-3 mr-1" />
+                ) : (
+                  <ChevronDown className="h-3 w-3 mr-1" />
+                )}
+                {isExpanded ? 'Show less' : 'Show more'}
+              </Button>
+            )}
+          </div>
         )}
 
         {!isTemplate && (
