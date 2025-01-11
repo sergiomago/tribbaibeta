@@ -29,7 +29,7 @@ export function RoleSelectionDialog({
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
 
-  const { data: roles } = useQuery({
+  const { data: roles, refetch } = useQuery({
     queryKey: ["roles-with-assignment", threadId],
     queryFn: async () => {
       if (!threadId) return [];
@@ -62,10 +62,11 @@ export function RoleSelectionDialog({
 
     try {
       if (isAssigned) {
-        onRoleRemoved(roleId);
+        await onRoleRemoved(roleId);
       } else {
-        onRoleSelected(roleId);
+        await onRoleSelected(roleId);
       }
+      refetch();
     } catch (error) {
       console.error("Error managing role:", error);
       toast({
@@ -85,12 +86,12 @@ export function RoleSelectionDialog({
           disabled={disabled}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Manage Roles
+          Add Roles
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Manage Roles</DialogTitle>
+          <DialogTitle>Add Roles</DialogTitle>
         </DialogHeader>
         <ScrollArea className="max-h-[300px] mt-4">
           <div className="space-y-2">
@@ -103,7 +104,7 @@ export function RoleSelectionDialog({
               >
                 <div className="flex flex-col items-start">
                   <span className="font-medium">{role.name}</span>
-                  <span className="text-xs text-muted-foreground">@{role.tag}</span>
+                  <span className="text-xs text-muted-foreground">{role.tag}</span>
                 </div>
                 {role.isAssigned ? (
                   <X className="h-4 w-4 text-muted-foreground" />
