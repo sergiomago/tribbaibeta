@@ -1,4 +1,4 @@
-type Settings = {
+export type SettingsType = {
   isDarkMode: boolean;
   fontSize: 'small' | 'medium' | 'large';
   messageDisplay: 'comfortable' | 'compact';
@@ -6,7 +6,7 @@ type Settings = {
 
 class SettingsStore {
   private static instance: SettingsStore;
-  private settings: Settings;
+  private settings: SettingsType;
 
   private constructor() {
     // Load settings from localStorage or use defaults
@@ -49,11 +49,11 @@ class SettingsStore {
     this.applySettings();
   }
 
-  getSettings(): Settings {
+  getSettings(): SettingsType {
     return { ...this.settings };
   }
 
-  updateSettings(newSettings: Partial<Settings>) {
+  updateSettings(newSettings: Partial<SettingsType>) {
     this.settings = { ...this.settings, ...newSettings };
     this.saveSettings();
   }
