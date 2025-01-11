@@ -9,11 +9,10 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Wand2 } from "lucide-react";
+import { Loader2, Wand2, Info } from "lucide-react";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -165,16 +164,19 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           name="tag"
           render={({ field }) => (
             <FormItem>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <FormLabel>Tag</FormLabel>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>A unique identifier used to mention this role in chats</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <div className="flex items-center gap-2">
+                <FormLabel>Tag</FormLabel>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="h-4 w-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Tags (like @analyst) are used to call specific roles during team chats. For example, typing @analyst in a chat will specifically engage that role.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
               <div className="flex gap-2">
                 <FormControl>
                   <Input 
@@ -227,9 +229,6 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
                   {...field}
                 />
               </FormControl>
-              <FormDescription>
-                Provide a comprehensive description of what this role specializes in and what it can help with.
-              </FormDescription>
               <FormMessage />
             </FormItem>
           )}
@@ -241,9 +240,6 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           render={({ field }) => (
             <FormItem>
               <FormLabel>Instructions</FormLabel>
-              <FormDescription>
-                Define how your AI role should behave and interact.
-              </FormDescription>
               <div className="space-y-2">
                 <FormControl>
                   <Textarea
