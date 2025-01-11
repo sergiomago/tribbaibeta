@@ -14,7 +14,6 @@ import { ChatContent } from "./ChatContent";
 
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
-  const roleId = searchParams.get('role');
   const threadParam = searchParams.get('thread');
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(threadParam);
