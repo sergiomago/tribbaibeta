@@ -4,20 +4,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 
 interface SearchBarProps {
   onResultSelect: (threadId: string, messageId: string) => void;
-}
-
-interface SearchResult {
-  id: string;
-  content: string;
-  thread_id: string;
-  created_at: string;
-  roles: {
-    name: string;
-  } | null;
 }
 
 export function SearchBar({ onResultSelect }: SearchBarProps) {
@@ -41,7 +30,7 @@ export function SearchBar({ onResultSelect }: SearchBarProps) {
         .limit(10);
         
       if (error) throw error;
-      return data as SearchResult[];
+      return data;
     },
     enabled: searchQuery.length > 2,
   });
