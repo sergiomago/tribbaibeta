@@ -19,11 +19,19 @@ import { cn } from "@/lib/utils";
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
   const roleId = searchParams.get('role');
+  const threadParam = searchParams.get('thread');
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
-  const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
+  const [currentThreadId, setCurrentThreadId] = useState<string | null>(threadParam);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+
+  // Update currentThreadId when URL parameter changes
+  useEffect(() => {
+    if (threadParam) {
+      setCurrentThreadId(threadParam);
+    }
+  }, [threadParam]);
 
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", currentThreadId],
