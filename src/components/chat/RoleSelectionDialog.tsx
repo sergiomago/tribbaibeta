@@ -34,9 +34,12 @@ export function RoleSelectionDialog({
     queryFn: async () => {
       if (!threadId) return [];
       
+      // Modified query to only fetch user's actual roles (not templates)
       const { data: allRoles, error: rolesError } = await supabase
         .from("roles")
-        .select("*");
+        .select("*")
+        .eq("is_template", false)
+        .not("user_id", "is", null);
 
       if (rolesError) throw rolesError;
 
