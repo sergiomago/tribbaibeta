@@ -28,19 +28,47 @@ export function RolePackages() {
     },
   });
 
+  const { data: userRoles } = useQuery({
+    queryKey: ["roles"],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from("roles")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("is_template", false);
+      
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const createRoleMutation = useMutation({
     mutationFn: async (templateRole: any) => {
-      const { name, alias, tag, description, instructions, model } = templateRole;
+      if (!user) throw new Error("User not authenticated");
+
+      // Check if tag already exists for user
+      const existingTag = userRoles?.find(role => role.tag === templateRole.tag);
+      if (existingTag) {
+        throw new Error(`You already have a role with the tag "${templateRole.tag}"`);
+      }
+
+      // Check if user already used this template
+      const existingTemplate = userRoles?.find(role => role.template_id === templateRole.id);
+      if (existingTemplate) {
+        throw new Error("You have already used this template");
+      }
+
       const { error } = await supabase
         .from("roles")
         .insert({
-          name,
-          alias,
-          tag,
-          description,
-          instructions,
-          model,
-          user_id: user?.id,
+          name: templateRole.name,
+          alias: templateRole.alias,
+          tag: templateRole.tag,
+          description: templateRole.description,
+          instructions: templateRole.instructions,
+          model: templateRole.model,
+          user_id: user.id,
           is_template: false,
           template_id: templateRole.id,
           source: 'template'
@@ -50,25 +78,36 @@ export function RolePackages() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["roles"] });
+      toast({
+        title: "Success",
+        description: "Role created from template successfully",
+      });
+    },
+    onError: (error: Error) => {
+      console.error("Error creating role from template:", error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
   const handleUseTemplate = async (templateRole: any) => {
-    if (!user) return;
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to use templates",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       await createRoleMutation.mutateAsync(templateRole);
-      toast({
-        title: "Success",
-        description: `Created new role from template: ${templateRole.name}`,
-      });
     } catch (error) {
-      console.error("Error creating role from template:", error);
-      toast({
-        title: "Error",
-        description: "Failed to create role from template",
-        variant: "destructive",
-      });
+      // Error is handled in mutation's onError
+      console.error("Error in handleUseTemplate:", error);
     }
   };
 
@@ -126,4 +165,4 @@ export function RolePackages() {
       </div>
     </div>
   );
-};
+}

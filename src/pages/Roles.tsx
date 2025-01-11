@@ -3,7 +3,7 @@ import { RoleList } from "@/components/roles/RoleList";
 import { RolePackages } from "@/components/roles/RolePackages";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Tables } from "@/integrations/supabase/types";
 import { Plus } from "lucide-react";
@@ -22,6 +22,7 @@ const Roles = () => {
   const [editingRole, setEditingRole] = useState<Tables<"roles"> | null>(null);
   const { createThread } = useThreadMutations();
   const { addRoleToThread } = useRoleMutations();
+  const queryClient = useQueryClient();
 
   const { data: roles, isLoading } = useQuery({
     queryKey: ['roles'],
@@ -37,24 +38,38 @@ const Roles = () => {
     }
   });
 
-  const handleDelete = async (id: string) => {
-    const { error } = await supabase
-      .from('roles')
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
+  const deleteRoleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('roles')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
+      toast({
+        title: "Success",
+        description: "Role deleted successfully",
+      });
+    },
+    onError: (error) => {
       console.error('Error deleting role:', error);
       toast({
         title: "Error",
         description: "Failed to delete role",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Role deleted successfully",
-      });
+    },
+  });
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteRoleMutation.mutateAsync(id);
+    } catch (error) {
+      // Error is handled in mutation's onError
+      console.error('Error in handleDelete:', error);
     }
   };
 
@@ -90,20 +105,6 @@ const Roles = () => {
     }
   };
 
-  const convertToFormValues = (role: Tables<"roles">): RoleFormValues => {
-    return {
-      id: role.id,
-      name: role.name,
-      alias: role.alias || undefined,
-      tag: role.tag,
-      description: role.description || "",
-      instructions: role.instructions,
-      model: (role.model === "gpt-4o" || role.model === "gpt-4o-mini") 
-        ? role.model 
-        : "gpt-4o" // fallback to default if invalid
-    };
-  };
-
   const handleUpdateRole = async (values: RoleFormValues) => {
     try {
       const { error } = await supabase
@@ -120,6 +121,7 @@ const Roles = () => {
 
       if (error) throw error;
 
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
       toast({
         title: "Success",
         description: "Role updated successfully",
@@ -170,7 +172,17 @@ const Roles = () => {
             <RoleForm
               onSubmit={handleUpdateRole}
               isCreating={false}
-              defaultValues={convertToFormValues(editingRole)}
+              defaultValues={{
+                id: editingRole.id,
+                name: editingRole.name,
+                alias: editingRole.alias || undefined,
+                tag: editingRole.tag,
+                description: editingRole.description || "",
+                instructions: editingRole.instructions,
+                model: editingRole.model === "gpt-4o" || editingRole.model === "gpt-4o-mini" 
+                  ? editingRole.model 
+                  : "gpt-4o"
+              }}
             />
           )}
         </DialogContent>

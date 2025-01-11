@@ -5,7 +5,7 @@ import { UserRoleCard } from "./UserRoleCard";
 type RoleListProps = {
   roles: Tables<"roles">[] | undefined;
   isLoading: boolean;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
   onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
 };
@@ -22,7 +22,7 @@ export const RoleList = ({ roles, isLoading, onDelete, onStartChat, onEdit }: Ro
   if (!roles?.length) {
     return (
       <div className="text-center py-12">
-        <p className="text-lg text-gray-600">
+        <p className="text-lg text-gray-600 dark:text-gray-400">
           No roles created yet. Create your first role using the button above.
         </p>
       </div>
