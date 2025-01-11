@@ -206,11 +206,14 @@ export type Database = {
           description: string | null
           id: string
           instructions: string
+          is_template: boolean | null
           model: string
           name: string
+          package_name: string | null
+          package_order: number | null
           tag: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           alias?: string | null
@@ -218,11 +221,14 @@ export type Database = {
           description?: string | null
           id?: string
           instructions: string
+          is_template?: boolean | null
           model?: string
           name: string
+          package_name?: string | null
+          package_order?: number | null
           tag?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           alias?: string | null
@@ -230,11 +236,14 @@ export type Database = {
           description?: string | null
           id?: string
           instructions?: string
+          is_template?: boolean | null
           model?: string
           name?: string
+          package_name?: string | null
+          package_order?: number | null
           tag?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
