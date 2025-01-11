@@ -2,10 +2,13 @@ import { LogOut, MessageSquare, Settings, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "./ui/button";
 import { Link, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { FeedbackDialog } from "./feedback/FeedbackDialog";
 
 export function AppNavbar() {
   const { signOut } = useAuth();
   const location = useLocation();
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
 
   const menuItems = [
     {
@@ -52,15 +55,26 @@ export function AppNavbar() {
             ))}
           </div>
         </div>
-        <Button
-          variant="ghost"
-          className="gap-2"
-          onClick={() => signOut()}
-        >
-          <LogOut className="h-4 w-4" />
-          Sign out
-        </Button>
+        <div className="flex items-center gap-4">
+          <Button
+            variant="ghost"
+            className="gap-2"
+            onClick={() => setIsFeedbackOpen(true)}
+          >
+            <MessageSquare className="h-4 w-4" />
+            Feedback
+          </Button>
+          <Button
+            variant="ghost"
+            className="gap-2"
+            onClick={() => signOut()}
+          >
+            <LogOut className="h-4 w-4" />
+            Sign out
+          </Button>
+        </div>
       </div>
+      <FeedbackDialog isOpen={isFeedbackOpen} onClose={() => setIsFeedbackOpen(false)} />
     </nav>
   );
 }
