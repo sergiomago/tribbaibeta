@@ -18,9 +18,10 @@ type RoleCardProps = {
   onDelete: (id: string) => void;
   onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
+  isTemplate?: boolean;
 };
 
-export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps) => {
+export const RoleCard = ({ role, onDelete, onStartChat, onEdit, isTemplate }: RoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   return (
@@ -48,34 +49,36 @@ export const RoleCard = ({ role, onDelete, onStartChat, onEdit }: RoleCardProps)
           </p>
         )}
 
-        <div className="mt-auto flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setShowDeleteDialog(true)}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-200 dark:border-gray-800"
-          >
-            <Trash className="h-3 w-3 mr-2" />
-            Delete
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => onEdit(role.id)}
-            className="text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
-          >
-            <Edit className="h-3 w-3 mr-2" />
-            Edit
-          </Button>
-          <Button 
-            size="sm"
-            onClick={() => onStartChat(role.id)}
-            className="bg-gradient-primary text-primary-foreground hover:opacity-90"
-          >
-            <MessageCircle className="h-3 w-3 mr-2" />
-            Chat
-          </Button>
-        </div>
+        {!isTemplate && (
+          <div className="mt-auto flex justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowDeleteDialog(true)}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10 border-gray-200 dark:border-gray-800"
+            >
+              <Trash className="h-3 w-3 mr-2" />
+              Delete
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onEdit(role.id)}
+              className="text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
+            >
+              <Edit className="h-3 w-3 mr-2" />
+              Edit
+            </Button>
+            <Button 
+              size="sm"
+              onClick={() => onStartChat(role.id)}
+              className="bg-gradient-primary text-primary-foreground hover:opacity-90"
+            >
+              <MessageCircle className="h-3 w-3 mr-2" />
+              Chat
+            </Button>
+          </div>
+        )}
       </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

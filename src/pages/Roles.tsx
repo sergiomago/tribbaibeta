@@ -1,5 +1,6 @@
 import { AppNavbar } from "@/components/AppNavbar";
 import { RoleList } from "@/components/roles/RoleList";
+import { RolePackages } from "@/components/roles/RolePackages";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ const Roles = () => {
       const { data, error } = await supabase
         .from('roles')
         .select('*')
+        .eq('is_template', false)
         .order('created_at', { ascending: false });
       
       if (error) throw error;
@@ -147,13 +149,19 @@ const Roles = () => {
             Create Role
           </Button>
         </div>
-        <RoleList 
-          roles={roles}
-          isLoading={isLoading}
-          onDelete={handleDelete}
-          onStartChat={handleStartChat}
-          onEdit={handleEdit}
-        />
+
+        <RolePackages />
+        
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold mb-6">Your Roles</h2>
+          <RoleList 
+            roles={roles}
+            isLoading={isLoading}
+            onDelete={handleDelete}
+            onStartChat={handleStartChat}
+            onEdit={handleEdit}
+          />
+        </div>
       </main>
 
       <Dialog open={!!editingRole} onOpenChange={(open) => !open && setEditingRole(null)}>
