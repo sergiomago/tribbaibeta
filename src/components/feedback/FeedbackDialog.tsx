@@ -14,9 +14,12 @@ interface FeedbackDialogProps {
   onClose: () => void;
 }
 
+// Define the allowed rating values to match the database enum
+type ExperienceRating = "excellent" | "good" | "average" | "poor" | "needs_improvement";
+
 export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
   const { toast } = useToast();
-  const [rating, setRating] = useState<string>("");
+  const [rating, setRating] = useState<ExperienceRating | "">("");
   const [features, setFeatures] = useState("");
   const [suggestions, setSuggestions] = useState("");
   const [hasBugs, setHasBugs] = useState(false);
@@ -35,16 +38,14 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
     }
 
     setIsSubmitting(true);
-    const { error } = await supabase.from("feedback").insert([
-      {
-        experience_rating: rating,
-        favorite_features: features,
-        improvement_suggestions: suggestions,
-        has_bugs: hasBugs,
-        interested_in_subscription: interested,
-        would_recommend: recommend,
-      },
-    ]);
+    const { error } = await supabase.from("feedback").insert({
+      experience_rating: rating,
+      favorite_features: features,
+      improvement_suggestions: suggestions,
+      has_bugs: hasBugs,
+      interested_in_subscription: interested,
+      would_recommend: recommend,
+    });
 
     if (error) {
       toast({
@@ -77,7 +78,7 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
             <Label>How would you rate your experience?</Label>
             <RadioGroup
               value={rating}
-              onValueChange={setRating}
+              onValueChange={(value: ExperienceRating) => setRating(value)}
               className="flex flex-col space-y-1"
             >
               {[
