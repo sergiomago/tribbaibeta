@@ -28,7 +28,23 @@ serve(async (req) => {
         prompt = `Create a creative, memorable alias for a role named "${name}". It should be a playful transformation of the role name into a person's name. Example: "Brand Strategist" becomes "Brad Strat". Only return the alias, nothing else.`;
         break;
       case 'instructions':
-        prompt = `Based on this role description: "${description}", create clear and concise instructions (max 200 words) for an AI to perform this role effectively. Focus on key responsibilities and communication style.`;
+        prompt = `As an expert in AI role design, create comprehensive instructions for an AI role with the following details:
+Name: "${name}"
+Description: "${description}"
+
+Generate detailed instructions covering these key aspects:
+1. Contextual Awareness: How should it adapt to conversations and user context?
+2. Interaction Style: What communication approach (directive, collaborative, advisory) should it use?
+3. Custom Scenarios: How should it handle specific situations related to its role?
+4. Emotion Handling: How should it respond to different emotional states?
+5. Problem-Solving: What approach should it take to challenges?
+6. Role-Specific Examples: What concrete examples should guide its behavior?
+7. Goal Adaptability: How should it adjust to different user objectives?
+8. Personality: What human-like traits should it exhibit?
+9. Role Models: What inspirational figures should influence its behavior?
+10. Formatting: How should it structure its responses?
+
+Format the response as a clear, cohesive set of instructions that flows naturally. Make it specific to the role while maintaining a conversational, easy-to-understand tone. Ensure the instructions are practical and actionable.`;
         break;
       default:
         throw new Error('Invalid generation type');

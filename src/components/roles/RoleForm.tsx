@@ -9,6 +9,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -195,11 +196,20 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           render={({ field }) => (
             <FormItem>
               <FormLabel>Instructions</FormLabel>
+              <FormDescription>
+                Define how your AI role should behave and interact.
+              </FormDescription>
               <div className="space-y-2">
                 <FormControl>
                   <Textarea
-                    placeholder="Enter role instructions"
-                    className="h-32"
+                    placeholder={`Write instructions for your AI role. Consider:
+• How should it interact? (friendly, professional, technical)
+• What's its main purpose? (teach, guide, analyze)
+• How should it handle different situations?
+• What tone and style should it use?
+
+Example: "Act as a friendly coding mentor who explains concepts clearly, uses relevant examples, and adapts to the user's skill level. Break down complex topics into simple steps and provide encouragement."`}
+                    className="h-48 font-mono text-sm"
                     {...field}
                   />
                 </FormControl>
@@ -213,7 +223,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
                   {isGenerating.instructions ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
+                      Generating detailed instructions...
                     </>
                   ) : (
                     <>
