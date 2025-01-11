@@ -108,11 +108,6 @@ const Settings = () => {
     setLoading(false);
   };
 
-  const playNotificationSound = () => {
-    const audio = new Audio("/notification.mp3");
-    audio.play();
-  };
-
   return (
     <div className="min-h-screen flex flex-col w-full bg-background text-foreground">
       <AppNavbar />
@@ -124,7 +119,6 @@ const Settings = () => {
             <TabsTrigger value="theme">Theme</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
           </TabsList>
 
           <TabsContent value="theme">
@@ -249,28 +243,6 @@ const Settings = () => {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="notifications">
-            <Card>
-              <CardContent className="space-y-4 pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Sound Notifications</Label>
-                    <div className="text-sm text-muted-foreground">
-                      Play sound when AI responds
-                    </div>
-                  </div>
-                  <Switch 
-                    checked={settings.soundEnabled}
-                    onCheckedChange={(checked) => {
-                      updateSettings({ soundEnabled: checked });
-                      if (checked) playNotificationSound();
-                    }}
-                  />
                 </div>
               </CardContent>
             </Card>

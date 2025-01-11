@@ -2,7 +2,6 @@ type Settings = {
   isDarkMode: boolean;
   fontSize: 'small' | 'medium' | 'large';
   messageDisplay: 'comfortable' | 'compact';
-  soundEnabled: boolean;
 };
 
 class SettingsStore {
@@ -16,7 +15,6 @@ class SettingsStore {
       isDarkMode: false,
       fontSize: 'medium',
       messageDisplay: 'comfortable',
-      soundEnabled: true,
     };
 
     // Apply settings on load
