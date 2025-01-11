@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      feedback: {
+        Row: {
+          created_at: string
+          experience_rating: Database["public"]["Enums"]["experience_rating"]
+          favorite_features: string | null
+          has_bugs: boolean | null
+          id: string
+          improvement_suggestions: string | null
+          interested_in_subscription: boolean | null
+          user_id: string | null
+          would_recommend: boolean | null
+        }
+        Insert: {
+          created_at?: string
+          experience_rating: Database["public"]["Enums"]["experience_rating"]
+          favorite_features?: string | null
+          has_bugs?: boolean | null
+          id?: string
+          improvement_suggestions?: string | null
+          interested_in_subscription?: boolean | null
+          user_id?: string | null
+          would_recommend?: boolean | null
+        }
+        Update: {
+          created_at?: string
+          experience_rating?: Database["public"]["Enums"]["experience_rating"]
+          favorite_features?: string | null
+          has_bugs?: boolean | null
+          id?: string
+          improvement_suggestions?: string | null
+          interested_in_subscription?: boolean | null
+          user_id?: string | null
+          would_recommend?: boolean | null
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           chain_id: string | null
@@ -530,7 +566,12 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      experience_rating:
+        | "excellent"
+        | "good"
+        | "average"
+        | "poor"
+        | "needs_improvement"
     }
     CompositeTypes: {
       [_ in never]: never

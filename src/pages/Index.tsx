@@ -1,5 +1,6 @@
 import { AppNavbar } from "@/components/AppNavbar";
 import { ChatLayout } from "@/components/chat/ChatLayout";
+import { FeedbackButton } from "@/components/feedback/FeedbackButton";
 
 const Index = () => {
   return (
@@ -8,6 +9,7 @@ const Index = () => {
       <main className="flex-1">
         <ChatLayout />
       </main>
+      <FeedbackButton />
     </div>
   );
 };
