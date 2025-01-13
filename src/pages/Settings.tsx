@@ -3,11 +3,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { settingsStore } from "@/stores/settingsStore";
 import { ThemeSettings } from "@/components/settings/ThemeSettings";
 import { ChatSettings } from "@/components/settings/ChatSettings";
 import { AccountSettings } from "@/components/settings/AccountSettings";
+import { SubscriptionStatus } from "@/components/settings/SubscriptionStatus";
 
 const Settings = () => {
   const { toast } = useToast();
@@ -93,12 +94,17 @@ const Settings = () => {
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <h1 className="text-2xl font-bold mb-6">Settings</h1>
         
-        <Tabs defaultValue="theme" className="space-y-6">
+        <Tabs defaultValue="subscription" className="space-y-6">
           <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="subscription">Subscription</TabsTrigger>
             <TabsTrigger value="theme">Theme</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="subscription">
+            <SubscriptionStatus />
+          </TabsContent>
 
           <TabsContent value="theme">
             <ThemeSettings settings={settings} updateSettings={updateSettings} />
