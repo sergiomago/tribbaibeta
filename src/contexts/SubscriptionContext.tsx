@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 interface SubscriptionState {
   hasSubscription: boolean;
   planType: string | null;
+  interval: 'month' | 'year' | null;
   trialEnd: string | null;
   currentPeriodEnd: string | null;
   isLoading: boolean;
@@ -13,7 +14,7 @@ interface SubscriptionState {
 
 interface SubscriptionContextType extends SubscriptionState {
   checkSubscription: () => Promise<void>;
-  startSubscription: (planType: "creator" | "maestro") => Promise<void>;
+  startSubscription: (planType: "creator" | "maestro", interval?: 'month' | 'year') => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -24,6 +25,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [state, setState] = useState<SubscriptionState>({
     hasSubscription: false,
     planType: null,
+    interval: null,
     trialEnd: null,
     currentPeriodEnd: null,
     isLoading: true,
@@ -43,6 +45,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       setState({
         hasSubscription: data.hasSubscription,
         planType: data.planType,
+        interval: data.interval || 'month',
         trialEnd: data.trialEnd,
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
@@ -58,7 +61,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const startSubscription = async (planType: "creator" | "maestro") => {
+  const startSubscription = async (planType: "creator" | "maestro", interval: 'month' | 'year' = 'month') => {
     if (!session) {
       toast({
         variant: "destructive",
@@ -70,7 +73,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-        body: { planType },
+        body: { planType, interval },
       });
       
       if (error) throw error;

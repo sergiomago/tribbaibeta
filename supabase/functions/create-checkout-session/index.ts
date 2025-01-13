@@ -14,10 +14,14 @@ serve(async (req) => {
   }
 
   try {
-    const { planType } = await req.json();
+    const { planType, interval = 'month' } = await req.json();
     
     if (!planType || !['creator', 'maestro'].includes(planType)) {
       throw new Error('Invalid plan type');
+    }
+
+    if (!['month', 'year'].includes(interval)) {
+      throw new Error('Invalid interval');
     }
 
     const supabaseClient = createClient(
@@ -70,16 +74,18 @@ serve(async (req) => {
       customerId = customer.id;
     }
 
-    // Get the appropriate price ID based on the plan type
-    const priceId = planType === 'creator' 
-      ? Deno.env.get('Creator Plan') 
-      : Deno.env.get('Maestro Plan');
+    // Get the appropriate price ID based on the plan type and interval
+    const priceIdKey = interval === 'year' 
+      ? `${planType === 'creator' ? 'Creator' : 'Maestro'} Plan Yearly`
+      : `${planType === 'creator' ? 'Creator' : 'Maestro'} Plan`;
+    
+    const priceId = Deno.env.get(priceIdKey);
 
     if (!priceId) {
       throw new Error('Price ID not configured');
     }
 
-    console.log(`Creating checkout session for plan: ${planType}`);
+    console.log(`Creating checkout session for plan: ${planType} (${interval}ly)`);
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -93,10 +99,11 @@ serve(async (req) => {
       success_url: `${req.headers.get('origin')}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${req.headers.get('origin')}/pricing`,
       subscription_data: {
-        trial_period_days: 7, // 7-day trial
+        trial_period_days: 7,
         metadata: {
           user_id: user.id,
           plan_type: planType,
+          interval: interval,
         },
       },
     });
@@ -108,7 +115,7 @@ serve(async (req) => {
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
-      },
+      }
     );
   } catch (error) {
     console.error('Error creating checkout session:', error);
@@ -117,7 +124,7 @@ serve(async (req) => {
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
-      },
+      }
     );
   }
 });
