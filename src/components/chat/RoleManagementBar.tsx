@@ -6,6 +6,7 @@ import { RoleTag } from "./RoleTag";
 import { RoleSelectionDialog } from "./RoleSelectionDialog";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface RoleManagementBarProps {
   threadId: string | null;
@@ -15,6 +16,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   const { updateThreadName } = useThreadMutations();
   const { addRoleToThread, removeRoleFromThread } = useRoleMutations();
   const [title, setTitle] = useState("");
+  const isMobile = useIsMobile();
 
   const { data: thread } = useQuery({
     queryKey: ["thread", threadId],
@@ -71,10 +73,10 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   };
 
   return (
-    <div className="border-b p-4 flex-shrink-0">
-      <div className="flex items-center justify-between mb-2">
+    <div className="border-b p-2 sm:p-4 flex-shrink-0">
+      <div className="flex items-center justify-between mb-2 gap-2">
         <Input
-          className="text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 max-w-[300px]"
+          className="text-base sm:text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 min-w-0 flex-1"
           value={title}
           onChange={handleTitleChange}
           onBlur={handleTitleUpdate}
@@ -96,7 +98,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           disabled={!threadId}
         />
       </div>
-      <div className="flex gap-2 flex-wrap">
+      <div className={`flex gap-1.5 sm:gap-2 flex-wrap ${isMobile ? 'max-h-24 overflow-y-auto' : ''}`}>
         {threadRoles?.map((role) => (
           <RoleTag
             key={role.id}
@@ -106,10 +108,11 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
                 removeRoleFromThread.mutate({ threadId, roleId: role.id });
               }
             }}
+            className="text-xs sm:text-sm"
           />
         ))}
         {threadRoles?.length === 0 && (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xs sm:text-sm text-muted-foreground">
             No roles assigned. Add roles to start chatting.
           </div>
         )}
