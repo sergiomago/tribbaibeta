@@ -1,4 +1,4 @@
 project_id = "wdffpyeesafsejfmzwvi"
 
-[handle-chat-message.http]
+[create-checkout-session.http]
 port = 54321
