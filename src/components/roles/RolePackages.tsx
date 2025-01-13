@@ -124,6 +124,9 @@ export function RolePackages() {
     return null;
   }
 
+  // Define premium packages
+  const premiumPackages = ['Advanced', 'Professional', 'Expert'];
+
   return (
     <div className="space-y-6 mb-8">
       <h2 className="text-lg font-semibold">Pre-made Role Packages</h2>
@@ -155,6 +158,7 @@ export function RolePackages() {
                     <TemplateRoleCard
                       role={role}
                       onUseTemplate={handleUseTemplate}
+                      isPremium={premiumPackages.includes(packageName)}
                     />
                   </div>
                 ))}
