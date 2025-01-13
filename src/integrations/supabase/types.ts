@@ -414,6 +414,12 @@ export type Database = {
             }
             Returns: unknown
           }
+      count_user_roles: {
+        Args: {
+          user_id: string
+        }
+        Returns: number
+      }
       get_conversation_chain: {
         Args: {
           p_thread_id: string
