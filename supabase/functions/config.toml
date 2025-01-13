@@ -2,3 +2,6 @@ project_id = "wdffpyeesafsejfmzwvi"
 
 [create-checkout-session.http]
 port = 54321
+
+[check-subscription.http]
+port = 54321
