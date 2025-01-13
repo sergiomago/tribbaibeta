@@ -41,7 +41,7 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
           onMatchFound={scrollToMessage}
         />
       </div>
-      <div className="space-y-4 max-w-4xl mx-auto p-4">
+      <div className="space-y-3 max-w-[95%] sm:max-w-4xl mx-auto p-2 sm:p-4">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -55,10 +55,10 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
             <div
               key={message.id}
               id={message.id}
-              className={`flex gap-3 max-w-[80%] transition-all duration-300 rounded-lg ${
+              className={`flex gap-2 sm:gap-3 max-w-[95%] sm:max-w-[80%] transition-all duration-300 rounded-lg ${
                 message.role_id 
-                  ? "mr-auto" // AI message aligned left
-                  : "ml-auto flex-row-reverse" // User message aligned right
+                  ? "mr-auto" 
+                  : "ml-auto flex-row-reverse"
               } ${
                 highlightedMessageId === message.id 
                   ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
@@ -66,25 +66,25 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
               }`}
             >
               {message.role && (
-                <Avatar className="h-8 w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
-                  <span className="text-xs font-semibold">
+                <Avatar className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
+                  <span className="text-[10px] sm:text-xs font-semibold">
                     {message.role.tag}
                   </span>
                 </Avatar>
               )}
               <div className={`flex-1 ${message.role_id ? "" : "text-right"}`}>
                 {message.role && (
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="font-semibold text-sm text-primary">
+                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
+                    <div className="font-semibold text-xs sm:text-sm text-primary">
                       {message.role.name}
                     </div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       {new Date(message.created_at).toLocaleTimeString()}
                     </div>
                   </div>
                 )}
                 <div 
-                  className={`text-sm whitespace-pre-wrap leading-relaxed p-4 rounded-lg ${
+                  className={`text-xs sm:text-sm whitespace-pre-wrap leading-relaxed p-2 sm:p-4 rounded-lg ${
                     message.role_id
                       ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow"
                       : "bg-primary/10 text-left"
