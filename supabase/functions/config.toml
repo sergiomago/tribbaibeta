@@ -5,3 +5,6 @@ port = 54321
 
 [check-subscription.http]
 port = 54321
+
+[stripe-webhook.http]
+port = 54321
