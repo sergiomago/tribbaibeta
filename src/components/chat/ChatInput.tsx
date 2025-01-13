@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
+import { Send } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ChatInputProps {
   threadId: string;
@@ -14,6 +16,7 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Query to check if thread has roles
   const { data: threadRoles } = useQuery({
@@ -35,7 +38,6 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   const handleSend = async () => {
     if (!message.trim()) return;
 
-    // Check if thread has any roles
     if (!threadRoles?.length) {
       toast({
         title: "No roles assigned",
@@ -79,18 +81,30 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   };
 
   return (
-    <div className="border-t p-4 bg-background mt-auto">
-      <div className="flex gap-2">
+    <div className="border-t p-2 sm:p-4 bg-background mt-auto">
+      <div className="flex gap-2 max-w-[95%] sm:max-w-4xl mx-auto">
         <Input
           placeholder="Type your message..."
-          className="flex-1"
+          className="flex-1 text-base sm:text-sm"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
           disabled={isSending}
         />
-        <Button onClick={handleSend} disabled={isSending}>
-          {isSending ? "Sending..." : "Send"}
+        <Button 
+          onClick={handleSend} 
+          disabled={isSending}
+          size={isMobile ? "sm" : "default"}
+          className="shrink-0"
+        >
+          {isSending ? (
+            "Sending..."
+          ) : (
+            <>
+              <Send className="h-4 w-4" />
+              {!isMobile && <span className="ml-2">Send</span>}
+            </>
+          )}
         </Button>
       </div>
     </div>
