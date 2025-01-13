@@ -8,7 +8,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -85,6 +84,20 @@ serve(async (req) => {
           console.error('Error updating subscription:', updateError)
           return new Response('Error updating subscription', { status: 500 })
         }
+
+        // Update role models based on plan type
+        const newModel = planType === 'maestro' ? 'gpt-4o' : 'gpt-4o-mini'
+        const { error: roleUpdateError } = await supabase
+          .from('roles')
+          .update({ model: newModel })
+          .eq('user_id', subscriptionData.user_id)
+          .not('is_template', 'eq', true)
+
+        if (roleUpdateError) {
+          console.error('Error updating role models:', roleUpdateError)
+          return new Response('Error updating role models', { status: 500 })
+        }
+
         break
       }
 
@@ -117,6 +130,19 @@ serve(async (req) => {
           console.error('Error updating subscription:', updateError)
           return new Response('Error updating subscription', { status: 500 })
         }
+
+        // Downgrade all roles to gpt-4o-mini
+        const { error: roleUpdateError } = await supabase
+          .from('roles')
+          .update({ model: 'gpt-4o-mini' })
+          .eq('user_id', subscriptionData.user_id)
+          .not('is_template', 'eq', true)
+
+        if (roleUpdateError) {
+          console.error('Error downgrading role models:', roleUpdateError)
+          return new Response('Error downgrading role models', { status: 500 })
+        }
+
         break
       }
 
