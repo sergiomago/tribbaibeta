@@ -12,6 +12,7 @@ import { AliasField } from "./form/AliasField";
 import { TagField } from "./form/TagField";
 import { DescriptionField } from "./form/DescriptionField";
 import { InstructionsField } from "./form/InstructionsField";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 export const roleFormSchema = z.object({
   id: z.string().optional(),
@@ -20,7 +21,7 @@ export const roleFormSchema = z.object({
   tag: z.string().min(1, "Tag is required"),
   description: z.string().min(1, "Description is required"),
   instructions: z.string().min(1, "Instructions are required"),
-  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o"),
+  model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o-mini"),
 });
 
 export type RoleFormValues = z.infer<typeof roleFormSchema>;
@@ -34,6 +35,7 @@ type RoleFormProps = {
 export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps) => {
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
+  const { planType, hasSubscription } = useSubscription();
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
@@ -43,9 +45,50 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
       tag: "",
       description: "",
       instructions: "",
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
     },
   });
+
+  const handleSubmit = async (values: RoleFormValues) => {
+    // Check role limits for Creator plan
+    if (!defaultValues?.id && planType === 'creator') {
+      const { count, error: countError } = await supabase
+        .from('roles')
+        .select('id', { count: 'exact' })
+        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+        .not('is_template', 'eq', true);
+
+      if (countError) {
+        toast({
+          title: "Error",
+          description: "Could not verify role count. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (count && count >= 7) {
+        toast({
+          title: "Role Limit Reached",
+          description: "Creator plan is limited to 7 roles. Please upgrade to Maestro plan for unlimited roles.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Check model access
+    if (values.model === "gpt-4o" && (!hasSubscription || planType !== 'maestro')) {
+      toast({
+        title: "Model Not Available",
+        description: "GPT-4 is only available with the Maestro plan. Please upgrade to access this model.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onSubmit(values);
+  };
 
   const generateContent = async (type: 'tag' | 'alias' | 'instructions') => {
     try {
@@ -78,7 +121,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
         <RoleNameField 
           form={form} 
           onNameChange={() => generateContent('tag')} 
