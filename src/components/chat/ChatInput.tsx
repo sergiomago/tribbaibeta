@@ -6,17 +6,28 @@ import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 interface ChatInputProps {
   threadId: string;
   onMessageSent?: () => void;
+  disabled?: boolean;
+  messageCount?: number;
+  maxMessages?: number;
 }
 
-export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
+export function ChatInput({ 
+  threadId, 
+  onMessageSent,
+  disabled = false,
+  messageCount = 0,
+  maxMessages = Infinity
+}: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { hasSubscription } = useSubscription();
 
   // Query to check if thread has roles
   const { data: threadRoles } = useQuery({
@@ -42,6 +53,17 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
       toast({
         title: "No roles assigned",
         description: "Please add at least one role to the chat before sending messages.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (disabled || messageCount >= maxMessages) {
+      toast({
+        title: "Message limit reached",
+        description: hasSubscription 
+          ? "You've reached the message limit for this thread."
+          : "Upgrade to send more messages in this thread.",
         variant: "destructive",
       });
       return;
@@ -83,17 +105,26 @@ export function ChatInput({ threadId, onMessageSent }: ChatInputProps) {
   return (
     <div className="border-t p-2 sm:p-4 bg-background mt-auto">
       <div className="flex gap-2 max-w-[95%] sm:max-w-4xl mx-auto">
+        {messageCount < maxMessages ? (
+          <div className="text-xs text-muted-foreground text-center mb-2">
+            {messageCount}/{maxMessages} messages used
+          </div>
+        ) : (
+          <div className="text-xs text-destructive text-center mb-2">
+            Message limit reached. {!hasSubscription && "Upgrade to send more messages."}
+          </div>
+        )}
         <Input
-          placeholder="Type your message..."
+          placeholder={disabled ? "Message limit reached" : "Type your message..."}
           className="flex-1 text-base sm:text-sm"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyPress={handleKeyPress}
-          disabled={isSending}
+          disabled={isSending || disabled}
         />
         <Button 
           onClick={handleSend} 
-          disabled={isSending}
+          disabled={isSending || disabled}
           size={isMobile ? "sm" : "default"}
           className="shrink-0"
         >

@@ -11,6 +11,9 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThreadPanel } from "./ThreadPanel";
 import { ChatContent } from "./ChatContent";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 export function ChatLayout() {
   const [searchParams] = useSearchParams();
@@ -20,6 +23,19 @@ export function ChatLayout() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
+  const { hasSubscription } = useSubscription();
+
+  const { data: freeTierLimits } = useQuery({
+    queryKey: ["free-tier-limits"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("free_tier_limits")
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
 
   // Update currentThreadId when URL parameter changes
   useEffect(() => {
@@ -95,6 +111,7 @@ export function ChatLayout() {
           threadId={currentThreadId}
           messageListRef={messageListRef}
           messagesEndRef={messagesEndRef}
+          maxMessages={hasSubscription ? Infinity : (freeTierLimits?.max_messages_per_thread || 10)}
         />
       </ResizablePanel>
     </ResizablePanelGroup>
