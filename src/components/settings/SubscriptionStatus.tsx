@@ -5,6 +5,7 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { format } from "date-fns";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Check } from "lucide-react";
 
 export const SubscriptionStatus = () => {
   const { 
@@ -35,12 +36,13 @@ export const SubscriptionStatus = () => {
     const maestroMonthlyPrice = 30;
     const creatorYearlyPrice = Math.floor(creatorMonthlyPrice * 12 * (1 - yearlyDiscount / 100));
     const maestroYearlyPrice = Math.floor(maestroMonthlyPrice * 12 * (1 - yearlyDiscount / 100));
+    const firstMonthMaestroPrice = creatorMonthlyPrice; // 50% off first month
 
     return (
       <Card>
         <CardHeader>
           <CardTitle>Choose a Plan</CardTitle>
-          <CardDescription>Select a plan to get started with Tribbai</CardDescription>
+          <CardDescription>Select a plan to unlock more features</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-end space-x-2">
@@ -56,7 +58,7 @@ export const SubscriptionStatus = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Creator</CardTitle>
-                <CardDescription>Perfect for getting started</CardDescription>
+                <CardDescription>For getting started</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
@@ -73,32 +75,57 @@ export const SubscriptionStatus = () => {
                   )}
                 </div>
                 <ul className="space-y-2 text-sm">
-                  <li>7 Custom Roles</li>
-                  <li>GPT-3.5 Model</li>
-                  <li>7-day free trial</li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Limited to 7 Total Roles
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    GPT-4-mini Model
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Basic Templates
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Cancel Anytime
+                  </li>
                 </ul>
                 <Button 
                   className="w-full"
                   onClick={() => startSubscription("creator", billingInterval)}
                 >
-                  Start Free Trial
+                  Subscribe Now
                 </Button>
               </CardContent>
             </Card>
             
-            <Card>
+            <Card className="border-2 border-primary">
               <CardHeader>
-                <CardTitle>Maestro</CardTitle>
-                <CardDescription>For power users</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Maestro</CardTitle>
+                    <CardDescription>For power users</CardDescription>
+                  </div>
+                  <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
+                    Recommended
+                  </span>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="text-2xl font-bold">
-                    ${billingInterval === 'month' ? maestroMonthlyPrice : maestroYearlyPrice}
+                    ${billingInterval === 'month' ? firstMonthMaestroPrice : maestroYearlyPrice}
                     <span className="text-sm font-normal text-muted-foreground">
-                      /{billingInterval}
+                      /{billingInterval === 'month' ? 'first month' : 'year'}
                     </span>
                   </div>
+                  {billingInterval === 'month' && (
+                    <div className="text-sm text-green-600">
+                      50% off first month, then ${maestroMonthlyPrice}/month
+                    </div>
+                  )}
                   {billingInterval === 'year' && (
                     <div className="text-sm text-green-600">
                       Save ${maestroMonthlyPrice * 12 - maestroYearlyPrice}/year
@@ -106,13 +133,41 @@ export const SubscriptionStatus = () => {
                   )}
                 </div>
                 <ul className="space-y-2 text-sm">
-                  <li>Unlimited Roles</li>
-                  <li>GPT-4 Model</li>
-                  <li>Special Roles Access</li>
-                  <li>7-day free trial</li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Unlimited Roles
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Enhanced GPT-4 Model
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Premium Templates
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Web Search Capability
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Document Analysis
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Image Understanding
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    7-day Free Trial
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Cancel or Downgrade Anytime
+                  </li>
                 </ul>
                 <Button 
-                  className="w-full"
+                  className="w-full bg-gradient-primary"
                   onClick={() => startSubscription("maestro", billingInterval)}
                 >
                   Start Free Trial
@@ -145,6 +200,9 @@ export const SubscriptionStatus = () => {
         <div>
           <div className="font-semibold">Next Billing Date</div>
           <div>{format(new Date(currentPeriodEnd!), 'PPP')}</div>
+        </div>
+        <div className="text-sm text-muted-foreground">
+          You can cancel or change your plan at any time
         </div>
       </CardContent>
     </Card>
