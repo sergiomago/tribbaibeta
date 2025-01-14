@@ -1,6 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createLlongtermManager } from "./LlongtermManager";
 
+// Special role tags
+const SPECIAL_ROLES = {
+  WEB_SEARCHER: '@web',
+  DOC_ANALYST: '@docanalyst'
+} as const;
+
 export class RoleManager {
   private threadId: string;
 
@@ -16,6 +22,21 @@ export class RoleManager {
 
     if (error) throw error;
     return threadRoles.map(tr => tr.role_id);
+  }
+
+  async hasSpecialCapability(capability: keyof typeof SPECIAL_ROLES) {
+    const { data: threadRoles, error } = await supabase
+      .from("thread_roles")
+      .select(`
+        role:roles (
+          tag
+        )
+      `)
+      .eq("thread_id", this.threadId);
+
+    if (error) throw error;
+
+    return threadRoles.some(tr => tr.role?.tag === SPECIAL_ROLES[capability]);
   }
 
   async getNextRespondingRole(currentOrder: number) {
