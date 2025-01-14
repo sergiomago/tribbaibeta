@@ -27,6 +27,7 @@ export function ChatInput({
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { hasSubscription } = useSubscription();
@@ -81,6 +82,18 @@ export function ChatInput({
 
     setIsSending(true);
     try {
+      // Check if this is a web search request
+      const webSearchMatch = message.match(/@web search:\s*(.+)/);
+      if (webSearchMatch && hasWebSearcher) {
+        setIsSearching(true);
+        const searchQuery = webSearchMatch[1];
+        const { error: searchError } = await supabase.functions.invoke("web-search", {
+          body: { query: searchQuery }
+        });
+
+        if (searchError) throw searchError;
+      }
+
       console.log('Sending message:', { threadId, content: message });
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
@@ -102,6 +115,7 @@ export function ChatInput({
       });
     } finally {
       setIsSending(false);
+      setIsSearching(false);
     }
   };
 
@@ -201,6 +215,16 @@ export function ChatInput({
     }
   };
 
+  const handleWebSearch = () => {
+    setMessage(prev => {
+      const searchPrefix = "@web search: ";
+      if (prev.includes(searchPrefix)) {
+        return prev;
+      }
+      return prev ? `${prev} ${searchPrefix}` : searchPrefix;
+    });
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -281,13 +305,14 @@ export function ChatInput({
               <Button 
                 variant="outline"
                 size={isMobile ? "sm" : "default"}
-                onClick={() => {
-                  setMessage(prev => prev + " @web search: ");
-                }}
+                onClick={handleWebSearch}
                 className="shrink-0"
+                disabled={isSearching}
               >
                 <Search className="h-4 w-4" />
-                {!isMobile && <span className="ml-2">Web Search</span>}
+                {!isMobile && <span className="ml-2">
+                  {isSearching ? "Searching..." : "Web Search"}
+                </span>}
               </Button>
             )}
             <Input
