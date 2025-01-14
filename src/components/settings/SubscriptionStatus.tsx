@@ -15,7 +15,9 @@ export const SubscriptionStatus = () => {
     trialEnd, 
     currentPeriodEnd, 
     isLoading,
-    startSubscription 
+    startSubscription,
+    startTrial,
+    trialStarted 
   } = useSubscription();
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
 
@@ -107,9 +109,11 @@ export const SubscriptionStatus = () => {
                     <CardTitle>Maestro</CardTitle>
                     <CardDescription>For power users</CardDescription>
                   </div>
-                  <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
-                    50% Off First Month
-                  </span>
+                  {!trialStarted && (
+                    <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
+                      7-Day Free Trial
+                    </span>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -165,18 +169,14 @@ export const SubscriptionStatus = () => {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="h-4 w-4" />
-                    7-day Free Trial
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check className="h-4 w-4" />
                     Cancel or Downgrade Anytime
                   </li>
                 </ul>
                 <Button 
                   className="w-full bg-gradient-primary"
-                  onClick={() => startSubscription("maestro", billingInterval)}
+                  onClick={() => trialStarted ? startSubscription("maestro", billingInterval) : startTrial()}
                 >
-                  Start Free Trial
+                  {trialStarted ? 'Subscribe Now' : 'Start Free Trial'}
                 </Button>
               </CardContent>
             </Card>
