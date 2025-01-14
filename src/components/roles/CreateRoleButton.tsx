@@ -7,12 +7,11 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
 
 type CreateRoleButtonProps = {
-  isDisabled: boolean;
   planType: string | null;
   roleCount: number | undefined;
 };
 
-export const CreateRoleButton = ({ isDisabled, planType, roleCount }: CreateRoleButtonProps) => {
+export const CreateRoleButton = ({ planType, roleCount }: CreateRoleButtonProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
@@ -33,7 +32,6 @@ export const CreateRoleButton = ({ isDisabled, planType, roleCount }: CreateRole
       <Button 
         onClick={handleCreateRole}
         className="gap-2"
-        disabled={isDisabled}
       >
         <Plus className="h-4 w-4" />
         Create Role

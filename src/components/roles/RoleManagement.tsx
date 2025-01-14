@@ -9,11 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 
-interface RoleManagementProps {
-  isDisabled?: boolean;
-}
-
-export function RoleManagement({ isDisabled }: RoleManagementProps) {
+export function RoleManagement() {
   const [isGridView, setIsGridView] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -69,7 +65,6 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
       <div className="flex justify-between items-center p-4">
         <RoleCountDisplay />
         <CreateRoleButton 
-          isDisabled={isDisabled} 
           planType={planType || null}
           roleCount={roles?.length}
         />
