@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 interface RoleManagementProps {
   roles?: Tables<"roles">[];
@@ -37,6 +38,7 @@ export function RoleManagement({
   const { hasSubscription } = useSubscription();
   const maxRoles = planType === 'creator' ? 7 : 3; // 7 for creator plan, 3 for free tier
   const isAtLimit = roleCount >= maxRoles;
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   const handleUpgradeClick = () => {
     navigate('/settings');
@@ -88,9 +90,11 @@ export function RoleManagement({
 
       <RoleList
         roles={roles}
+        isLoading={isLoading}
         onDelete={onDelete}
         onStartChat={onStartChat}
         onEdit={onEdit}
+        viewMode={viewMode}
       />
     </div>
   );
