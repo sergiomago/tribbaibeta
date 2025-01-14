@@ -3,15 +3,19 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ThreadList } from "./ThreadList";
 import { ThreadSearch } from "./ThreadSearch";
 import { Plus } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
+import { useState } from "react";
 
 export function ChatSidebar() {
   const navigate = useNavigate();
+  const { threadId } = useParams();
   const { hasSubscription } = useSubscription();
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
+  const [newThreadName, setNewThreadName] = useState("");
 
   const { data: freeTierLimits } = useQuery({
     queryKey: ["free-tier-limits"],
@@ -36,9 +40,56 @@ export function ChatSidebar() {
     },
   });
 
+  const { data: messages } = useQuery({
+    queryKey: ["messages", threadId],
+    queryFn: async () => {
+      if (!threadId) return [];
+      const { data, error } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("thread_id", threadId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!threadId,
+  });
+
   const maxThreads = freeTierLimits?.max_threads || 3;
   const canCreateThread = hasSubscription || (threadCount || 0) < maxThreads;
   const showUpgradeCard = !hasSubscription && !canCreateThread;
+
+  const handleThreadSelect = (threadId: string) => {
+    navigate(`/chats/${threadId}`);
+  };
+
+  const handleEditStart = (thread: any) => {
+    setEditingThreadId(thread.id);
+    setNewThreadName(thread.name);
+  };
+
+  const handleEditSubmit = async (threadId: string) => {
+    if (!newThreadName.trim()) return;
+    
+    await supabase
+      .from("threads")
+      .update({ name: newThreadName })
+      .eq("id", threadId);
+    
+    setEditingThreadId(null);
+    setNewThreadName("");
+  };
+
+  const handleDeleteThread = async (threadId: string) => {
+    await supabase
+      .from("threads")
+      .delete()
+      .eq("id", threadId);
+  };
+
+  const handleMatchFound = (messageId: string) => {
+    // Scroll to message implementation would go here
+    console.log("Scroll to message:", messageId);
+  };
 
   return (
     <div className="flex h-full flex-col gap-2">
@@ -69,11 +120,23 @@ export function ChatSidebar() {
       )}
 
       <div className="px-2">
-        <ThreadSearch />
+        <ThreadSearch 
+          messages={messages || []}
+          onMatchFound={handleMatchFound}
+        />
       </div>
 
       <ScrollArea className="flex-1">
-        <ThreadList />
+        <ThreadList 
+          selectedThreadId={threadId || null}
+          editingThreadId={editingThreadId}
+          newThreadName={newThreadName}
+          onThreadSelect={handleThreadSelect}
+          onEditStart={handleEditStart}
+          onEditSubmit={handleEditSubmit}
+          onNameChange={setNewThreadName}
+          onDeleteClick={handleDeleteThread}
+        />
       </ScrollArea>
     </div>
   );
