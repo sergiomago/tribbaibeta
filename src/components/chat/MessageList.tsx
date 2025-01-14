@@ -3,6 +3,9 @@ import { Avatar } from "@/components/ui/avatar";
 import { Loader2 } from "lucide-react";
 import { ThreadSearch } from "./ThreadSearch";
 import { useState } from "react";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Message {
   id: string;
@@ -20,10 +23,24 @@ interface MessageListProps {
   messages: Message[] | undefined;
   isLoading: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement>;
+  threadId: string | null;
 }
 
-export function MessageList({ messages, isLoading, messagesEndRef }: MessageListProps) {
+export function MessageList({ messages, isLoading, messagesEndRef, threadId }: MessageListProps) {
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const { hasSubscription } = useSubscription();
+
+  const { data: freeTierLimits } = useQuery({
+    queryKey: ["free-tier-limits"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("free_tier_limits")
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const scrollToMessage = (messageId: string) => {
     setHighlightedMessageId(messageId);
@@ -33,13 +50,21 @@ export function MessageList({ messages, isLoading, messagesEndRef }: MessageList
     }
   };
 
+  const messageCount = messages?.length || 0;
+  const maxMessages = hasSubscription ? Infinity : (freeTierLimits?.max_messages_per_thread || 10);
+
   return (
     <ScrollArea className="h-full">
-      <div className="sticky top-0 z-10">
+      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <ThreadSearch 
           messages={messages || []} 
           onMatchFound={scrollToMessage}
         />
+        {!hasSubscription && threadId && (
+          <div className="text-xs text-muted-foreground text-center py-1">
+            {messageCount}/{maxMessages} messages used
+          </div>
+        )}
       </div>
       <div className="space-y-3 max-w-[95%] sm:max-w-4xl mx-auto p-2 sm:p-4">
         {isLoading ? (

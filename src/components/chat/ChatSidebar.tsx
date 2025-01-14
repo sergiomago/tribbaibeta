@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 interface ChatSidebarProps {
   defaultSize: number;
@@ -18,6 +19,7 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const { hasSubscription } = useSubscription();
 
   const { data: threads, isLoading } = useQuery({
     queryKey: ["threads"],
@@ -26,6 +28,18 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
         .from("threads")
         .select("*")
         .order("updated_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: freeTierLimits } = useQuery({
+    queryKey: ["free-tier-limits"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("free_tier_limits")
+        .select("*")
+        .single();
       if (error) throw error;
       return data;
     },
@@ -71,17 +85,38 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
     onThreadSelect(threadId);
   };
 
+  const threadCount = threads?.length || 0;
+  const maxThreads = hasSubscription ? Infinity : (freeTierLimits?.max_threads || 3);
+  const canCreateThread = threadCount < maxThreads;
+
+  const handleCreateThread = () => {
+    if (!canCreateThread) {
+      toast({
+        title: "Thread limit reached",
+        description: "Upgrade your plan to create more threads",
+        variant: "destructive",
+      });
+      return;
+    }
+    createThread.mutate();
+  };
+
   return (
     <div className="h-full flex flex-col border-r">
       <div className="p-4 border-b">
         <Button
           className="w-full"
-          onClick={() => createThread.mutate()}
-          disabled={createThread.isPending}
+          onClick={handleCreateThread}
+          disabled={createThread.isPending || !canCreateThread}
         >
           <Plus className="h-4 w-4 mr-2" />
           New Thread
         </Button>
+        {!hasSubscription && (
+          <div className="mt-2 text-xs text-muted-foreground text-center">
+            {threadCount}/{maxThreads} threads used
+          </div>
+        )}
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-2">
@@ -99,6 +134,11 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
                 <MessageSquare className="h-4 w-4" />
                 <span className="font-medium">{thread.name}</span>
               </div>
+              {thread.message_count !== undefined && (
+                <div className="text-xs text-muted-foreground mt-1">
+                  {thread.message_count}/{!hasSubscription ? (freeTierLimits?.max_messages_per_thread || 10) : "∞"} messages
+                </div>
+              )}
             </button>
           ))}
         </div>
