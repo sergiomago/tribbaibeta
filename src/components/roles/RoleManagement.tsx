@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RoleList } from "./RoleList";
 import { CreateRoleButton } from "./CreateRoleButton";
-import { RoleCountDisplay } from "./RoleCountDisplay";
 import { RolePackages } from "./RolePackages";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -84,7 +83,11 @@ export function RoleManagement() {
                 <List className="h-4 w-4" />
               </Button>
             </div>
-            <CreateRoleButton disabled={isAtLimit} />
+            <CreateRoleButton 
+              isDisabled={isAtLimit}
+              planType={planType}
+              roleCount={roleCount}
+            />
           </div>
         </div>
 

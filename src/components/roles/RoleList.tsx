@@ -3,12 +3,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { UserRoleCard } from "./UserRoleCard";
 import { UserRoleListItem } from "./UserRoleListItem";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
 
 interface RoleListProps {
   viewMode: "grid" | "list";
 }
 
 export function RoleList({ viewMode }: RoleListProps) {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
   const { data: roles, isLoading } = useQuery({
     queryKey: ["roles"],
     queryFn: async () => {
@@ -21,6 +26,37 @@ export function RoleList({ viewMode }: RoleListProps) {
       return data;
     },
   });
+
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("roles")
+        .delete()
+        .eq("id", id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Role deleted successfully",
+      });
+    } catch (error) {
+      console.error('Error deleting role:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete role",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleStartChat = (id: string) => {
+    navigate(`/chats?role=${id}`);
+  };
+
+  const handleEdit = (id: string) => {
+    navigate(`/roles/edit/${id}`);
+  };
 
   if (isLoading) {
     return (
@@ -54,9 +90,21 @@ export function RoleList({ viewMode }: RoleListProps) {
     }>
       {roles.map((role) => (
         viewMode === "grid" ? (
-          <UserRoleCard key={role.id} role={role} />
+          <UserRoleCard 
+            key={role.id} 
+            role={role} 
+            onDelete={handleDelete}
+            onStartChat={handleStartChat}
+            onEdit={handleEdit}
+          />
         ) : (
-          <UserRoleListItem key={role.id} role={role} />
+          <UserRoleListItem 
+            key={role.id} 
+            role={role}
+            onDelete={handleDelete}
+            onStartChat={handleStartChat}
+            onEdit={handleEdit}
+          />
         )
       ))}
     </div>
