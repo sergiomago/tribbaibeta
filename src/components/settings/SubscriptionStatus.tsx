@@ -108,27 +108,34 @@ export const SubscriptionStatus = () => {
                     <CardDescription>For power users</CardDescription>
                   </div>
                   <span className="px-2.5 py-0.5 text-xs font-semibold bg-primary text-primary-foreground rounded-full">
-                    Recommended
+                    50% Off First Month
                   </span>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <div className="text-2xl font-bold">
-                    ${billingInterval === 'month' ? firstMonthMaestroPrice : maestroYearlyPrice}
-                    <span className="text-sm font-normal text-muted-foreground">
-                      /{billingInterval === 'month' ? 'first month' : 'year'}
-                    </span>
-                  </div>
-                  {billingInterval === 'month' && (
-                    <div className="text-sm text-green-600">
-                      50% off first month, then ${maestroMonthlyPrice}/month
-                    </div>
-                  )}
-                  {billingInterval === 'year' && (
-                    <div className="text-sm text-green-600">
-                      Save ${(maestroMonthlyPrice * 12) - maestroYearlyPrice}/year
-                    </div>
+                  {billingInterval === 'month' ? (
+                    <>
+                      <div className="text-2xl font-bold">
+                        ${firstMonthMaestroPrice}
+                        <span className="text-sm font-normal text-muted-foreground">
+                          /first month
+                        </span>
+                      </div>
+                      <div className="text-sm text-green-600">
+                        Then ${maestroMonthlyPrice}/month
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold">
+                        ${maestroYearlyPrice}
+                        <span className="text-sm font-normal text-muted-foreground">/year</span>
+                      </div>
+                      <div className="text-sm text-green-600">
+                        Save ${(maestroMonthlyPrice * 12) - maestroYearlyPrice}/year
+                      </div>
+                    </>
                   )}
                 </div>
                 <ul className="space-y-2 text-sm">
