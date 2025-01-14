@@ -26,6 +26,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { hasSubscription } = useSubscription();
@@ -104,14 +105,39 @@ export function ChatInput({
     }
   };
 
+  const validateFile = (file: File, type: 'document' | 'image') => {
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new Error('File size must be less than 10MB');
+    }
+
+    if (type === 'document') {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Only PDF and Word documents are allowed');
+      }
+    } else {
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Only image files are allowed');
+      }
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
+      validateFile(file, 'document');
+      setIsUploading(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
       const { error } = await supabase.functions.invoke("upload-file", {
         body: formData,
       });
@@ -126,9 +152,15 @@ export function ChatInput({
       console.error("Error uploading file:", error);
       toast({
         title: "Upload failed",
-        description: "Failed to upload file. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to upload file. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
+      // Clear the input
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
@@ -136,10 +168,13 @@ export function ChatInput({
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('file', file);
-
     try {
+      validateFile(file, 'image');
+      setIsUploading(true);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
       const { error } = await supabase.functions.invoke("upload-file", {
         body: formData,
       });
@@ -154,9 +189,15 @@ export function ChatInput({
       console.error("Error uploading image:", error);
       toast({
         title: "Upload failed",
-        description: "Failed to upload image. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to upload image. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsUploading(false);
+      // Clear the input
+      if (event.target) {
+        event.target.value = '';
+      }
     }
   };
 
@@ -200,6 +241,7 @@ export function ChatInput({
                   className="hidden"
                   id="file-upload"
                   onChange={handleFileUpload}
+                  disabled={isUploading}
                 />
                 <Input
                   type="file"
@@ -207,24 +249,31 @@ export function ChatInput({
                   className="hidden"
                   id="image-upload"
                   onChange={handleImageUpload}
+                  disabled={isUploading}
                 />
                 <Button 
                   variant="outline" 
                   size={isMobile ? "sm" : "default"}
                   onClick={() => document.getElementById('file-upload')?.click()}
                   className="shrink-0"
+                  disabled={isUploading}
                 >
                   <Upload className="h-4 w-4" />
-                  {!isMobile && <span className="ml-2">Upload File</span>}
+                  {!isMobile && <span className="ml-2">
+                    {isUploading ? "Uploading..." : "Upload File"}
+                  </span>}
                 </Button>
                 <Button 
                   variant="outline"
                   size={isMobile ? "sm" : "default"}
                   onClick={() => document.getElementById('image-upload')?.click()}
                   className="shrink-0"
+                  disabled={isUploading}
                 >
                   <Image className="h-4 w-4" />
-                  {!isMobile && <span className="ml-2">Upload Image</span>}
+                  {!isMobile && <span className="ml-2">
+                    {isUploading ? "Uploading..." : "Upload Image"}
+                  </span>}
                 </Button>
               </>
             )}
