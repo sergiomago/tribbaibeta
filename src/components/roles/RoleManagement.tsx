@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Role } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 interface RoleManagementProps {
   isDisabled?: boolean;
@@ -16,8 +17,9 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
   const [isGridView, setIsGridView] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { subscription } = useSubscription();
 
-  const { data: roles } = useQuery({
+  const { data: roles, data: roleCount } = useQuery({
     queryKey: ["roles"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -66,7 +68,11 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
     <div className="space-y-4">
       <div className="flex justify-between items-center p-4">
         <RoleCountDisplay />
-        <CreateRoleButton isDisabled={isDisabled} />
+        <CreateRoleButton 
+          isDisabled={isDisabled} 
+          planType={subscription?.plan_type || null}
+          roleCount={roles?.length}
+        />
       </div>
       <RoleList
         roles={roles || []}
