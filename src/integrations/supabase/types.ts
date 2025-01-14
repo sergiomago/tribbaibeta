@@ -9,6 +9,48 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      analyzed_files: {
+        Row: {
+          analysis_result: Json | null
+          analysis_status: string | null
+          content_type: string
+          created_at: string
+          file_name: string
+          file_path: string
+          file_type: string
+          id: string
+          size: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          analysis_result?: Json | null
+          analysis_status?: string | null
+          content_type: string
+          created_at?: string
+          file_name: string
+          file_path: string
+          file_type: string
+          id?: string
+          size: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          analysis_result?: Json | null
+          analysis_status?: string | null
+          content_type?: string
+          created_at?: string
+          file_name?: string
+          file_path?: string
+          file_type?: string
+          id?: string
+          size?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       feedback: {
         Row: {
           created_at: string
