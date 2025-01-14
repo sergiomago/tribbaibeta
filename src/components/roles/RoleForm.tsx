@@ -13,6 +13,9 @@ import { TagField } from "./form/TagField";
 import { DescriptionField } from "./form/DescriptionField";
 import { InstructionsField } from "./form/InstructionsField";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { SPECIAL_CAPABILITIES } from "@/utils/RoleManager";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export const roleFormSchema = z.object({
   id: z.string().optional(),
@@ -22,6 +25,7 @@ export const roleFormSchema = z.object({
   description: z.string().min(1, "Description is required"),
   instructions: z.string().min(1, "Instructions are required"),
   model: z.enum(["gpt-4o", "gpt-4o-mini"]).default("gpt-4o-mini"),
+  special_capabilities: z.array(z.string()).default([]),
 });
 
 export type RoleFormValues = z.infer<typeof roleFormSchema>;
@@ -46,6 +50,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
       description: "",
       instructions: "",
       model: "gpt-4o-mini",
+      special_capabilities: [],
     },
   });
 
@@ -75,6 +80,16 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
         });
         return;
       }
+    }
+
+    // Check special capabilities access
+    if (values.special_capabilities.length > 0 && (!hasSubscription || planType !== 'maestro')) {
+      toast({
+        title: "Special Capabilities Not Available",
+        description: "Special capabilities are only available with the Maestro plan. Please upgrade to access these features.",
+        variant: "destructive",
+      });
+      return;
     }
 
     // Check model access
@@ -119,6 +134,8 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
     }
   };
 
+  const isMaestroUser = hasSubscription && planType === 'maestro';
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
@@ -146,6 +163,44 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
           isGenerating={isGenerating.instructions} 
           onGenerate={() => generateContent('instructions')} 
         />
+
+        {isMaestroUser && (
+          <div className="space-y-4">
+            <Label>Special Capabilities</Label>
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="web_search"
+                  checked={form.watch("special_capabilities").includes(SPECIAL_CAPABILITIES.WEB_SEARCH)}
+                  onCheckedChange={(checked) => {
+                    const current = form.watch("special_capabilities");
+                    if (checked) {
+                      form.setValue("special_capabilities", [...current, SPECIAL_CAPABILITIES.WEB_SEARCH]);
+                    } else {
+                      form.setValue("special_capabilities", current.filter(c => c !== SPECIAL_CAPABILITIES.WEB_SEARCH));
+                    }
+                  }}
+                />
+                <Label htmlFor="web_search">Web Search</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="doc_analysis"
+                  checked={form.watch("special_capabilities").includes(SPECIAL_CAPABILITIES.DOC_ANALYSIS)}
+                  onCheckedChange={(checked) => {
+                    const current = form.watch("special_capabilities");
+                    if (checked) {
+                      form.setValue("special_capabilities", [...current, SPECIAL_CAPABILITIES.DOC_ANALYSIS]);
+                    } else {
+                      form.setValue("special_capabilities", current.filter(c => c !== SPECIAL_CAPABILITIES.DOC_ANALYSIS));
+                    }
+                  }}
+                />
+                <Label htmlFor="doc_analysis">Document Analysis</Label>
+              </div>
+            </div>
+          </div>
+        )}
 
         <Button
           type="submit"

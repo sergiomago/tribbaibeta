@@ -320,6 +320,7 @@ export type Database = {
           package_name: string | null
           package_order: number | null
           source: string
+          special_capabilities: string[] | null
           tag: string
           template_id: string | null
           updated_at: string
@@ -337,6 +338,7 @@ export type Database = {
           package_name?: string | null
           package_order?: number | null
           source?: string
+          special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
           updated_at?: string
@@ -354,6 +356,7 @@ export type Database = {
           package_name?: string | null
           package_order?: number | null
           source?: string
+          special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
           updated_at?: string

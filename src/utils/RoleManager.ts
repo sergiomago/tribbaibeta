@@ -1,11 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createLlongtermManager } from "./LlongtermManager";
 
-// Special role tags
-const SPECIAL_ROLES = {
-  WEB_SEARCHER: '@web',
-  DOC_ANALYST: '@docanalyst'
+// Special role capabilities
+export const SPECIAL_CAPABILITIES = {
+  WEB_SEARCH: 'web_search',
+  DOC_ANALYSIS: 'doc_analysis'
 } as const;
+
+export type SpecialCapability = typeof SPECIAL_CAPABILITIES[keyof typeof SPECIAL_CAPABILITIES];
 
 export class RoleManager {
   private threadId: string;
@@ -24,19 +26,21 @@ export class RoleManager {
     return threadRoles.map(tr => tr.role_id);
   }
 
-  async hasSpecialCapability(capability: keyof typeof SPECIAL_ROLES) {
+  async hasSpecialCapability(capability: SpecialCapability) {
     const { data: threadRoles, error } = await supabase
       .from("thread_roles")
       .select(`
         role:roles (
-          tag
+          special_capabilities
         )
       `)
       .eq("thread_id", this.threadId);
 
     if (error) throw error;
 
-    return threadRoles.some(tr => tr.role?.tag === SPECIAL_ROLES[capability]);
+    return threadRoles.some(tr => 
+      tr.role?.special_capabilities?.includes(capability)
+    );
   }
 
   async getNextRespondingRole(currentOrder: number) {
@@ -63,6 +67,17 @@ export class RoleManager {
 
     if (error) throw error;
     return data;
+  }
+
+  async getRoleCapabilities(roleId: string) {
+    const { data, error } = await supabase
+      .from("roles")
+      .select("special_capabilities")
+      .eq("id", roleId)
+      .single();
+
+    if (error) throw error;
+    return data?.special_capabilities || [];
   }
 
   async storeRoleMemory(roleId: string, content: string) {
