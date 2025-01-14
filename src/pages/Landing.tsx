@@ -20,7 +20,7 @@ const Landing = () => {
           {/* Tag line */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass mb-8 animate-in">
             <Sparkles className="w-4 h-4 text-primary-bright" />
-            <span className="text-sm text-white">Revolutionizing team collaboration with AI</span>
+            <span className="text-sm text-white">Start for free, no credit card required</span>
           </div>
 
           {/* Main heading */}
@@ -31,8 +31,12 @@ const Landing = () => {
             </span>
           </h1>
           
-          <p className="text-xl text-white/90 mb-8 max-w-2xl animate-in">
+          <p className="text-xl text-white/90 mb-4 max-w-2xl animate-in">
             Collaborate with AI roles to strategize, plan, and execute your ideas.
+          </p>
+          
+          <p className="text-lg text-white/80 mb-8 animate-in">
+            Create 3 AI roles instantly and start collaborating today
           </p>
 
           <div className="flex gap-4 animate-in">
@@ -41,7 +45,7 @@ const Landing = () => {
                 size="lg" 
                 className="bg-gradient-primary hover:opacity-90 text-white font-semibold hover:scale-105 transition-all duration-300"
               >
-                Get Started
+                Start Free Now
               </Button>
             </Link>
             <Link to="/login">
@@ -70,7 +74,7 @@ const Landing = () => {
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Create AI Roles</h3>
             <p className="text-white/80">
-              Build your dream team with custom or pre-built AI roles
+              Start with 3 free AI roles to build your dream team. Choose from custom or pre-built roles
             </p>
           </div>
 
@@ -81,7 +85,7 @@ const Landing = () => {
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Start Conversations</h3>
             <p className="text-white/80">
-              Chat individually or create dynamic team discussions
+              Begin collaborating instantly with 3 free threads. Create dynamic team discussions
             </p>
           </div>
 
@@ -92,7 +96,7 @@ const Landing = () => {
             </div>
             <h3 className="text-xl font-semibold mb-4 text-white">Execute & Scale</h3>
             <p className="text-white/80">
-              Manage all your conversations and roles in one place
+              Try it free, then unlock unlimited roles and advanced features when you're ready to scale
             </p>
           </div>
         </div>
