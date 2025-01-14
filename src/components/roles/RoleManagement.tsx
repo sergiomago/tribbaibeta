@@ -17,7 +17,7 @@ import { useNavigate } from "react-router-dom";
 interface RoleManagementProps {
   roles?: Tables<"roles">[];
   isLoading: boolean;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
   onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
   roleCount?: number;
@@ -78,7 +78,11 @@ export function RoleManagement({
             </DialogContent>
           </Dialog>
         ) : (
-          <CreateRoleButton />
+          <CreateRoleButton 
+            isDisabled={false}
+            planType={planType}
+            roleCount={roleCount}
+          />
         )}
       </div>
 
