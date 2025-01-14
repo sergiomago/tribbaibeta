@@ -8,6 +8,7 @@ import { Role } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { RolePackages } from "./RolePackages";
 
 export function RoleManagement() {
   const [isGridView, setIsGridView] = useState(true);
@@ -61,21 +62,27 @@ export function RoleManagement() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center p-4">
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
         <RoleCountDisplay />
         <CreateRoleButton 
           planType={planType || null}
           roleCount={roles?.length}
         />
       </div>
-      <RoleList
-        roles={roles || []}
-        isGridView={isGridView}
-        onDelete={handleDelete}
-        onStartChat={handleStartChat}
-        onEdit={handleEdit}
-      />
+
+      <RolePackages />
+
+      <div className="space-y-4">
+        <h2 className="text-lg font-semibold">Your Roles</h2>
+        <RoleList
+          roles={roles || []}
+          isGridView={isGridView}
+          onDelete={handleDelete}
+          onStartChat={handleStartChat}
+          onEdit={handleEdit}
+        />
+      </div>
     </div>
   );
 }

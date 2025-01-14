@@ -4,6 +4,7 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
 
 export function RoleCountDisplay() {
   const { planType } = useSubscription();
@@ -30,40 +31,27 @@ export function RoleCountDisplay() {
 
   if (!isAtLimit) {
     return (
-      <div className="mb-4 space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Available Roles</span>
-          <span className="font-medium">{roleCount}/{maxRoles}</span>
-        </div>
-        <Progress value={percentage} className="h-2" />
+      <div className="flex items-center gap-4">
+        <Progress value={percentage} className="w-32 h-2" />
+        <Badge variant="outline" className="h-6">
+          {roleCount}/{maxRoles} roles
+        </Badge>
       </div>
     );
   }
 
   return (
-    <Alert variant="destructive" className="mb-4">
+    <Alert variant="destructive" className="max-w-fit py-2 px-4 flex items-center gap-2">
       <AlertCircle className="h-4 w-4" />
-      <AlertDescription>
+      <AlertDescription className="text-sm">
         {planType === 'creator' ? (
-          <>
-            You've reached the maximum of 7 roles on the Creator plan.{' '}
-            <a href="/settings" className="font-medium underline underline-offset-4">
-              Upgrade to Maestro
-            </a>{' '}
-            for unlimited roles.
-          </>
+          <span>
+            Upgrade to <a href="/settings" className="font-medium underline underline-offset-4">Maestro</a> for unlimited roles
+          </span>
         ) : (
-          <>
-            You've reached the free tier limit of 3 roles.{' '}
-            <a href="/settings" className="font-medium underline underline-offset-4">
-              Upgrade to Creator
-            </a>{' '}
-            for up to 7 roles, or{' '}
-            <a href="/settings" className="font-medium underline underline-offset-4">
-              Maestro
-            </a>{' '}
-            for unlimited roles.
-          </>
+          <span>
+            Upgrade to <a href="/settings" className="font-medium underline underline-offset-4">Creator</a> for more roles
+          </span>
         )}
       </AlertDescription>
     </Alert>
