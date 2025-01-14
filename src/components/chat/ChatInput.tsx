@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { Send, Upload, Search, Image } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
@@ -46,6 +46,14 @@ export function ChatInput({
     },
     enabled: !!threadId,
   });
+
+  // Check if special roles are present
+  const hasDocAnalyst = threadRoles?.some(tr => 
+    tr.role?.special_capabilities?.includes('document_analysis')
+  );
+  const hasWebSearcher = threadRoles?.some(tr => 
+    tr.role?.special_capabilities?.includes('web_search')
+  );
 
   const handleSend = async () => {
     if (!message.trim()) return;
@@ -96,6 +104,62 @@ export function ChatInput({
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const { error } = await supabase.functions.invoke("upload-file", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "File uploaded",
+        description: "Your file has been uploaded successfully.",
+      });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload file. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const { error } = await supabase.functions.invoke("upload-file", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Image uploaded",
+        description: "Your image has been uploaded successfully.",
+      });
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload image. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -128,6 +192,55 @@ export function ChatInput({
             )}
           </div>
           <div className="flex gap-2">
+            {hasDocAnalyst && (
+              <>
+                <Input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  className="hidden"
+                  id="file-upload"
+                  onChange={handleFileUpload}
+                />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="image-upload"
+                  onChange={handleImageUpload}
+                />
+                <Button 
+                  variant="outline" 
+                  size={isMobile ? "sm" : "default"}
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  className="shrink-0"
+                >
+                  <Upload className="h-4 w-4" />
+                  {!isMobile && <span className="ml-2">Upload File</span>}
+                </Button>
+                <Button 
+                  variant="outline"
+                  size={isMobile ? "sm" : "default"}
+                  onClick={() => document.getElementById('image-upload')?.click()}
+                  className="shrink-0"
+                >
+                  <Image className="h-4 w-4" />
+                  {!isMobile && <span className="ml-2">Upload Image</span>}
+                </Button>
+              </>
+            )}
+            {hasWebSearcher && (
+              <Button 
+                variant="outline"
+                size={isMobile ? "sm" : "default"}
+                onClick={() => {
+                  setMessage(prev => prev + " @web search: ");
+                }}
+                className="shrink-0"
+              >
+                <Search className="h-4 w-4" />
+                {!isMobile && <span className="ml-2">Web Search</span>}
+              </Button>
+            )}
             <Input
               placeholder={disabled ? "Message limit reached" : "Type your message..."}
               className="flex-1 text-base sm:text-sm"
