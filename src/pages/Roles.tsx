@@ -1,6 +1,7 @@
 import { AppNavbar } from "@/components/AppNavbar";
 import { RoleList } from "@/components/roles/RoleList";
 import { RolePackages } from "@/components/roles/RolePackages";
+import { RoleCountDisplay } from "@/components/roles/RoleCountDisplay";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,6 +30,7 @@ const Roles = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { planType } = useSubscription();
   const [editingRole, setEditingRole] = useState<Tables<"roles"> | null>(null);
   const { createThread } = useThreadMutations();
   const { addRoleToThread } = useRoleMutations();
@@ -46,6 +49,19 @@ const Roles = () => {
       
       if (error) throw error;
       return data as Tables<"roles">[];
+    }
+  });
+
+  const { data: roleCount } = useQuery({
+    queryKey: ['role-count'],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('roles')
+        .select('*', { count: 'exact' })
+        .eq('is_template', false);
+      
+      if (error) throw error;
+      return count || 0;
     }
   });
 
@@ -97,7 +113,6 @@ const Roles = () => {
     try {
       await deleteRoleMutation.mutateAsync(id);
     } catch (error) {
-      // Error is handled in mutation's onError
       console.error('Error in handleDelete:', error);
     }
   };
@@ -106,16 +121,12 @@ const Roles = () => {
     if (!user) return;
 
     try {
-      // Create a new thread
       const newThread = await createThread.mutateAsync(user.id);
-      
-      // Add the role to the thread
       await addRoleToThread.mutateAsync({
         threadId: newThread.id,
         roleId: roleId,
       });
 
-      // Navigate to the chat with the new thread
       navigate(`/chats?thread=${newThread.id}`);
     } catch (error) {
       console.error('Error starting chat:', error);
@@ -132,6 +143,18 @@ const Roles = () => {
     if (role) {
       setEditingRole(role);
     }
+  };
+
+  const handleCreateRole = () => {
+    if (planType === 'creator' && roleCount && roleCount >= 7) {
+      toast({
+        title: "Role limit reached",
+        description: "Upgrade to Maestro plan for unlimited roles",
+        variant: "destructive",
+      });
+      return;
+    }
+    navigate('/roles/create');
   };
 
   const handleUpdateRole = async (values: RoleFormValues) => {
@@ -206,8 +229,9 @@ const Roles = () => {
               {viewMode === 'grid' ? <List className="h-4 w-4" /> : <Grid className="h-4 w-4" />}
             </Button>
             <Button 
-              onClick={() => navigate('/roles/create')}
+              onClick={handleCreateRole}
               className="gap-2"
+              disabled={planType === 'creator' && roleCount && roleCount >= 7}
             >
               <Plus className="h-4 w-4" />
               Create Role
@@ -215,6 +239,8 @@ const Roles = () => {
           </div>
         </div>
 
+        <RoleCountDisplay />
+        
         <RolePackages />
         
         <div className="mt-8">
