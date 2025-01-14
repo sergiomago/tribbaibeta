@@ -52,6 +52,7 @@ export type Database = {
           max_messages_per_thread: number
           max_roles: number
           max_threads: number
+          message_limit: number
           updated_at: string
         }
         Insert: {
@@ -60,6 +61,7 @@ export type Database = {
           max_messages_per_thread?: number
           max_roles?: number
           max_threads?: number
+          message_limit?: number
           updated_at?: string
         }
         Update: {
@@ -68,6 +70,7 @@ export type Database = {
           max_messages_per_thread?: number
           max_roles?: number
           max_threads?: number
+          message_limit?: number
           updated_at?: string
         }
         Relationships: []
@@ -447,6 +450,12 @@ export type Database = {
             }
             Returns: unknown
           }
+      can_create_message: {
+        Args: {
+          thread_id: string
+        }
+        Returns: boolean
+      }
       can_create_role: {
         Args: {
           user_id: string
