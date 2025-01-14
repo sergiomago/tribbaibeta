@@ -34,6 +34,18 @@ export function ChatContent({
     enabled: !!threadId,
   });
 
+  const { data: freeTierLimits } = useQuery({
+    queryKey: ["free-tier-limits"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("free_tier_limits")
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
+
   if (!threadId) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -43,7 +55,8 @@ export function ChatContent({
   }
 
   const messageCount = messages?.length || 0;
-  const canSendMessage = messageCount < maxMessages;
+  const messageLimitPerThread = freeTierLimits?.message_limit || 10;
+  const canSendMessage = messageCount < (maxMessages || messageLimitPerThread);
 
   return (
     <div className="h-full flex flex-col">
@@ -57,7 +70,7 @@ export function ChatContent({
         threadId={threadId} 
         disabled={!canSendMessage}
         messageCount={messageCount}
-        maxMessages={maxMessages}
+        maxMessages={maxMessages || messageLimitPerThread}
       />
     </div>
   );

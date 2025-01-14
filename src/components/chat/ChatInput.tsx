@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
 
 interface ChatInputProps {
   threadId: string;
@@ -102,41 +103,56 @@ export function ChatInput({
     }
   };
 
+  const showUpgradeCard = !hasSubscription && messageCount >= maxMessages;
+
   return (
-    <div className="border-t p-2 sm:p-4 bg-background mt-auto">
-      <div className="flex gap-2 max-w-[95%] sm:max-w-4xl mx-auto">
-        {messageCount < maxMessages ? (
-          <div className="text-xs text-muted-foreground text-center mb-2">
-            {messageCount}/{maxMessages} messages used
+    <div className="border-t bg-background mt-auto">
+      {showUpgradeCard && (
+        <div className="p-4 border-b">
+          <UpgradeSubscriptionCard 
+            variant="compact" 
+            showCreatorPlan={true}
+            context="messages"
+          />
+        </div>
+      )}
+      <div className="p-2 sm:p-4">
+        <div className="flex flex-col gap-2 max-w-[95%] sm:max-w-4xl mx-auto">
+          <div className="text-xs text-muted-foreground text-center">
+            {messageCount < maxMessages ? (
+              <span>{messageCount}/{maxMessages} messages used</span>
+            ) : (
+              <span className="text-destructive">
+                Message limit reached. {!hasSubscription && "Upgrade to send more messages."}
+              </span>
+            )}
           </div>
-        ) : (
-          <div className="text-xs text-destructive text-center mb-2">
-            Message limit reached. {!hasSubscription && "Upgrade to send more messages."}
+          <div className="flex gap-2">
+            <Input
+              placeholder={disabled ? "Message limit reached" : "Type your message..."}
+              className="flex-1 text-base sm:text-sm"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isSending || disabled}
+            />
+            <Button 
+              onClick={handleSend} 
+              disabled={isSending || disabled}
+              size={isMobile ? "sm" : "default"}
+              className="shrink-0"
+            >
+              {isSending ? (
+                "Sending..."
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  {!isMobile && <span className="ml-2">Send</span>}
+                </>
+              )}
+            </Button>
           </div>
-        )}
-        <Input
-          placeholder={disabled ? "Message limit reached" : "Type your message..."}
-          className="flex-1 text-base sm:text-sm"
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyPress={handleKeyPress}
-          disabled={isSending || disabled}
-        />
-        <Button 
-          onClick={handleSend} 
-          disabled={isSending || disabled}
-          size={isMobile ? "sm" : "default"}
-          className="shrink-0"
-        >
-          {isSending ? (
-            "Sending..."
-          ) : (
-            <>
-              <Send className="h-4 w-4" />
-              {!isMobile && <span className="ml-2">Send</span>}
-            </>
-          )}
-        </Button>
+        </div>
       </div>
     </div>
   );
