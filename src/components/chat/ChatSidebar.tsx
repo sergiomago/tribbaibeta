@@ -1,37 +1,17 @@
-import { useState } from "react";
-import { Plus, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ThreadList } from "./ThreadList";
+import { ThreadSearch } from "./ThreadSearch";
+import { Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
 
-interface ChatSidebarProps {
-  defaultSize: number;
-  onResize: (size: number) => void;
-  onThreadSelect: (threadId: string) => void;
-}
-
-export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+export function ChatSidebar() {
+  const navigate = useNavigate();
   const { hasSubscription } = useSubscription();
-
-  const { data: threads, isLoading } = useQuery({
-    queryKey: ["threads"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("threads")
-        .select("*")
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
 
   const { data: freeTierLimits } = useQuery({
     queryKey: ["free-tier-limits"],
@@ -45,103 +25,55 @@ export function ChatSidebar({ onThreadSelect }: ChatSidebarProps) {
     },
   });
 
-  const createThread = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("User not authenticated");
-
-      // Create the thread directly in our database
-      const { data, error } = await supabase
+  const { data: threadCount } = useQuery({
+    queryKey: ["thread-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
         .from("threads")
-        .insert({
-          name: "New Thread",
-          user_id: user.id,
-        })
-        .select()
-        .single();
-
+        .select("*", { count: 'exact' });
       if (error) throw error;
-      return data;
-    },
-    onSuccess: (newThread) => {
-      queryClient.invalidateQueries({ queryKey: ["threads"] });
-      setSelectedThreadId(newThread.id);
-      onThreadSelect(newThread.id);
-      toast({
-        title: "Success",
-        description: "New thread created",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "Error",
-        description: "Failed to create thread: " + error.message,
-        variant: "destructive",
-      });
+      return count || 0;
     },
   });
 
-  const handleThreadClick = (threadId: string) => {
-    setSelectedThreadId(threadId);
-    onThreadSelect(threadId);
-  };
-
-  const threadCount = threads?.length || 0;
-  const maxThreads = hasSubscription ? Infinity : (freeTierLimits?.max_threads || 3);
-  const canCreateThread = threadCount < maxThreads;
-
-  const handleCreateThread = () => {
-    if (!canCreateThread) {
-      toast({
-        title: "Thread limit reached",
-        description: "Upgrade your plan to create more threads",
-        variant: "destructive",
-      });
-      return;
-    }
-    createThread.mutate();
-  };
+  const maxThreads = freeTierLimits?.max_threads || 3;
+  const canCreateThread = hasSubscription || (threadCount || 0) < maxThreads;
+  const showUpgradeCard = !hasSubscription && !canCreateThread;
 
   return (
-    <div className="h-full flex flex-col border-r">
-      <div className="p-4 border-b">
+    <div className="flex h-full flex-col gap-2">
+      <div className="px-2 py-2">
         <Button
-          className="w-full"
-          onClick={handleCreateThread}
-          disabled={createThread.isPending || !canCreateThread}
+          className="w-full justify-start gap-2"
+          onClick={() => navigate("/chats/new")}
+          disabled={!canCreateThread}
         >
-          <Plus className="h-4 w-4 mr-2" />
-          New Thread
+          <Plus className="h-4 w-4" />
+          New Chat
         </Button>
         {!hasSubscription && (
-          <div className="mt-2 text-xs text-muted-foreground text-center">
-            {threadCount}/{maxThreads} threads used
+          <div className="text-xs text-muted-foreground text-center mt-1">
+            {threadCount}/{maxThreads} chats used
           </div>
         )}
       </div>
-      <ScrollArea className="flex-1">
-        <div className="p-2 space-y-2">
-          {threads?.map((thread) => (
-            <button
-              key={thread.id}
-              onClick={() => handleThreadClick(thread.id)}
-              className={`w-full p-3 text-left rounded-lg transition-colors ${
-                selectedThreadId === thread.id
-                  ? "bg-primary/10 text-primary"
-                  : "hover:bg-muted"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                <span className="font-medium">{thread.name}</span>
-              </div>
-              {thread.message_count !== undefined && (
-                <div className="text-xs text-muted-foreground mt-1">
-                  {thread.message_count}/{!hasSubscription ? (freeTierLimits?.max_messages_per_thread || 10) : "∞"} messages
-                </div>
-              )}
-            </button>
-          ))}
+
+      {showUpgradeCard && (
+        <div className="px-2">
+          <UpgradeSubscriptionCard 
+            variant="compact" 
+            showCreatorPlan={true}
+            context="threads"
+          />
         </div>
+      )}
+
+      <div className="px-2">
+        <ThreadSearch />
+      </div>
+
+      <ScrollArea className="flex-1">
+        <ThreadList />
       </ScrollArea>
     </div>
   );
