@@ -31,11 +31,10 @@ export const SubscriptionStatus = () => {
   }
 
   if (!hasSubscription) {
-    const yearlyDiscount = 20; // 20% discount for yearly plans
     const creatorMonthlyPrice = 15;
     const maestroMonthlyPrice = 30;
-    const creatorYearlyPrice = Math.floor(creatorMonthlyPrice * 12 * (1 - yearlyDiscount / 100));
-    const maestroYearlyPrice = Math.floor(maestroMonthlyPrice * 12 * (1 - yearlyDiscount / 100));
+    const creatorYearlyPrice = 150;
+    const maestroYearlyPrice = 300;
     const firstMonthMaestroPrice = creatorMonthlyPrice; // 50% off first month
 
     return (
@@ -46,7 +45,7 @@ export const SubscriptionStatus = () => {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-end space-x-2">
-            <Label htmlFor="billing-interval">Bill Yearly (Save 20%)</Label>
+            <Label htmlFor="billing-interval">Bill Yearly (Save more)</Label>
             <Switch
               id="billing-interval"
               checked={billingInterval === 'year'}
@@ -70,7 +69,7 @@ export const SubscriptionStatus = () => {
                   </div>
                   {billingInterval === 'year' && (
                     <div className="text-sm text-green-600">
-                      Save ${creatorMonthlyPrice * 12 - creatorYearlyPrice}/year
+                      Save ${(creatorMonthlyPrice * 12) - creatorYearlyPrice}/year
                     </div>
                   )}
                 </div>
@@ -128,7 +127,7 @@ export const SubscriptionStatus = () => {
                   )}
                   {billingInterval === 'year' && (
                     <div className="text-sm text-green-600">
-                      Save ${maestroMonthlyPrice * 12 - maestroYearlyPrice}/year
+                      Save ${(maestroMonthlyPrice * 12) - maestroYearlyPrice}/year
                     </div>
                   )}
                 </div>
@@ -208,3 +207,4 @@ export const SubscriptionStatus = () => {
     </Card>
   );
 };
+}
