@@ -45,6 +45,33 @@ export type Database = {
         }
         Relationships: []
       }
+      free_tier_limits: {
+        Row: {
+          created_at: string
+          id: string
+          max_messages_per_thread: number
+          max_roles: number
+          max_threads: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          max_messages_per_thread?: number
+          max_roles?: number
+          max_threads?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          max_messages_per_thread?: number
+          max_roles?: number
+          max_threads?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           chain_id: string | null
@@ -307,6 +334,7 @@ export type Database = {
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
           trial_end: string | null
+          trial_started: boolean | null
           updated_at: string
           user_id: string
         }
@@ -319,6 +347,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           trial_end?: string | null
+          trial_started?: boolean | null
           updated_at?: string
           user_id: string
         }
@@ -331,6 +360,7 @@ export type Database = {
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
           trial_end?: string | null
+          trial_started?: boolean | null
           updated_at?: string
           user_id?: string
         }
@@ -374,6 +404,7 @@ export type Database = {
           created_at: string
           id: string
           last_opened: string | null
+          message_count: number | null
           name: string
           updated_at: string
           user_id: string
@@ -382,6 +413,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_opened?: string | null
+          message_count?: number | null
           name: string
           updated_at?: string
           user_id: string
@@ -390,6 +422,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_opened?: string | null
+          message_count?: number | null
           name?: string
           updated_at?: string
           user_id?: string
