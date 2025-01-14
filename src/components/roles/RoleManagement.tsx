@@ -17,9 +17,9 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
   const [isGridView, setIsGridView] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { subscription } = useSubscription();
+  const { planType } = useSubscription();
 
-  const { data: roles, data: roleCount } = useQuery({
+  const { data: roles } = useQuery({
     queryKey: ["roles"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -60,8 +60,8 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
     navigate(`/chats?role=${roleId}`);
   };
 
-  const handleEdit = (role: Role) => {
-    navigate(`/roles/${role.id}/edit`);
+  const handleEdit = (roleId: string) => {
+    navigate(`/roles/${roleId}/edit`);
   };
 
   return (
@@ -70,7 +70,7 @@ export function RoleManagement({ isDisabled }: RoleManagementProps) {
         <RoleCountDisplay />
         <CreateRoleButton 
           isDisabled={isDisabled} 
-          planType={subscription?.plan_type || null}
+          planType={planType || null}
           roleCount={roles?.length}
         />
       </div>
