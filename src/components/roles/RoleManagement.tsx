@@ -2,7 +2,7 @@ import { useState } from "react";
 import { RoleList } from "./RoleList";
 import { RoleCountDisplay } from "./RoleCountDisplay";
 import { CreateRoleButton } from "./CreateRoleButton";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Role } from "@/types";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ export function RoleManagement() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { planType } = useSubscription();
+  const queryClient = useQueryClient();
 
   const { data: roles } = useQuery({
     queryKey: ["roles"],
@@ -38,6 +39,9 @@ export function RoleManagement() {
         .eq("id", roleId);
 
       if (error) throw error;
+
+      // Invalidate and refetch roles after successful deletion
+      queryClient.invalidateQueries({ queryKey: ["roles"] });
 
       toast({
         title: "Success",

@@ -7,12 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 export function RolePackages() {
   const [openPackages, setOpenPackages] = useState<Record<string, boolean>>({});
+  const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { planType } = useSubscription();
 
   const { data: templateRoles } = useQuery({
     queryKey: ["template-roles"],
@@ -103,6 +108,15 @@ export function RolePackages() {
       return;
     }
 
+    // Check role limits
+    const maxRoles = planType === 'creator' ? 7 : 3;
+    const isAtLimit = userRoles && userRoles.length >= maxRoles;
+
+    if (isAtLimit) {
+      setShowUpgradeDialog(true);
+      return;
+    }
+
     try {
       await createRoleMutation.mutateAsync(templateRole);
     } catch (error) {
@@ -167,6 +181,16 @@ export function RolePackages() {
           </Collapsible>
         ))}
       </div>
+
+      <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
+        <DialogContent className="max-w-3xl">
+          <UpgradeSubscriptionCard 
+            variant="modal"
+            showCreatorPlan={planType !== 'creator'}
+            context="roles"
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
