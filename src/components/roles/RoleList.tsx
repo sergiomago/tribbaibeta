@@ -7,7 +7,7 @@ interface RoleListProps {
   isGridView?: boolean;
   onDelete?: (roleId: string) => void;
   onStartChat?: (roleId: string) => void;
-  onEdit?: (role: Role) => void;
+  onEdit?: (roleId: string) => void;
 }
 
 export function RoleList({ roles, isGridView = true, onDelete, onStartChat, onEdit }: RoleListProps) {
