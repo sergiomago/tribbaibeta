@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Package, ChevronDown, ChevronRight } from "lucide-react";
+import { Package, ChevronDown, ChevronRight, Crown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { TemplateRoleCard } from "./TemplateRoleCard";
@@ -145,41 +145,58 @@ export function RolePackages() {
     <div className="space-y-6 mb-8">
       <h2 className="text-lg font-semibold">Pre-made Role Packages</h2>
       <div className="space-y-4">
-        {Object.entries(packages).map(([packageName, roles]) => (
-          <Collapsible
-            key={packageName}
-            open={openPackages[packageName]}
-            onOpenChange={(isOpen) => 
-              setOpenPackages(prev => ({ ...prev, [packageName]: isOpen }))
-            }
-            className="border rounded-lg p-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm"
-          >
-            <CollapsibleTrigger className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-medium">{packageName}</h3>
-              </div>
-              {openPackages[packageName] ? (
-                <ChevronDown className="h-5 w-5" />
-              ) : (
-                <ChevronRight className="h-5 w-5" />
-              )}
-            </CollapsibleTrigger>
-            <CollapsibleContent className="mt-4">
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {roles.map((role) => (
-                  <div key={role.id} className="relative">
-                    <TemplateRoleCard
-                      role={role}
-                      onUseTemplate={handleUseTemplate}
-                      isPremium={premiumPackages.includes(packageName)}
-                    />
-                  </div>
-                ))}
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        ))}
+        {Object.entries(packages).map(([packageName, roles]) => {
+          const isMaestroPackage = packageName === 'Maestro';
+          
+          return (
+            <Collapsible
+              key={packageName}
+              open={openPackages[packageName]}
+              onOpenChange={(isOpen) => 
+                setOpenPackages(prev => ({ ...prev, [packageName]: isOpen }))
+              }
+              className={`border rounded-lg p-4 bg-white/50 dark:bg-gray-900/50 backdrop-blur-sm ${
+                isMaestroPackage ? 'border-primary/30 bg-gradient-to-r from-primary/5 to-transparent' : ''
+              }`}
+            >
+              <CollapsibleTrigger className="flex items-center justify-between w-full">
+                <div className="flex items-center gap-2">
+                  {isMaestroPackage ? (
+                    <Crown className="h-5 w-5 text-primary" />
+                  ) : (
+                    <Package className="h-5 w-5 text-primary" />
+                  )}
+                  <h3 className="text-lg font-medium flex items-center gap-2">
+                    {isMaestroPackage ? 'Maestro Exclusive Roles' : packageName}
+                    {isMaestroPackage && (
+                      <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                        Premium
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                {openPackages[packageName] ? (
+                  <ChevronDown className="h-5 w-5" />
+                ) : (
+                  <ChevronRight className="h-5 w-5" />
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-4">
+                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                  {roles.map((role) => (
+                    <div key={role.id} className="relative">
+                      <TemplateRoleCard
+                        role={role}
+                        onUseTemplate={handleUseTemplate}
+                        isPremium={isMaestroPackage}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          );
+        })}
       </div>
 
       <Dialog open={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
