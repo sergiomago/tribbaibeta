@@ -1,83 +1,93 @@
-import { Tables } from "@/integrations/supabase/types";
+import { Button } from "@/components/ui/button";
 import { RoleList } from "./RoleList";
-import { RoleControls } from "./RoleControls";
 import { CreateRoleButton } from "./CreateRoleButton";
-import { useState } from "react";
+import { Tables } from "@/integrations/supabase/types";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { useNavigate } from "react-router-dom";
 
-type ViewMode = 'grid' | 'list';
-type SortOption = 'role-asc' | 'role-desc' | 'date-new' | 'date-old';
-
-type RoleManagementProps = {
-  roles: Tables<"roles">[] | undefined;
+interface RoleManagementProps {
+  roles?: Tables<"roles">[];
   isLoading: boolean;
-  onDelete: (id: string) => Promise<void>;
+  onDelete: (id: string) => void;
   onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
-  roleCount: number | undefined;
+  roleCount?: number;
   planType: string | null;
-};
+}
 
-export const RoleManagement = ({ 
-  roles, 
-  isLoading, 
-  onDelete, 
-  onStartChat, 
+export function RoleManagement({
+  roles,
+  isLoading,
+  onDelete,
+  onStartChat,
   onEdit,
-  roleCount,
-  planType
-}: RoleManagementProps) => {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  const [sortOption, setSortOption] = useState<SortOption>('role-asc');
+  roleCount = 0,
+  planType,
+}: RoleManagementProps) {
+  const navigate = useNavigate();
+  const { hasSubscription } = useSubscription();
+  const maxRoles = planType === 'creator' ? 7 : 3; // 7 for creator plan, 3 for free tier
+  const isAtLimit = roleCount >= maxRoles;
 
-  const sortRoles = (rolesData: Tables<"roles">[]) => {
-    if (!rolesData) return [];
-    
-    const sorted = [...rolesData];
-    switch (sortOption) {
-      case 'role-asc':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
-      case 'role-desc':
-        return sorted.sort((a, b) => b.name.localeCompare(a.name));
-      case 'date-new':
-        return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      case 'date-old':
-        return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      default:
-        return sorted;
-    }
+  const handleUpgradeClick = () => {
+    navigate('/settings');
   };
 
-  const isCreateDisabled = roleCount !== undefined && (
-    (planType === 'creator' && roleCount >= 7) ||
-    (!planType && roleCount >= 3)
-  );
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-8">
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-lg font-semibold">Your Roles</h2>
-        <div className="flex gap-2">
-          <RoleControls
-            sortOption={sortOption}
-            viewMode={viewMode}
-            onSortChange={setSortOption}
-            onViewModeChange={setViewMode}
-          />
-          <CreateRoleButton
-            isDisabled={isCreateDisabled}
-            planType={planType}
-            roleCount={roleCount}
-          />
-        </div>
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        {isAtLimit ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="default">
+                Create Role
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Upgrade to Create More Roles</DialogTitle>
+                <DialogDescription>
+                  {hasSubscription 
+                    ? "Upgrade to Maestro plan for unlimited roles"
+                    : `You've reached the limit of ${maxRoles} roles on your current plan. Upgrade to create more roles.`
+                  }
+                </DialogDescription>
+              </DialogHeader>
+              <Button onClick={handleUpgradeClick} className="w-full">
+                View Plans
+              </Button>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <CreateRoleButton />
+        )}
       </div>
-      <RoleList 
-        roles={sortRoles(roles)}
-        isLoading={isLoading}
+
+      <RoleList
+        roles={roles}
         onDelete={onDelete}
         onStartChat={onStartChat}
         onEdit={onEdit}
-        viewMode={viewMode}
       />
     </div>
   );
-};
+}
