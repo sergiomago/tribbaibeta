@@ -146,10 +146,17 @@ const Roles = () => {
   };
 
   const handleCreateRole = () => {
-    if (planType === 'creator' && roleCount && roleCount >= 7) {
+    const maxRoles = planType === 'creator' ? 7 : 3;
+    const isAtLimit = roleCount && roleCount >= maxRoles;
+
+    if (isAtLimit) {
+      const message = planType === 'creator' 
+        ? "You've reached the limit of 7 roles on the Creator plan. Upgrade to Maestro for unlimited roles."
+        : "You've reached the free tier limit of 3 roles. Upgrade to Creator for up to 7 roles, or Maestro for unlimited roles.";
+      
       toast({
         title: "Role limit reached",
-        description: "Upgrade to Maestro plan for unlimited roles",
+        description: message,
         variant: "destructive",
       });
       return;
@@ -188,6 +195,11 @@ const Roles = () => {
       });
     }
   };
+
+  const isCreateDisabled = roleCount !== undefined && (
+    (planType === 'creator' && roleCount >= 7) ||
+    (!planType && roleCount >= 3)
+  );
 
   return (
     <div className="min-h-screen flex flex-col w-full bg-gradient-to-br from-purple-50 to-white dark:from-gray-900 dark:to-gray-800">
@@ -231,7 +243,7 @@ const Roles = () => {
             <Button 
               onClick={handleCreateRole}
               className="gap-2"
-              disabled={planType === 'creator' && roleCount && roleCount >= 7}
+              disabled={isCreateDisabled}
             >
               <Plus className="h-4 w-4" />
               Create Role
