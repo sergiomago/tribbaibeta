@@ -1,123 +1,106 @@
-import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { RoleList } from "./RoleList";
 import { CreateRoleButton } from "./CreateRoleButton";
-import { Tables } from "@/integrations/supabase/types";
-import { Skeleton } from "@/components/ui/skeleton";
+import { RoleCountDisplay } from "./RoleCountDisplay";
+import { RolePackages } from "./RolePackages";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 import { LayoutGrid, List } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-interface RoleManagementProps {
-  roles?: Tables<"roles">[];
-  isLoading: boolean;
-  onDelete: (id: string) => Promise<void>;
-  onStartChat: (id: string) => void;
-  onEdit: (id: string) => void;
-  roleCount?: number;
-  planType: string | null;
-}
+export function RoleManagement() {
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const { hasSubscription, planType } = useSubscription();
 
-export function RoleManagement({
-  roles,
-  isLoading,
-  onDelete,
-  onStartChat,
-  onEdit,
-  roleCount = 0,
-  planType,
-}: RoleManagementProps) {
-  const navigate = useNavigate();
-  const { hasSubscription } = useSubscription();
-  const maxRoles = planType === 'creator' ? 7 : 3;
-  const isAtLimit = roleCount >= maxRoles;
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // Query free tier limits
+  const { data: freeTierLimits } = useQuery({
+    queryKey: ["free-tier-limits"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("free_tier_limits")
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+  });
 
-  const handleUpgradeClick = () => {
-    navigate('/settings');
-  };
+  // Query user's roles count
+  const { data: roleCount } = useQuery({
+    queryKey: ["role-count"],
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from("roles")
+        .select("*", { count: 'exact', head: true })
+        .eq("is_template", false);
+      if (error) throw error;
+      return count || 0;
+    },
+  });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
-        <Skeleton className="h-12 w-full" />
-      </div>
-    );
-  }
+  const maxRoles = hasSubscription 
+    ? (planType === 'creator' ? 7 : Infinity)
+    : (freeTierLimits?.max_roles || 3);
+
+  const isAtLimit = maxRoles !== Infinity && roleCount !== null && roleCount >= maxRoles;
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          {isAtLimit ? (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="default">
-                  Create Role
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Upgrade to Create More Roles</DialogTitle>
-                  <DialogDescription>
-                    {hasSubscription 
-                      ? "Upgrade to Maestro plan for unlimited roles"
-                      : `You've reached the limit of ${maxRoles} roles on your current plan. Upgrade to create more roles.`
-                    }
-                  </DialogDescription>
-                </DialogHeader>
-                <Button onClick={handleUpgradeClick} className="w-full">
-                  View Plans
-                </Button>
-              </DialogContent>
-            </Dialog>
-          ) : (
-            <CreateRoleButton 
-              isDisabled={false}
-              planType={planType}
-              roleCount={roleCount}
-            />
-          )}
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl font-bold">Your Roles</h1>
+            {!hasSubscription && (
+              <p className="text-sm text-muted-foreground">
+                Free tier: {roleCount}/{maxRoles} roles used
+              </p>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex items-center border rounded-lg p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className={cn(
+                  "px-2",
+                  viewMode === "grid" && "bg-muted"
+                )}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className={cn(
+                  "px-2",
+                  viewMode === "list" && "bg-muted"
+                )}
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
+            <CreateRoleButton disabled={isAtLimit} />
+          </div>
         </div>
-        
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setViewMode('grid')}
-            className={viewMode === 'grid' ? 'bg-primary/10' : ''}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setViewMode('list')}
-            className={viewMode === 'list' ? 'bg-primary/10' : ''}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
 
-      <RoleList
-        roles={roles}
-        isLoading={isLoading}
-        onDelete={onDelete}
-        onStartChat={onStartChat}
-        onEdit={onEdit}
-        viewMode={viewMode}
-      />
+        {isAtLimit && !hasSubscription && (
+          <div className="bg-primary/5 border border-primary/10 rounded-lg p-4">
+            <h3 className="font-semibold mb-1">Upgrade to Create More Roles</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              You've reached the free tier limit of {maxRoles} roles. 
+              Upgrade to our Creator plan for up to 7 roles, or Maestro plan for unlimited roles.
+            </p>
+            <RolePackages />
+          </div>
+        )}
+
+        <RoleList viewMode={viewMode} />
+      </div>
     </div>
   );
 }
