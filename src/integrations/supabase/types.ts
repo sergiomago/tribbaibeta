@@ -447,6 +447,18 @@ export type Database = {
             }
             Returns: unknown
           }
+      can_create_role: {
+        Args: {
+          user_id: string
+        }
+        Returns: boolean
+      }
+      can_create_thread: {
+        Args: {
+          user_id: string
+        }
+        Returns: boolean
+      }
       count_user_roles: {
         Args: {
           user_id: string
