@@ -12,7 +12,6 @@ import { Plus, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
 
 interface RoleSelectionDialogProps {
   threadId: string | null;
@@ -29,18 +28,18 @@ export function RoleSelectionDialog({
 }: RoleSelectionDialogProps) {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
 
   const { data: roles, refetch } = useQuery({
     queryKey: ["roles-with-assignment", threadId],
     queryFn: async () => {
-      if (!threadId || !user) return [];
+      if (!threadId) return [];
       
-      // Reverted query to only fetch user's personal roles
+      // Modified query to only fetch user's actual roles (not templates)
       const { data: allRoles, error: rolesError } = await supabase
         .from("roles")
         .select("*")
-        .eq("user_id", user.id);
+        .eq("is_template", false)
+        .not("user_id", "is", null);
 
       if (rolesError) throw rolesError;
 
@@ -58,7 +57,7 @@ export function RoleSelectionDialog({
         isAssigned: assignedRoleIds.has(role.id)
       }));
     },
-    enabled: !!threadId && !!user,
+    enabled: !!threadId,
   });
 
   const handleRoleClick = async (roleId: string, isAssigned: boolean) => {

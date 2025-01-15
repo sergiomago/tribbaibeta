@@ -1,24 +1,9 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 
-interface Message {
-  id: string;
-  thread_id: string;
-  role_id: string | null;
-  content: string;
-  created_at: string;
-  response_order: number | null;
-  role?: {
-    name: string;
-    tag: string;
-  } | null;
-}
-
 export function useMessages(threadId: string | null) {
-  const queryClient = useQueryClient();
-
-  const { data: messages, isLoading: isLoadingMessages } = useQuery({
+  const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", threadId],
     queryFn: async () => {
       if (!threadId) return [];
@@ -31,7 +16,7 @@ export function useMessages(threadId: string | null) {
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data as Message[];
+      return data;
     },
     enabled: !!threadId,
   });
@@ -49,37 +34,8 @@ export function useMessages(threadId: string | null) {
           table: 'messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        (payload) => {
-          // Get the current messages from the cache
-          const currentMessages = queryClient.getQueryData<Message[]>(["messages", threadId]) || [];
-          
-          // Fetch the role information for the new message if it has a role_id
-          if (payload.new.role_id) {
-            supabase
-              .from('roles')
-              .select('name, tag')
-              .eq('id', payload.new.role_id)
-              .single()
-              .then(({ data: role }) => {
-                // Create the new message with role information
-                const newMessage = {
-                  ...payload.new,
-                  role: role || null
-                } as Message;
-
-                // Update the cache with the new message
-                queryClient.setQueryData(["messages", threadId], [...currentMessages, newMessage]);
-              });
-          } else {
-            // If no role_id, just add the message directly
-            const newMessage = {
-              ...payload.new,
-              role: null
-            } as Message;
-            
-            // Update the cache with the new message
-            queryClient.setQueryData(["messages", threadId], [...currentMessages, newMessage]);
-          }
+        () => {
+          refetchMessages();
         }
       )
       .subscribe();
@@ -87,7 +43,7 @@ export function useMessages(threadId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId, queryClient]);
+  }, [threadId, refetchMessages]);
 
-  return { messages, isLoadingMessages };
+  return { messages, refetchMessages, isLoadingMessages };
 }

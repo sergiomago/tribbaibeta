@@ -71,7 +71,7 @@ export function RoleManagement() {
       <TestSubscriptionToggle />
       
       <div className="flex justify-between items-center">
-        <RoleCountDisplay roles={roles || []} />
+        <RoleCountDisplay />
         <CreateRoleButton 
           planType={planType || null}
           roleCount={roles?.length}

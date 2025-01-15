@@ -21,11 +21,16 @@ export function TestSubscriptionToggle() {
     await checkSubscription();
   };
 
+  // Only show in development
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
   return (
     <div className="mb-8 p-4 border-2 border-yellow-400 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
       <div className="flex flex-col gap-4">
         <div className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-          🧪 Test Subscription Toggle
+          🧪 Test Subscription Toggle (Development Only)
         </div>
         <div className="flex gap-2">
           <Button 

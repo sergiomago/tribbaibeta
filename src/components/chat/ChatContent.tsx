@@ -3,7 +3,6 @@ import { ChatInput } from "./ChatInput";
 import { useMessages } from "@/hooks/useMessages";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { RoleManagementBar } from "./RoleManagementBar";
 
 interface ChatContentProps {
   threadId: string | null;
@@ -61,7 +60,6 @@ export function ChatContent({
 
   return (
     <div className="h-full flex flex-col">
-      <RoleManagementBar threadId={threadId} />
       <MessageList
         messages={messages}
         isLoading={isLoadingMessages}
