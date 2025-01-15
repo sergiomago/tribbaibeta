@@ -17,10 +17,11 @@ export const CreateRoleButton = ({ planType, roleCount }: CreateRoleButtonProps)
   const [showUpgradeDialog, setShowUpgradeDialog] = useState(false);
 
   const handleCreateRole = () => {
-    const maxRoles = planType === 'creator' ? 7 : 3;
+    // Maestro has unlimited roles, Creator has 7, Free tier has 3
+    const maxRoles = planType === 'maestro' ? Infinity : planType === 'creator' ? 7 : 3;
     const isAtLimit = roleCount && roleCount >= maxRoles;
 
-    if (isAtLimit) {
+    if (isAtLimit && planType !== 'maestro') {
       setShowUpgradeDialog(true);
       return;
     }
