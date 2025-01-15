@@ -1,13 +1,12 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
-import { Send, Upload, Search, Image } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
+import { FileUploadButtons } from "./FileUploadButtons";
+import { MessageControls } from "./MessageControls";
+import { detectUrl, detectSearchIntent } from "@/utils/messageDetection";
 
 interface ChatInputProps {
   threadId: string;
@@ -29,7 +28,6 @@ export function ChatInput({
   const [isUploading, setIsUploading] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const { hasSubscription } = useSubscription();
 
   // Query to check if thread has roles
@@ -57,6 +55,28 @@ export function ChatInput({
     tr.role?.special_capabilities?.includes('web_search')
   );
 
+  const validateFile = (file: File, type: 'document' | 'image') => {
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    if (file.size > maxSize) {
+      throw new Error('File size must be less than 10MB');
+    }
+
+    if (type === 'document') {
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ];
+      if (!allowedTypes.includes(file.type)) {
+        throw new Error('Only PDF and Word documents are allowed');
+      }
+    } else {
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Only image files are allowed');
+      }
+    }
+  };
+
   const handleSend = async () => {
     if (!message.trim()) return;
 
@@ -82,13 +102,13 @@ export function ChatInput({
 
     setIsSending(true);
     try {
-      // Check if this is a web search request
-      const webSearchMatch = message.match(/@web search:\s*(.+)/);
-      if (webSearchMatch && hasWebSearcher) {
+      const isUrl = detectUrl(message);
+      const isSearchIntent = detectSearchIntent(message);
+      
+      if (hasWebSearcher && (isUrl || isSearchIntent)) {
         setIsSearching(true);
-        const searchQuery = webSearchMatch[1];
         const { error: searchError } = await supabase.functions.invoke("web-search", {
-          body: { query: searchQuery }
+          body: { content: message }
         });
 
         if (searchError) throw searchError;
@@ -116,28 +136,6 @@ export function ChatInput({
     } finally {
       setIsSending(false);
       setIsSearching(false);
-    }
-  };
-
-  const validateFile = (file: File, type: 'document' | 'image') => {
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    if (file.size > maxSize) {
-      throw new Error('File size must be less than 10MB');
-    }
-
-    if (type === 'document') {
-      const allowedTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ];
-      if (!allowedTypes.includes(file.type)) {
-        throw new Error('Only PDF and Word documents are allowed');
-      }
-    } else {
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Only image files are allowed');
-      }
     }
   };
 
@@ -171,7 +169,6 @@ export function ChatInput({
       });
     } finally {
       setIsUploading(false);
-      // Clear the input
       if (event.target) {
         event.target.value = '';
       }
@@ -208,7 +205,6 @@ export function ChatInput({
       });
     } finally {
       setIsUploading(false);
-      // Clear the input
       if (event.target) {
         event.target.value = '';
       }
@@ -216,13 +212,7 @@ export function ChatInput({
   };
 
   const handleWebSearch = () => {
-    setMessage(prev => {
-      const searchPrefix = "@web search: ";
-      if (prev.includes(searchPrefix)) {
-        return prev;
-      }
-      return prev ? `${prev} ${searchPrefix}` : searchPrefix;
-    });
+    setMessage(prev => prev.trim() ? `${prev} ` : prev);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -258,86 +248,23 @@ export function ChatInput({
           </div>
           <div className="flex gap-2">
             {hasDocAnalyst && (
-              <>
-                <Input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  className="hidden"
-                  id="file-upload"
-                  onChange={handleFileUpload}
-                  disabled={isUploading}
-                />
-                <Input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  id="image-upload"
-                  onChange={handleImageUpload}
-                  disabled={isUploading}
-                />
-                <Button 
-                  variant="outline" 
-                  size={isMobile ? "sm" : "default"}
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                  className="shrink-0"
-                  disabled={isUploading}
-                >
-                  <Upload className="h-4 w-4" />
-                  {!isMobile && <span className="ml-2">
-                    {isUploading ? "Uploading..." : "Upload File"}
-                  </span>}
-                </Button>
-                <Button 
-                  variant="outline"
-                  size={isMobile ? "sm" : "default"}
-                  onClick={() => document.getElementById('image-upload')?.click()}
-                  className="shrink-0"
-                  disabled={isUploading}
-                >
-                  <Image className="h-4 w-4" />
-                  {!isMobile && <span className="ml-2">
-                    {isUploading ? "Uploading..." : "Upload Image"}
-                  </span>}
-                </Button>
-              </>
+              <FileUploadButtons
+                onFileUpload={handleFileUpload}
+                onImageUpload={handleImageUpload}
+                isUploading={isUploading}
+              />
             )}
-            {hasWebSearcher && (
-              <Button 
-                variant="outline"
-                size={isMobile ? "sm" : "default"}
-                onClick={handleWebSearch}
-                className="shrink-0"
-                disabled={isSearching}
-              >
-                <Search className="h-4 w-4" />
-                {!isMobile && <span className="ml-2">
-                  {isSearching ? "Searching..." : "Web Search"}
-                </span>}
-              </Button>
-            )}
-            <Input
-              placeholder={disabled ? "Message limit reached" : "Type your message..."}
-              className="flex-1 text-base sm:text-sm"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
+            <MessageControls
+              message={message}
+              onMessageChange={(e) => setMessage(e.target.value)}
+              onSend={handleSend}
+              onWebSearch={handleWebSearch}
               onKeyPress={handleKeyPress}
-              disabled={isSending || disabled}
+              hasWebSearcher={hasWebSearcher}
+              isSending={isSending}
+              isSearching={isSearching}
+              disabled={disabled}
             />
-            <Button 
-              onClick={handleSend} 
-              disabled={isSending || disabled}
-              size={isMobile ? "sm" : "default"}
-              className="shrink-0"
-            >
-              {isSending ? (
-                "Sending..."
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  {!isMobile && <span className="ml-2">Send</span>}
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>

@@ -11,19 +11,37 @@ serve(async (req) => {
   }
 
   try {
-    const { query } = await req.json()
+    const { content } = await req.json();
 
-    if (!query) {
+    if (!content) {
       return new Response(
-        JSON.stringify({ error: 'No search query provided' }),
+        JSON.stringify({ error: 'No content provided' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
 
+    // Check if content is a URL
+    const urlPattern = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/;
+    const isUrl = urlPattern.test(content);
+
+    // If it's a URL, we'll analyze it (for now just return it as is)
+    // In the future, we can add URL content fetching and analysis
+    if (isUrl) {
+      return new Response(
+        JSON.stringify({ 
+          type: 'url',
+          url: content,
+          analysis: 'URL detected and will be analyzed'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Otherwise, treat it as a search query
     const searchApiKey = Deno.env.get('GOOGLE_SEARCH_API_KEY')
     const searchEngineId = Deno.env.get('GOOGLE_SEARCH_ENGINE_ID')
 
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${searchApiKey}&cx=${searchEngineId}&q=${encodeURIComponent(query)}`
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${searchApiKey}&cx=${searchEngineId}&q=${encodeURIComponent(content)}`
 
     const response = await fetch(searchUrl)
     const data = await response.json()
@@ -36,7 +54,6 @@ serve(async (req) => {
       )
     }
 
-    // Process and format search results
     const formattedResults = data.items?.map(item => ({
       title: item.title,
       link: item.link,
@@ -46,6 +63,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
+        type: 'search',
         results: formattedResults,
         searchInformation: {
           totalResults: data.searchInformation?.totalResults,
