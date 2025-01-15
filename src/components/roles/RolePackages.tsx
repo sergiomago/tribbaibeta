@@ -108,11 +108,11 @@ export function RolePackages() {
       return;
     }
 
-    // Check role limits
-    const maxRoles = planType === 'creator' ? 7 : 3;
+    // Check role limits based on plan type
+    const maxRoles = planType === 'maestro' ? Infinity : planType === 'creator' ? 7 : 3;
     const isAtLimit = userRoles && userRoles.length >= maxRoles;
 
-    if (isAtLimit) {
+    if (isAtLimit && planType !== 'maestro') {
       setShowUpgradeDialog(true);
       return;
     }
@@ -120,7 +120,6 @@ export function RolePackages() {
     try {
       await createRoleMutation.mutateAsync(templateRole);
     } catch (error) {
-      // Error is handled in mutation's onError
       console.error("Error in handleUseTemplate:", error);
     }
   };
@@ -145,7 +144,7 @@ export function RolePackages() {
     <div className="space-y-6 mb-8">
       <h2 className="text-lg font-semibold">Pre-made Role Packages</h2>
       <div className="space-y-4">
-        {Object.entries(packages).map(([packageName, roles]) => {
+        {Object.entries(packages || {}).map(([packageName, roles]) => {
           const isMaestroPackage = packageName === 'Maestro';
           
           return (
