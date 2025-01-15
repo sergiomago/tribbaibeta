@@ -9,7 +9,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { RolePackages } from "./RolePackages";
-import { TestSubscriptionToggle } from "./TestSubscriptionToggle";
 
 export function RoleManagement() {
   const [isGridView, setIsGridView] = useState(true);
@@ -68,8 +67,6 @@ export function RoleManagement() {
 
   return (
     <div className="space-y-8">
-      <TestSubscriptionToggle />
-      
       <div className="flex justify-between items-center">
         <RoleCountDisplay />
         <CreateRoleButton 

@@ -41,25 +41,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      // Check for test subscription first (development only)
-      if (process.env.NODE_ENV !== 'production') {
-        const testSub = localStorage.getItem('test_subscription');
-        if (testSub) {
-          const { planType, currentPeriodEnd } = JSON.parse(testSub);
-          setState({
-            hasSubscription: true,
-            planType,
-            interval: 'month',
-            trialEnd: null,
-            currentPeriodEnd,
-            isLoading: false,
-            trialStarted: false,
-          });
-          return;
-        }
-      }
-
-      // Regular subscription check
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) throw error;
