@@ -57,22 +57,6 @@ export function ChatInput({
     tr.role?.special_capabilities?.includes('web_search')
   );
 
-  // URL detection
-  const detectUrl = (text: string) => {
-    const urlPattern = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/;
-    return urlPattern.test(text);
-  };
-
-  // Search intent detection (basic implementation)
-  const detectSearchIntent = (text: string) => {
-    const searchPatterns = [
-      /^(search|find|look up|tell me about|what is|who is|where is|when|how to)/i,
-      /\?(search|find|look up|tell me about|what is|who is|where is|when|how to)/i,
-      /can you (search|find|look up|tell me about)/i
-    ];
-    return searchPatterns.some(pattern => pattern.test(text));
-  };
-
   const handleSend = async () => {
     if (!message.trim()) return;
 
@@ -98,14 +82,13 @@ export function ChatInput({
 
     setIsSending(true);
     try {
-      // Check if this is a web search or URL analysis request
-      const isUrl = detectUrl(message);
-      const isSearchIntent = detectSearchIntent(message);
-      
-      if (hasWebSearcher && (isUrl || isSearchIntent)) {
+      // Check if this is a web search request
+      const webSearchMatch = message.match(/@web search:\s*(.+)/);
+      if (webSearchMatch && hasWebSearcher) {
         setIsSearching(true);
+        const searchQuery = webSearchMatch[1];
         const { error: searchError } = await supabase.functions.invoke("web-search", {
-          body: { content: message }
+          body: { query: searchQuery }
         });
 
         if (searchError) throw searchError;
@@ -233,7 +216,13 @@ export function ChatInput({
   };
 
   const handleWebSearch = () => {
-    setMessage(prev => prev.trim() ? `${prev} ` : prev);
+    setMessage(prev => {
+      const searchPrefix = "@web search: ";
+      if (prev.includes(searchPrefix)) {
+        return prev;
+      }
+      return prev ? `${prev} ${searchPrefix}` : searchPrefix;
+    });
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -327,7 +316,7 @@ export function ChatInput({
               </Button>
             )}
             <Input
-              placeholder={disabled ? "Message limit reached" : hasWebSearcher ? "Type your message or ask me to search..." : "Type your message..."}
+              placeholder={disabled ? "Message limit reached" : "Type your message..."}
               className="flex-1 text-base sm:text-sm"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
