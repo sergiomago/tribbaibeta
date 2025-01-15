@@ -36,11 +36,11 @@ export function RoleSelectionDialog({
     queryFn: async () => {
       if (!threadId || !user) return [];
       
-      // Modified query to correctly filter user's roles and template roles
+      // Reverted query to only fetch user's personal roles
       const { data: allRoles, error: rolesError } = await supabase
         .from("roles")
         .select("*")
-        .or(`user_id.eq.${user.id},is_template.eq.true`);
+        .eq("user_id", user.id);
 
       if (rolesError) throw rolesError;
 
