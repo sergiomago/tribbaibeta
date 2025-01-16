@@ -2,6 +2,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Tables } from "@/integrations/supabase/types";
+
+type ThreadResponse = Tables<"threads">;
 
 export function useThreadMutations() {
   const { toast } = useToast();
@@ -10,14 +13,13 @@ export function useThreadMutations() {
 
   const createThread = useMutation({
     mutationFn: async ({ userId, roleId }: { userId: string, roleId?: string }) => {
-      const { data: threadData, error: threadError } = await supabase
-        .rpc('create_thread_with_state', {
-          p_user_id: userId,
-          p_role_id: roleId
+      const { data, error } = await supabase
+        .functions.invoke<ThreadResponse>("create-thread-with-state", {
+          body: { p_user_id: userId, p_role_id: roleId }
         });
 
-      if (threadError) throw threadError;
-      return threadData;
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["threads"] });
