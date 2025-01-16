@@ -7,6 +7,7 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { Json } from "@/integrations/supabase/types";
 
 interface Message {
   id: string;
@@ -15,10 +16,7 @@ interface Message {
   created_at: string;
   response_order: number | null;
   chain_id: string | null;
-  metadata: {
-    intent?: 'analysis' | 'search' | 'conversation';
-    fileReference?: boolean;
-  } | null;
+  metadata: Json | null;
   role?: {
     name: string;
     tag: string;
@@ -67,12 +65,17 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
       ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
       : "";
     
+    const intentClass = message.metadata?.intent === 'analysis' 
+      ? "border-l-2 border-blue-500" 
+      : message.metadata?.intent === 'search' 
+        ? "border-l-2 border-green-500" 
+        : "";
+    
     return cn(
       baseClasses,
       alignmentClasses,
       highlightClasses,
-      message.metadata?.intent === 'analysis' && "border-l-2 border-blue-500",
-      message.metadata?.intent === 'search' && "border-l-2 border-green-500"
+      intentClass
     );
   };
 

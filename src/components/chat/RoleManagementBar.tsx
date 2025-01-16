@@ -46,7 +46,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           role:roles (*)
         `)
         .eq("thread_id", threadId)
-        .orderBy("created_at", { ascending: true });
+        .order('created_at', { ascending: true });
       if (error) throw error;
       return data.map(tr => tr.role);
     },
