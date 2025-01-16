@@ -53,7 +53,7 @@ export default function Login() {
               className: {
                 input: 'dark:text-white text-gray-900',
                 label: 'dark:text-white text-gray-900',
-                button: 'dark:text-white',
+                button: '!text-white dark:!text-white', // Added !important to ensure text is white in both modes
                 anchor: 'text-primary-600 dark:text-primary-400',
               },
             }}
