@@ -45,7 +45,6 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         analysis_status: null
       };
 
-      // Transform the data to match our expected type
       return {
         analysis_result: data.analysis_result as { content: string } | null,
         analysis_status: data.analysis_status
