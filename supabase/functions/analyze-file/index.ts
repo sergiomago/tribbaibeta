@@ -61,31 +61,39 @@ serve(async (req) => {
     reader.readAsDataURL(fileContent);
     const base64Data = await base64Promise;
 
+    // Prepare messages based on file type
+    const messages = [
+      {
+        role: "system",
+        content: "You are a document and image analysis expert. Analyze the provided file and extract key information, themes, and insights."
+      },
+      {
+        role: "user",
+        content: fileData.content_type.startsWith('image/') ? [
+          {
+            type: "text",
+            text: "Please analyze this image and describe what you see, including any text, objects, people, or notable elements."
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: base64Data as string,
+              detail: "high"
+            }
+          }
+        ] : [
+          {
+            type: "text",
+            text: `Please analyze this ${fileData.file_type} document and provide a detailed summary of its contents, key points, and any notable elements.`
+          }
+        ]
+      }
+    ];
+
     // Analyze file with GPT-4 Vision
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: "You are a document and image analysis expert. Analyze the provided file and extract key information, themes, and insights."
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Please analyze this ${fileData.file_type} file and provide a detailed analysis. Focus on the main content, key points, and any notable elements.`
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: base64Data as string,
-                detail: "high"
-              }
-            }
-          ]
-        }
-      ],
+      messages,
       max_tokens: 1000
     });
 
