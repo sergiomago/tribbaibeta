@@ -58,13 +58,48 @@ export async function storeRoleMemory(
   content: string,
   metadata: any
 ) {
-  await supabase
+  // Store the memory with enhanced metadata
+  const { error } = await supabase
     .from('role_memories')
     .insert({
       role_id: roleId,
       content,
       context_type: 'conversation',
-      context_relevance: 1.0,
-      metadata
+      metadata: {
+        ...metadata,
+        timestamp: Date.now(),
+        memory_type: 'conversation',
+        importance_score: 1.0,
+      },
+      relevance_score: 1.0,
+      confidence_score: 1.0,
     });
+
+  if (error) {
+    console.error('Error storing role memory:', error);
+    throw error;
+  }
+
+  // Reinforce similar memories
+  const { data: similarMemories } = await supabase.rpc(
+    'get_similar_memories',
+    {
+      p_embedding: content,
+      p_match_threshold: 0.7,
+      p_match_count: 5,
+      p_role_id: roleId
+    }
+  );
+
+  if (similarMemories?.length) {
+    for (const memory of similarMemories) {
+      await supabase
+        .from('role_memories')
+        .update({
+          reinforcement_count: supabase.sql`reinforcement_count + 1`,
+          last_reinforced: new Date().toISOString(),
+        })
+        .eq('id', memory.id);
+    }
+  }
 }

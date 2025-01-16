@@ -380,9 +380,13 @@ export type Database = {
           created_at: string
           embedding: string | null
           id: string
+          importance_score: number | null
           interaction_id: string | null
           last_accessed: string | null
+          last_reinforced: string | null
+          memory_type: string | null
           metadata: Json | null
+          reinforcement_count: number | null
           relevance_score: number | null
           role_id: string | null
           topic_vector: string | null
@@ -397,9 +401,13 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          importance_score?: number | null
           interaction_id?: string | null
           last_accessed?: string | null
+          last_reinforced?: string | null
+          memory_type?: string | null
           metadata?: Json | null
+          reinforcement_count?: number | null
           relevance_score?: number | null
           role_id?: string | null
           topic_vector?: string | null
@@ -414,9 +422,13 @@ export type Database = {
           created_at?: string
           embedding?: string | null
           id?: string
+          importance_score?: number | null
           interaction_id?: string | null
           last_accessed?: string | null
+          last_reinforced?: string | null
+          memory_type?: string | null
           metadata?: Json | null
+          reinforcement_count?: number | null
           relevance_score?: number | null
           role_id?: string | null
           topic_vector?: string | null
