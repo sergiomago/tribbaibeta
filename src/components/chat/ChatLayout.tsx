@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -16,8 +16,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 
 export function ChatLayout() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const threadParam = searchParams.get('thread');
+  const roleParam = searchParams.get('role');
   const [chatSidebarSize, setChatSidebarSize] = useState(20);
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(threadParam);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -36,6 +38,22 @@ export function ChatLayout() {
       return data;
     },
   });
+
+  // Handle role parameter when thread is created
+  const handleThreadCreated = async (threadId: string) => {
+    if (roleParam) {
+      // Associate role with the new thread
+      const { error } = await supabase
+        .from('thread_roles')
+        .insert({ thread_id: threadId, role_id: roleParam });
+      
+      if (!error) {
+        // Clear role parameter and set thread parameter
+        setSearchParams({ thread: threadId });
+      }
+    }
+    setCurrentThreadId(threadId);
+  };
 
   // Update currentThreadId when URL parameter changes
   useEffect(() => {
@@ -98,6 +116,7 @@ export function ChatLayout() {
             <ThreadPanel
               selectedThreadId={currentThreadId}
               onThreadSelect={setCurrentThreadId}
+              onThreadCreated={handleThreadCreated}
               isCollapsed={isSidebarCollapsed}
             />
           </div>

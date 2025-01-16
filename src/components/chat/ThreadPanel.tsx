@@ -15,10 +15,16 @@ import { useToast } from "@/hooks/use-toast";
 interface ThreadPanelProps {
   selectedThreadId: string | null;
   onThreadSelect: (threadId: string) => void;
+  onThreadCreated?: (threadId: string) => void;
   isCollapsed?: boolean;
 }
 
-export function ThreadPanel({ selectedThreadId, onThreadSelect, isCollapsed = false }: ThreadPanelProps) {
+export function ThreadPanel({ 
+  selectedThreadId, 
+  onThreadSelect, 
+  onThreadCreated,
+  isCollapsed = false 
+}: ThreadPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [editingThreadId, setEditingThreadId] = useState<string | null>(null);
@@ -84,6 +90,7 @@ export function ThreadPanel({ selectedThreadId, onThreadSelect, isCollapsed = fa
 
     createThread.mutate(user.id, {
       onSuccess: (newThread) => {
+        onThreadCreated?.(newThread.id);
         onThreadSelect(newThread.id);
       },
     });
