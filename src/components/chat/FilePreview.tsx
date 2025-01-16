@@ -13,10 +13,17 @@ interface FilePreviewProps {
   };
 }
 
+interface AnalysisResult {
+  analysis_result: {
+    content: string;
+  } | null;
+  analysis_status: string | null;
+}
+
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisResult, isLoading: isAnalyzing } = useQuery({
+  const { data: analysisResult, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) return null;
@@ -25,7 +32,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         .from('analyzed_files')
         .select('analysis_result, analysis_status')
         .eq('id', fileMetadata.file_id)
-        .single();
+        .maybeSingle();
         
       if (error) throw error;
       return data;
@@ -103,7 +110,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       {analysisResult?.analysis_result && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{analysisResult.analysis_result.content}</p>
+          <p>{(analysisResult.analysis_result as { content: string }).content}</p>
         </div>
       )}
     </div>
