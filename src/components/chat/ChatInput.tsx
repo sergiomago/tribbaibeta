@@ -7,6 +7,7 @@ import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscr
 import { FileUploadButtons } from "./FileUploadButtons";
 import { MessageControls } from "./MessageControls";
 import { detectUrl, detectSearchIntent } from "@/utils/messageDetection";
+import { SPECIAL_CAPABILITIES } from "@/utils/RoleManager";
 
 interface ChatInputProps {
   threadId: string;
@@ -49,10 +50,10 @@ export function ChatInput({
 
   // Check if special roles are present
   const hasDocAnalyst = threadRoles?.some(tr => 
-    tr.role?.special_capabilities?.includes('document_analysis')
+    tr.role?.special_capabilities?.includes(SPECIAL_CAPABILITIES.DOC_ANALYSIS)
   );
   const hasWebSearcher = threadRoles?.some(tr => 
-    tr.role?.special_capabilities?.includes('web_search')
+    tr.role?.special_capabilities?.includes(SPECIAL_CAPABILITIES.WEB_SEARCH)
   );
 
   const validateFile = (file: File, type: 'document' | 'image') => {
