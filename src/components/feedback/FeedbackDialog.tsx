@@ -14,7 +14,6 @@ interface FeedbackDialogProps {
   onClose: () => void;
 }
 
-// Define the allowed rating values to match the database enum
 type ExperienceRating = "excellent" | "good" | "average" | "poor" | "needs_improvement";
 
 export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
@@ -23,7 +22,7 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
   const [features, setFeatures] = useState("");
   const [suggestions, setSuggestions] = useState("");
   const [hasBugs, setHasBugs] = useState(false);
-  const [interested, setInterested] = useState(false);
+  const [bugReport, setBugReport] = useState("");
   const [recommend, setRecommend] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -33,6 +32,7 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
         title: "Error",
         description: "Please select an experience rating",
         variant: "destructive",
+        duration: 3000,
       });
       return;
     }
@@ -43,7 +43,7 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
       favorite_features: features,
       improvement_suggestions: suggestions,
       has_bugs: hasBugs,
-      interested_in_subscription: interested,
+      bug_report: hasBugs ? bugReport : null,
       would_recommend: recommend,
     });
 
@@ -52,11 +52,13 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
         title: "Error",
         description: "Failed to submit feedback",
         variant: "destructive",
+        duration: 3000,
       });
     } else {
       toast({
-        title: "Success",
-        description: "Thank you for your feedback!",
+        title: "Thank you for your feedback!",
+        description: "You've unlocked the Feedback Expert role! Check your templates.",
+        duration: 5000,
       });
       onClose();
     }
@@ -129,16 +131,17 @@ export function FeedbackDialog({ isOpen, onClose }: FeedbackDialogProps) {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <Label htmlFor="subscription">
-                Interested in a subscription?
-              </Label>
-              <Switch
-                id="subscription"
-                checked={interested}
-                onCheckedChange={setInterested}
-              />
-            </div>
+            {hasBugs && (
+              <div className="space-y-2">
+                <Label htmlFor="bugReport">Please describe the bug(s):</Label>
+                <Textarea
+                  id="bugReport"
+                  value={bugReport}
+                  onChange={(e) => setBugReport(e.target.value)}
+                  placeholder="Describe what went wrong..."
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <Label htmlFor="recommend">

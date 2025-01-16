@@ -17,6 +17,7 @@ export default function Login() {
         toast({
           title: "Welcome back!",
           description: "Successfully signed in.",
+          duration: 3000, // Auto-dismiss after 3 seconds
         });
       }
     });
@@ -39,13 +40,21 @@ export default function Login() {
               variables: {
                 default: {
                   colors: {
-                    brand: 'rgb(var(--primary))',
-                    brandAccent: 'rgb(var(--primary))',
+                    brand: '#7234f3', // Primary purple from our theme
+                    brandAccent: '#594edf', // Secondary purple from our theme
+                    inputText: 'white', // Make text visible in dark mode
+                    inputBackground: 'transparent',
+                    inputBorder: 'lightgray',
                   },
                 },
               },
+              className: {
+                input: 'dark:text-white',
+                label: 'dark:text-white',
+                button: 'dark:text-white',
+              },
             }}
-            providers={[]}
+            providers={["google"]}
             redirectTo={window.location.origin}
           />
         </CardContent>
