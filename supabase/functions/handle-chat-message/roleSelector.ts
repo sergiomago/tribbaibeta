@@ -14,8 +14,10 @@ export async function selectResponders(
     .select('role_id, roles(*)') 
     .eq('thread_id', threadId);
 
+  // If no roles are found, return empty array instead of throwing error
   if (!availableRoles?.length) {
-    throw new Error('No roles available for this thread');
+    console.log('No roles found for thread:', threadId);
+    return [];
   }
 
   const completion = await openai.chat.completions.create({
