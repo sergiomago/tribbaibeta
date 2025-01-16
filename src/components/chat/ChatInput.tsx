@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscriptionCard";
 import { FileUploadButtons } from "./FileUploadButtons";
-import { MessageControls } from "./MessageControls";
-import { detectUrl, detectSearchIntent } from "@/utils/messageDetection";
-import { SPECIAL_CAPABILITIES } from "@/utils/RoleManager";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Send } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ChatInputProps {
   threadId: string;
@@ -27,11 +28,11 @@ export function ChatInput({
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
   const { hasSubscription } = useSubscription();
+  const isMobile = useIsMobile();
 
-  // Query to check if thread has roles with updated configuration
+  // Query to check if thread has roles
   const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
@@ -46,18 +47,10 @@ export function ChatInput({
       return data;
     },
     enabled: !!threadId,
-    staleTime: 0, // Don't use stale data
-    refetchOnMount: true, // Always refetch when component mounts
-    refetchOnWindowFocus: true // Refetch when window regains focus
+    staleTime: 0,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true
   });
-
-  // Check if special roles are present
-  const hasDocAnalyst = threadRoles?.some(tr => 
-    tr.role?.special_capabilities?.includes(SPECIAL_CAPABILITIES.DOC_ANALYSIS)
-  );
-  const hasWebSearcher = threadRoles?.some(tr => 
-    tr.role?.special_capabilities?.includes(SPECIAL_CAPABILITIES.WEB_SEARCH)
-  );
 
   const validateFile = (file: File, type: 'document' | 'image') => {
     const maxSize = 10 * 1024 * 1024; // 10MB
@@ -106,19 +99,6 @@ export function ChatInput({
 
     setIsSending(true);
     try {
-      const isUrl = detectUrl(message);
-      const isSearchIntent = detectSearchIntent(message);
-      
-      if (hasWebSearcher && (isUrl || isSearchIntent)) {
-        setIsSearching(true);
-        const { error: searchError } = await supabase.functions.invoke("web-search", {
-          body: { content: message }
-        });
-
-        if (searchError) throw searchError;
-      }
-
-      console.log('Sending message:', { threadId, content: message });
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId,
@@ -139,7 +119,6 @@ export function ChatInput({
       });
     } finally {
       setIsSending(false);
-      setIsSearching(false);
     }
   };
 
@@ -215,10 +194,6 @@ export function ChatInput({
     }
   };
 
-  const handleWebSearch = () => {
-    setMessage(prev => prev.trim() ? `${prev} ` : prev);
-  };
-
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -251,24 +226,34 @@ export function ChatInput({
             )}
           </div>
           <div className="flex gap-2">
-            {hasDocAnalyst && (
-              <FileUploadButtons
-                onFileUpload={handleFileUpload}
-                onImageUpload={handleImageUpload}
-                isUploading={isUploading}
-              />
-            )}
-            <MessageControls
-              message={message}
-              onMessageChange={(e) => setMessage(e.target.value)}
-              onSend={handleSend}
-              onWebSearch={handleWebSearch}
-              onKeyPress={handleKeyPress}
-              hasWebSearcher={hasWebSearcher}
-              isSending={isSending}
-              isSearching={isSearching}
-              disabled={disabled}
+            <FileUploadButtons
+              onFileUpload={handleFileUpload}
+              onImageUpload={handleImageUpload}
+              isUploading={isUploading}
             />
+            <Input
+              placeholder={disabled ? "Message limit reached" : "Type your message..."}
+              className="flex-1 text-base sm:text-sm"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              disabled={isSending || disabled}
+            />
+            <Button 
+              onClick={handleSend} 
+              disabled={isSending || disabled}
+              size={isMobile ? "sm" : "default"}
+              className="shrink-0"
+            >
+              {isSending ? (
+                "Sending..."
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  {!isMobile && <span className="ml-2">Send</span>}
+                </>
+              )}
+            </Button>
           </div>
         </div>
       </div>
