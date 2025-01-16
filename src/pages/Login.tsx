@@ -42,16 +42,24 @@ export default function Login() {
                   colors: {
                     brand: '#7234f3',
                     brandAccent: '#594edf',
-                    inputText: 'white',
-                    inputBackground: 'transparent',
+                    inputText: 'black',
+                    inputBackground: 'white',
                     inputBorder: 'lightgray',
+                  },
+                  dark: {
+                    colors: {
+                      inputText: 'white',
+                      inputBackground: '#2D3748',
+                      inputBorder: '#4A5568',
+                    },
                   },
                 },
               },
               className: {
-                input: 'dark:text-white',
-                label: 'dark:text-white',
+                input: 'dark:text-white text-gray-900',
+                label: 'dark:text-white text-gray-900',
                 button: 'dark:text-white',
+                anchor: 'text-primary-600 dark:text-primary-400',
               },
             }}
             providers={["google"]}
