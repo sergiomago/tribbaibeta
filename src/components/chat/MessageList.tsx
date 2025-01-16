@@ -28,7 +28,7 @@ interface Message {
   response_order: number | null;
   chain_id: string | null;
   metadata: Json | null;
-  message_type?: 'text' | 'file' | 'image';
+  message_type?: 'text' | 'file' | 'image' | 'analysis';
   role?: {
     name: string;
     tag: string;
