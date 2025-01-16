@@ -79,8 +79,8 @@
     @apply text-gray-900 dark:text-gray-100;
   }
   
-  /* Ensure Google sign-in button text is visible in dark mode */
-  .dark [data-provider="google"] button {
+  /* Ensure Google sign-in button text is black in both themes */
+  [data-provider="google"] button {
     @apply text-gray-900;
   }
 }
