@@ -42,16 +42,11 @@ export default function Login() {
                   colors: {
                     brand: '#7234f3',
                     brandAccent: '#594edf',
-                    inputText: 'black',
-                    inputBackground: 'white',
+                    inputText: 'currentColor',
+                    inputBackground: 'transparent',
                     inputBorder: 'lightgray',
-                  },
-                  dark: {
-                    colors: {
-                      inputText: 'white',
-                      inputBackground: '#2D3748',
-                      inputBorder: '#4A5568',
-                    },
+                    inputLabelText: 'currentColor',
+                    inputPlaceholder: 'currentColor',
                   },
                 },
               },
