@@ -25,9 +25,48 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
 
     if (userError || !user?.email) {
-      throw new Error('Unauthorized');
+      console.error('Auth error:', userError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 401 
+        }
+      );
     }
 
+    // First check for active subscription in database
+    const { data: subscriptionData, error: subscriptionError } = await supabaseClient
+      .from('subscriptions')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .single();
+
+    if (subscriptionError) {
+      console.error('Database error:', subscriptionError);
+    }
+
+    // If we find an active subscription in the database, return it
+    if (subscriptionData) {
+      console.log('Found active subscription in database:', subscriptionData);
+      return new Response(
+        JSON.stringify({
+          hasSubscription: true,
+          planType: subscriptionData.plan_type,
+          interval: 'month', // Default to month for now
+          trialEnd: subscriptionData.trial_end,
+          currentPeriodEnd: subscriptionData.current_period_end,
+          trialStarted: subscriptionData.trial_started
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    // If no active subscription in database, check Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
@@ -39,16 +78,18 @@ serve(async (req) => {
     });
 
     if (customers.data.length === 0) {
+      console.log('No Stripe customer found for:', user.email);
       return new Response(
         JSON.stringify({ 
           hasSubscription: false,
           planType: null,
           trialEnd: null,
-          currentPeriodEnd: null 
+          currentPeriodEnd: null,
+          trialStarted: false
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
+          status: 200 
         }
       );
     }
@@ -61,16 +102,18 @@ serve(async (req) => {
     });
 
     if (subscriptions.data.length === 0) {
+      console.log('No active Stripe subscription found for customer:', customers.data[0].id);
       return new Response(
         JSON.stringify({ 
           hasSubscription: false,
           planType: null,
           trialEnd: null,
-          currentPeriodEnd: null 
+          currentPeriodEnd: null,
+          trialStarted: false
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200,
+          status: 200 
         }
       );
     }
@@ -97,16 +140,19 @@ serve(async (req) => {
       console.error('Error updating subscription in database:', updateError);
     }
 
+    console.log('Successfully checked and updated subscription for user:', user.id);
     return new Response(
       JSON.stringify({
         hasSubscription: true,
         planType,
+        interval: subscription.items.data[0]?.price?.recurring?.interval || 'month',
         trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
         currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+        trialStarted: false
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
+        status: 200 
       }
     );
   } catch (error) {
@@ -115,7 +161,7 @@ serve(async (req) => {
       JSON.stringify({ error: error.message }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400,
+        status: 500 
       }
     );
   }
