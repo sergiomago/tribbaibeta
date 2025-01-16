@@ -23,21 +23,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("Error getting session:", error);
+        handleAuthError(error);
+        return;
+      }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
+    // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state change:", event);
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(session);
+        setUser(session?.user ?? null);
+      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
+        setSession(null);
+        setUser(null);
+        navigate("/login");
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
+
+  const handleAuthError = (error: any) => {
+    console.error("Auth error:", error);
+    
+    // Check for refresh token errors
+    if (error.message?.includes('refresh_token_not_found') || 
+        error.message?.includes('Invalid Refresh Token')) {
+      setSession(null);
+      setUser(null);
+      navigate("/login");
+      toast({
+        title: "Session expired",
+        description: "Please sign in again",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Handle other auth errors
+    toast({
+      title: "Authentication error",
+      description: error.message,
+      variant: "destructive",
+    });
+  };
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -52,11 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Successfully signed in.",
       });
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error signing in",
-        description: error.message,
-      });
+      handleAuthError(error);
     }
   };
 
@@ -73,11 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       navigate("/login");
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error signing up",
-        description: error.message,
-      });
+      handleAuthError(error);
     }
   };
 
@@ -91,11 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Successfully signed out.",
       });
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error signing out",
-        description: error.message,
-      });
+      handleAuthError(error);
     }
   };
 
