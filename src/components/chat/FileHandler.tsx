@@ -1,4 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface FileHandlerProps {
   onFileUpload: (file: File) => Promise<void>;
@@ -29,6 +30,25 @@ export function FileHandler({ onFileUpload }: FileHandlerProps) {
     }
   };
 
+  const triggerFileAnalysis = async (fileId: string) => {
+    try {
+      const { error } = await supabase.functions.invoke('analyze-file', {
+        body: { fileId }
+      });
+
+      if (error) throw error;
+
+      console.log('File analysis triggered successfully');
+    } catch (error) {
+      console.error('Error triggering file analysis:', error);
+      toast({
+        title: "Analysis failed",
+        description: "Failed to analyze file. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, type: 'document' | 'image') => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -36,6 +56,22 @@ export function FileHandler({ onFileUpload }: FileHandlerProps) {
     try {
       validateFile(file, type);
       await onFileUpload(file);
+
+      // Get the latest uploaded file for this user
+      const { data: fileData, error: fileError } = await supabase
+        .from('analyzed_files')
+        .select('id')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (fileError) throw fileError;
+
+      // Trigger analysis for documents
+      if (type === 'document' && fileData?.id) {
+        await triggerFileAnalysis(fileData.id);
+      }
+
     } catch (error) {
       console.error(`Error uploading ${type}:`, error);
       toast({
