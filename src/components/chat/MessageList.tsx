@@ -8,10 +8,16 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Json } from "@/integrations/supabase/types";
+import { FilePreview } from "./FilePreview";
 
 interface MessageMetadata {
   intent?: 'analysis' | 'search' | 'conversation';
   fileReference?: boolean;
+  file_id?: string;
+  file_name?: string;
+  file_path?: string;
+  content_type?: string;
+  size?: number;
 }
 
 interface Message {
@@ -22,6 +28,7 @@ interface Message {
   response_order: number | null;
   chain_id: string | null;
   metadata: Json | null;
+  message_type?: 'text' | 'file' | 'image';
   role?: {
     name: string;
     tag: string;
@@ -85,6 +92,37 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
     );
   };
 
+  const renderMessageContent = (message: Message) => {
+    if (message.message_type === 'file' || message.message_type === 'image') {
+      const metadata = message.metadata as MessageMetadata;
+      if (metadata?.file_path) {
+        return (
+          <div className="space-y-2">
+            {message.content && (
+              <div className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">
+                {message.content}
+              </div>
+            )}
+            <FilePreview
+              fileMetadata={{
+                file_path: metadata.file_path,
+                file_name: metadata.file_name || 'Unnamed file',
+                content_type: metadata.content_type || 'application/octet-stream',
+                size: metadata.size || 0,
+              }}
+            />
+          </div>
+        );
+      }
+    }
+
+    return (
+      <div className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">
+        {message.content}
+      </div>
+    );
+  };
+
   return (
     <ScrollArea className="h-full">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -133,13 +171,13 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
                   </div>
                 )}
                 <div 
-                  className={`text-xs sm:text-sm whitespace-pre-wrap leading-relaxed p-2 sm:p-4 rounded-lg ${
+                  className={`p-2 sm:p-4 rounded-lg ${
                     message.role_id
                       ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow"
                       : "bg-primary/10 text-left"
                   }`}
                 >
-                  {message.content}
+                  {renderMessageContent(message)}
                 </div>
               </div>
             </div>
