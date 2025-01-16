@@ -7,7 +7,6 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -15,10 +14,11 @@ serve(async (req) => {
   try {
     const formData = await req.formData()
     const file = formData.get('file')
+    const threadId = formData.get('threadId')
 
-    if (!file) {
+    if (!file || !threadId) {
       return new Response(
-        JSON.stringify({ error: 'No file uploaded' }),
+        JSON.stringify({ error: 'Missing file or thread ID' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       )
     }
@@ -93,6 +93,29 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to save file metadata', details: dbError }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
       )
+    }
+
+    // Create a message entry for the file
+    const { error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        content: `File uploaded: ${fileName}`,
+        message_type: 'file',
+        metadata: {
+          file_id: fileRecord.id,
+          file_name: fileName,
+          file_type: fileExt,
+          file_path: filePath,
+          content_type: file.type,
+          size: file.size
+        }
+      })
+
+    if (messageError) {
+      console.error('Message creation error:', messageError)
+      // Don't roll back file upload if message creation fails
+      // The file is still useful even without a message entry
     }
 
     return new Response(

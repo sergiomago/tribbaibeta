@@ -1,15 +1,40 @@
 import { Button } from "@/components/ui/button";
 import { Upload, Image } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useToast } from "@/hooks/use-toast";
 
 interface FileUploadButtonsProps {
+  threadId: string;
   onFileUpload: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   onImageUpload: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>;
   isUploading: boolean;
 }
 
-export function FileUploadButtons({ onFileUpload, onImageUpload, isUploading }: FileUploadButtonsProps) {
+export function FileUploadButtons({ threadId, onFileUpload, onImageUpload, isUploading }: FileUploadButtonsProps) {
   const isMobile = useIsMobile();
+  const { toast } = useToast();
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('threadId', threadId);
+
+    await onFileUpload(event);
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('threadId', threadId);
+
+    await onImageUpload(event);
+  };
 
   return (
     <>
@@ -18,7 +43,7 @@ export function FileUploadButtons({ onFileUpload, onImageUpload, isUploading }: 
         accept=".pdf,.doc,.docx"
         className="hidden"
         id="file-upload"
-        onChange={onFileUpload}
+        onChange={handleFileUpload}
         disabled={isUploading}
       />
       <input
@@ -26,7 +51,7 @@ export function FileUploadButtons({ onFileUpload, onImageUpload, isUploading }: 
         accept="image/*"
         className="hidden"
         id="image-upload"
-        onChange={onImageUpload}
+        onChange={handleImageUpload}
         disabled={isUploading}
       />
       <Button 
