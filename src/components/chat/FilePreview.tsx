@@ -42,10 +42,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         
       if (error) throw error;
       
-      return {
-        analysis_result: data?.analysis_result as { content: string; analyzed_at?: string } | null,
-        analysis_status: data?.analysis_status as AnalysisResult['analysis_status']
-      };
+      return data as AnalysisResult;
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
