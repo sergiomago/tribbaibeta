@@ -8,35 +8,66 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Intent detection patterns
-const ANALYSIS_INTENT = /analyze|examine|review|check|look at|what('s| is) in/i;
-const SEARCH_INTENT = /search|find|look up|tell me about|what is|who is|where is|when|how to/i;
-const FILE_REFERENCE = /this (file|document|pdf|image|photo)/i;
+async function handleInitialAnalysis(supabase: any, threadId: string, content: string, openai: OpenAI) {
+  console.log('Performing initial analysis...');
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'Analyze the user message and determine the primary intent and any special requirements.'
+      },
+      { role: 'user', content }
+    ],
+  });
 
-interface MessageIntent {
-  type: 'analysis' | 'search' | 'conversation';
-  fileReference?: boolean;
-  taggedRoleId?: string;
+  const analysis = completion.choices[0].message.content;
+  
+  await supabase
+    .from('conversation_states')
+    .update({
+      current_state: 'role_selection',
+      metadata: { analysis, original_message: content }
+    })
+    .eq('thread_id', threadId);
+
+  return analysis;
 }
 
-function detectIntent(content: string, taggedRoleId?: string): MessageIntent {
-  // Check for explicit role tagging first
-  if (taggedRoleId) {
-    return { type: 'conversation', taggedRoleId };
-  }
+async function selectResponders(supabase: any, threadId: string, analysis: string, openai: OpenAI) {
+  console.log('Selecting responders based on analysis...');
+  
+  const { data: availableRoles } = await supabase
+    .from('thread_roles')
+    .select('role_id, roles(*)') 
+    .eq('thread_id', threadId);
 
-  // Check for file analysis intent
-  if (ANALYSIS_INTENT.test(content) && FILE_REFERENCE.test(content)) {
-    return { type: 'analysis', fileReference: true };
-  }
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: `Select the most appropriate roles to handle this conversation from: ${
+          availableRoles.map(r => `${r.roles.name} (${r.roles.tag})`).join(', ')
+        }`
+      },
+      { role: 'user', content: analysis }
+    ],
+  });
 
-  // Check for search intent
-  if (SEARCH_INTENT.test(content)) {
-    return { type: 'search' };
-  }
+  const selectedRoles = availableRoles
+    .filter(role => completion.choices[0].message.content.includes(role.roles.tag))
+    .map(role => role.role_id);
 
-  // Default to conversation
-  return { type: 'conversation' };
+  await supabase
+    .from('conversation_states')
+    .update({
+      current_state: 'response_generation',
+      active_roles: selectedRoles
+    })
+    .eq('thread_id', threadId);
+
+  return selectedRoles;
 }
 
 serve(async (req) => {
@@ -52,179 +83,136 @@ serve(async (req) => {
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Received request:', { threadId, content, taggedRoleId });
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Detect message intent
-    const intent = detectIntent(content, taggedRoleId);
-    console.log('Detected intent:', intent);
+    // Initialize or get conversation state
+    const { data: state } = await supabase
+      .from('conversation_states')
+      .select('*')
+      .eq('thread_id', threadId)
+      .maybeSingle();
 
-    // Save user message with intent metadata
+    if (!state) {
+      await supabase
+        .from('conversation_states')
+        .insert({
+          thread_id: threadId,
+          current_state: 'initial_analysis'
+        });
+    }
+
+    // Save user message
     const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
-        metadata: {
-          intent: intent.type,
-          fileReference: intent.fileReference || false
-        }
       })
       .select()
       .single();
 
-    if (messageError) {
-      console.error('Error saving user message:', messageError);
-      throw messageError;
+    if (messageError) throw messageError;
+
+    // Handle conversation based on state
+    let analysis;
+    let selectedRoles;
+
+    if (!taggedRoleId) {
+      // Perform initial analysis
+      analysis = await handleInitialAnalysis(supabase, threadId, content, openai);
+      
+      // Select appropriate responders
+      selectedRoles = await selectResponders(supabase, threadId, analysis, openai);
+    } else {
+      selectedRoles = [taggedRoleId];
     }
 
-    // Get conversation chain based on intent
-    const { data: chain, error: chainError } = await supabase
-      .rpc('get_conversation_chain', {
-        p_thread_id: threadId,
-        p_tagged_role_id: intent.type === 'analysis' ? 
-          // Find analyst role
-          (await supabase
-            .from('thread_roles')
-            .select('role_id')
-            .eq('thread_id', threadId)
-            .eq('roles.special_capabilities', '{doc_analysis}')
-            .single()
-          ).data?.role_id :
-          intent.type === 'search' ?
-          // Find researcher role
-          (await supabase
-            .from('thread_roles')
-            .select('role_id')
-            .eq('thread_id', threadId)
-            .eq('roles.special_capabilities', '{web_search}')
-            .single()
-          ).data?.role_id :
-          taggedRoleId
-      });
-
-    if (chainError) {
-      console.error('Error getting conversation chain:', chainError);
-      throw chainError;
-    }
-
-    console.log('Conversation chain:', chain);
-
-    // Process each role in the chain
-    for (const { role_id, chain_order } of chain) {
-      // Get role details
+    // Generate responses from selected roles
+    for (const roleId of selectedRoles) {
       const { data: role } = await supabase
         .from('roles')
         .select('*')
-        .eq('id', role_id)
+        .eq('id', roleId)
         .single();
 
-      if (!role) {
-        console.error('Role not found:', role_id);
-        continue;
-      }
+      if (!role) continue;
 
-      // Get relevant memories for context
+      // Get relevant memories
       const { data: memories } = await supabase
         .rpc('get_similar_memories', {
           p_embedding: content,
           p_match_threshold: 0.7,
           p_match_count: 5,
-          p_role_id: role_id
+          p_role_id: roleId
         });
 
-      // Get recent conversation history
-      const { data: history } = await supabase
-        .from('messages')
-        .select(`
-          content,
-          role:roles(name, tag, instructions),
-          created_at,
-          metadata
-        `)
-        .eq('thread_id', threadId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      // Prepare conversation context
       const memoryContext = memories?.length 
         ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
         : '';
 
-      // Add intent-specific instructions
-      const intentInstructions = intent.type === 'analysis' 
-        ? "\nThe user wants you to analyze a file or document. Look for file references in their message."
-        : intent.type === 'search'
-        ? "\nThe user wants you to search for information. Consider using web search capabilities if available."
-        : "";
-
-      const conversationHistory = history?.reverse().map(msg => ({
-        role: msg.role ? 'assistant' : 'user',
-        name: msg.role?.tag || undefined,
-        content: msg.content
-      })) || [];
-
-      // Generate response using chat completion
+      // Generate response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `${role.instructions}\n\n${memoryContext}${intentInstructions}`
+            content: `${role.instructions}\n\n${memoryContext}`
           },
-          ...conversationHistory,
-          {
-            role: 'user',
-            content
-          }
+          { role: 'user', content }
         ],
       });
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save the role's response
-      const { error: responseError } = await supabase
+      // Save response
+      await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
-          role_id: role_id,
+          role_id: roleId,
           content: responseContent,
-          response_order: chain_order,
           chain_id: userMessage.id,
-          metadata: {
-            intent: intent.type,
-            fileReference: intent.fileReference || false
-          }
         });
 
-      if (responseError) {
-        console.error('Error saving response:', responseError);
-        throw responseError;
-      }
-
-      // Store response in role's memory
-      const { error: memoryError } = await supabase
+      // Store in role's memory
+      await supabase
         .from('role_memories')
         .insert({
-          role_id: role_id,
+          role_id: roleId,
           content: responseContent,
           context_type: 'conversation',
           metadata: {
             thread_id: threadId,
             user_message: content,
             timestamp: new Date().getTime(),
-            chain_order: chain_order,
-            intent: intent.type
           }
         });
 
-      if (memoryError) {
-        console.error('Error storing memory:', memoryError);
-      }
+      // Record interaction
+      await supabase
+        .from('role_interactions')
+        .insert({
+          thread_id: threadId,
+          initiator_role_id: roleId,
+          responder_role_id: taggedRoleId || roleId,
+          interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
+        });
     }
+
+    // Update state to completion
+    await supabase
+      .from('conversation_states')
+      .update({
+        current_state: 'completion',
+        metadata: {
+          last_message_id: userMessage.id,
+          completion_time: new Date().toISOString()
+        }
+      })
+      .eq('thread_id', threadId);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
