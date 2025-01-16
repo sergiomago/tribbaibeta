@@ -638,6 +638,13 @@ export type Database = {
             }
             Returns: unknown
           }
+      calculate_text_similarity: {
+        Args: {
+          text1: string
+          text2: string
+        }
+        Returns: number
+      }
       can_create_message: {
         Args: {
           thread_id: string
@@ -655,6 +662,10 @@ export type Database = {
           user_id: string
         }
         Returns: boolean
+      }
+      consolidate_role_memories: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       count_user_roles: {
         Args: {

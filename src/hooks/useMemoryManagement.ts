@@ -6,6 +6,7 @@ export function useMemoryManagement(roleId: string | null) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Get all memories including consolidated ones
   const { data: memories, isLoading: isLoadingMemories } = useQuery({
     queryKey: ["role-memories", roleId],
     queryFn: async () => {
@@ -23,6 +24,7 @@ export function useMemoryManagement(roleId: string | null) {
     enabled: !!roleId,
   });
 
+  // Store new memory with enhanced metadata
   const storeMemory = useMutation({
     mutationFn: async ({ content, contextType, metadata }: { 
       content: string; 
@@ -37,7 +39,13 @@ export function useMemoryManagement(roleId: string | null) {
           role_id: roleId,
           content,
           context_type: contextType,
-          metadata,
+          metadata: {
+            ...metadata,
+            timestamp: Date.now(),
+            consolidated: false,
+            memory_type: 'conversation',
+            importance_score: 1.0,
+          },
           relevance_score: 1.0,
           confidence_score: 1.0,
         });
@@ -60,6 +68,7 @@ export function useMemoryManagement(roleId: string | null) {
     },
   });
 
+  // Reinforce memory and update its importance
   const reinforceMemory = useMutation({
     mutationFn: async (memoryId: string) => {
       const { error } = await supabase
@@ -67,6 +76,7 @@ export function useMemoryManagement(roleId: string | null) {
         .update({
           reinforcement_count: `(COALESCE(reinforcement_count, 0) + 1)`,
           last_reinforced: new Date().toISOString(),
+          importance_score: `GREATEST(importance_score * 1.1, 1.0)`,
         })
         .eq("id", memoryId);
       
@@ -80,10 +90,28 @@ export function useMemoryManagement(roleId: string | null) {
     },
   });
 
+  // Get consolidated memories for a specific context
+  const getConsolidatedMemories = async (contextType: string) => {
+    if (!roleId) return [];
+    
+    const { data, error } = await supabase
+      .from("role_memories")
+      .select("*")
+      .eq("role_id", roleId)
+      .eq("context_type", "consolidated")
+      .eq("memory_type", contextType)
+      .order("importance_score", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+    return data;
+  };
+
   return {
     memories,
     isLoadingMemories,
     storeMemory,
     reinforceMemory,
+    getConsolidatedMemories,
   };
 }
