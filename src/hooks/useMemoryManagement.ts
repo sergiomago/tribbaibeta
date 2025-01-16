@@ -65,7 +65,7 @@ export function useMemoryManagement(roleId: string | null) {
       const { error } = await supabase
         .from("role_memories")
         .update({
-          reinforcement_count: supabase.sql`reinforcement_count + 1`,
+          reinforcement_count: `(COALESCE(reinforcement_count, 0) + 1)`,
           last_reinforced: new Date().toISOString(),
         })
         .eq("id", memoryId);
