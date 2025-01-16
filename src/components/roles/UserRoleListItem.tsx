@@ -13,16 +13,34 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useThreadMutations } from "@/hooks/useThreadMutations";
 
 type UserRoleListItemProps = {
   role: Tables<"roles">;
   onDelete: (id: string) => void;
-  onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
 };
 
-export const UserRoleListItem = ({ role, onDelete, onStartChat, onEdit }: UserRoleListItemProps) => {
+export const UserRoleListItem = ({ role, onDelete, onEdit }: UserRoleListItemProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { createThread } = useThreadMutations();
+
+  const handleStartChat = async () => {
+    if (!user) return;
+    
+    createThread.mutate(
+      { userId: user.id, roleId: role.id },
+      {
+        onSuccess: (thread) => {
+          navigate(`/chats?thread=${thread.id}`);
+        },
+      }
+    );
+  };
 
   return (
     <>
@@ -60,7 +78,8 @@ export const UserRoleListItem = ({ role, onDelete, onStartChat, onEdit }: UserRo
           </Button>
           <Button 
             size="sm"
-            onClick={() => onStartChat(role.id)}
+            onClick={handleStartChat}
+            disabled={createThread.isPending}
             className="bg-gradient-primary text-primary-foreground hover:opacity-90"
           >
             <MessageCircle className="h-3 w-3" />

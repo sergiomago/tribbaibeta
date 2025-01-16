@@ -88,7 +88,7 @@ export function ThreadPanel({
       return;
     }
 
-    createThread.mutate(user.id, {
+    createThread.mutate({ userId: user.id }, {
       onSuccess: (newThread) => {
         onThreadCreated?.(newThread.id);
         onThreadSelect(newThread.id);
