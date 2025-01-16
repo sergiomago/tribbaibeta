@@ -121,10 +121,7 @@ serve(async (req) => {
     let selectedRoles;
 
     if (!taggedRoleId) {
-      // Perform initial analysis
       analysis = await handleInitialAnalysis(supabase, threadId, content, openai);
-      
-      // Select appropriate responders
       selectedRoles = await selectResponders(supabase, threadId, analysis, openai);
     } else {
       selectedRoles = [taggedRoleId];
@@ -140,7 +137,7 @@ serve(async (req) => {
 
       if (!role) continue;
 
-      // Get relevant memories
+      // Get relevant memories with context
       const { data: memories } = await supabase
         .rpc('get_similar_memories', {
           p_embedding: content,
@@ -168,30 +165,34 @@ serve(async (req) => {
       const responseContent = completion.choices[0].message.content;
 
       // Save response
-      await supabase
+      const { data: savedMessage } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
           role_id: roleId,
           content: responseContent,
           chain_id: userMessage.id,
-        });
+        })
+        .select()
+        .single();
 
-      // Store in role's memory
+      // Store in role's memory with enhanced context
       await supabase
         .from('role_memories')
         .insert({
           role_id: roleId,
           content: responseContent,
           context_type: 'conversation',
+          context_relevance: 1.0,
           metadata: {
             thread_id: threadId,
             user_message: content,
+            message_id: savedMessage.id,
             timestamp: new Date().getTime(),
           }
         });
 
-      // Record interaction
+      // Record interaction with context
       await supabase
         .from('role_interactions')
         .insert({
@@ -199,7 +200,26 @@ serve(async (req) => {
           initiator_role_id: roleId,
           responder_role_id: taggedRoleId || roleId,
           interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
+          metadata: {
+            context_type: 'conversation',
+            analysis: analysis || null,
+            memory_count: memories?.length || 0
+          }
         });
+
+      // Update memory relevance based on interaction
+      if (memories?.length) {
+        for (const memory of memories) {
+          await supabase
+            .from('role_memories')
+            .update({ 
+              context_relevance: memory.similarity,
+              access_count: supabase.sql`access_count + 1`,
+              last_accessed: new Date().toISOString()
+            })
+            .eq('id', memory.id);
+        }
+      }
     }
 
     // Update state to completion
@@ -209,7 +229,8 @@ serve(async (req) => {
         current_state: 'completion',
         metadata: {
           last_message_id: userMessage.id,
-          completion_time: new Date().toISOString()
+          completion_time: new Date().toISOString(),
+          memory_enhanced: true
         }
       })
       .eq('thread_id', threadId);

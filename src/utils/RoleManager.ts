@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createLlongtermManager } from "./LlongtermManager";
+import { createMemoryContextManager } from "./memory/contextManager";
 
 // Special role capabilities
 export const SPECIAL_CAPABILITIES = {
@@ -11,6 +12,7 @@ export type SpecialCapability = typeof SPECIAL_CAPABILITIES[keyof typeof SPECIAL
 
 export class RoleManager {
   private threadId: string;
+  private memoryContextManager: ReturnType<typeof createMemoryContextManager> | null = null;
 
   constructor(threadId: string) {
     this.threadId = threadId;
@@ -80,14 +82,29 @@ export class RoleManager {
     return data?.special_capabilities || [];
   }
 
-  async storeRoleMemory(roleId: string, content: string) {
-    const llongtermManager = createLlongtermManager(roleId, this.threadId);
-    await llongtermManager.storeMemory(content);
+  private getMemoryContextManager(roleId: string) {
+    if (!this.memoryContextManager) {
+      this.memoryContextManager = createMemoryContextManager(roleId);
+    }
+    return this.memoryContextManager;
+  }
+
+  async storeRoleMemory(roleId: string, content: string, contextType: string = 'conversation', metadata: any = {}) {
+    const memoryManager = this.getMemoryContextManager(roleId);
+    await memoryManager.storeMemoryWithContext(content, contextType, {
+      ...metadata,
+      thread_id: this.threadId
+    });
   }
 
   async getRoleMemories(roleId: string, content: string) {
-    const llongtermManager = createLlongtermManager(roleId, this.threadId);
-    return await llongtermManager.getMemories(content);
+    const memoryManager = this.getMemoryContextManager(roleId);
+    return await memoryManager.retrieveRelevantMemories(content);
+  }
+
+  async updateMemoryRelevance(roleId: string, memoryId: string, relevanceScore: number) {
+    const memoryManager = this.getMemoryContextManager(roleId);
+    await memoryManager.updateMemoryRelevance(memoryId, relevanceScore);
   }
 }
 
