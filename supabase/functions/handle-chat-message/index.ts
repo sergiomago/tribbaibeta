@@ -8,6 +8,37 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Intent detection patterns
+const ANALYSIS_INTENT = /analyze|examine|review|check|look at|what('s| is) in/i;
+const SEARCH_INTENT = /search|find|look up|tell me about|what is|who is|where is|when|how to/i;
+const FILE_REFERENCE = /this (file|document|pdf|image|photo)/i;
+
+interface MessageIntent {
+  type: 'analysis' | 'search' | 'conversation';
+  fileReference?: boolean;
+  taggedRoleId?: string;
+}
+
+function detectIntent(content: string, taggedRoleId?: string): MessageIntent {
+  // Check for explicit role tagging first
+  if (taggedRoleId) {
+    return { type: 'conversation', taggedRoleId };
+  }
+
+  // Check for file analysis intent
+  if (ANALYSIS_INTENT.test(content) && FILE_REFERENCE.test(content)) {
+    return { type: 'analysis', fileReference: true };
+  }
+
+  // Check for search intent
+  if (SEARCH_INTENT.test(content)) {
+    return { type: 'search' };
+  }
+
+  // Default to conversation
+  return { type: 'conversation' };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -26,13 +57,21 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Save user message
+    // Detect message intent
+    const intent = detectIntent(content, taggedRoleId);
+    console.log('Detected intent:', intent);
+
+    // Save user message with intent metadata
     const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
-        tagged_role_id: taggedRoleId || null
+        tagged_role_id: taggedRoleId || null,
+        metadata: {
+          intent: intent.type,
+          fileReference: intent.fileReference || false
+        }
       })
       .select()
       .single();
@@ -42,11 +81,29 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get conversation chain (roles that should respond)
+    // Get conversation chain based on intent
     const { data: chain, error: chainError } = await supabase
       .rpc('get_conversation_chain', {
         p_thread_id: threadId,
-        p_tagged_role_id: taggedRoleId
+        p_tagged_role_id: intent.type === 'analysis' ? 
+          // Find analyst role
+          (await supabase
+            .from('thread_roles')
+            .select('role_id')
+            .eq('thread_id', threadId)
+            .eq('roles.special_capabilities', '{doc_analysis}')
+            .single()
+          ).data?.role_id :
+          intent.type === 'search' ?
+          // Find researcher role
+          (await supabase
+            .from('thread_roles')
+            .select('role_id')
+            .eq('thread_id', threadId)
+            .eq('roles.special_capabilities', '{web_search}')
+            .single()
+          ).data?.role_id :
+          taggedRoleId
       });
 
     if (chainError) {
@@ -85,7 +142,8 @@ serve(async (req) => {
         .select(`
           content,
           role:roles(name, tag, instructions),
-          created_at
+          created_at,
+          metadata
         `)
         .eq('thread_id', threadId)
         .order('created_at', { ascending: false })
@@ -95,6 +153,13 @@ serve(async (req) => {
       const memoryContext = memories?.length 
         ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
         : '';
+
+      // Add intent-specific instructions
+      const intentInstructions = intent.type === 'analysis' 
+        ? "\nThe user wants you to analyze a file or document. Look for file references in their message."
+        : intent.type === 'search'
+        ? "\nThe user wants you to search for information. Consider using web search capabilities if available."
+        : "";
 
       const conversationHistory = history?.reverse().map(msg => ({
         role: msg.role ? 'assistant' : 'user',
@@ -108,7 +173,7 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `${role.instructions}\n\n${memoryContext}`
+            content: `${role.instructions}\n\n${memoryContext}${intentInstructions}`
           },
           ...conversationHistory,
           {
@@ -128,7 +193,11 @@ serve(async (req) => {
           role_id: role_id,
           content: responseContent,
           response_order: chain_order,
-          chain_id: userMessage.id
+          chain_id: userMessage.id,
+          metadata: {
+            intent: intent.type,
+            fileReference: intent.fileReference || false
+          }
         });
 
       if (responseError) {
@@ -147,7 +216,8 @@ serve(async (req) => {
             thread_id: threadId,
             user_message: content,
             timestamp: new Date().getTime(),
-            chain_order: chain_order
+            chain_order: chain_order,
+            intent: intent.type
           }
         });
 
