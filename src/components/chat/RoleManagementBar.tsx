@@ -7,6 +7,9 @@ import { RoleSelectionDialog } from "./RoleSelectionDialog";
 import { useRoleMutations } from "@/hooks/useRoleMutations";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Badge } from "@/components/ui/badge";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface RoleManagementBarProps {
   threadId: string | null;
@@ -42,7 +45,8 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         .select(`
           role:roles (*)
         `)
-        .eq("thread_id", threadId);
+        .eq("thread_id", threadId)
+        .orderBy("created_at", { ascending: true });
       if (error) throw error;
       return data.map(tr => tr.role);
     },
@@ -73,7 +77,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   };
 
   return (
-    <div className="border-b p-2 sm:p-4 flex-shrink-0">
+    <div className="border-b p-2 sm:p-4 flex-shrink-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center justify-between mb-2 gap-2">
         <Input
           className="text-base sm:text-lg font-semibold bg-transparent border-none hover:bg-gray-100 dark:hover:bg-gray-800 px-2 min-w-0 flex-1"
@@ -83,20 +87,33 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
           onKeyDown={handleTitleKeyDown}
           placeholder="Chat title..."
         />
-        <RoleSelectionDialog
-          threadId={threadId}
-          onRoleSelected={(roleId) => {
-            if (threadId) {
-              addRoleToThread.mutate({ threadId, roleId });
-            }
-          }}
-          onRoleRemoved={(roleId) => {
-            if (threadId) {
-              removeRoleFromThread.mutate({ threadId, roleId });
-            }
-          }}
-          disabled={!threadId}
-        />
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger>
+              <Badge variant="outline" className="hidden sm:flex">
+                <Info className="h-3 w-3 mr-1" />
+                {threadRoles?.length || 0} roles
+              </Badge>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p className="max-w-xs">Number of roles in this conversation</p>
+            </TooltipContent>
+          </Tooltip>
+          <RoleSelectionDialog
+            threadId={threadId}
+            onRoleSelected={(roleId) => {
+              if (threadId) {
+                addRoleToThread.mutate({ threadId, roleId });
+              }
+            }}
+            onRoleRemoved={(roleId) => {
+              if (threadId) {
+                removeRoleFromThread.mutate({ threadId, roleId });
+              }
+            }}
+            disabled={!threadId}
+          />
+        </div>
       </div>
       <div className={`flex gap-1.5 sm:gap-2 flex-wrap ${isMobile ? 'max-h-24 overflow-y-auto' : ''}`}>
         {threadRoles?.map((role) => (

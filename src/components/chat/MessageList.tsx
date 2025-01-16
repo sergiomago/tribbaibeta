@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -13,9 +14,15 @@ interface Message {
   role_id: string | null;
   created_at: string;
   response_order: number | null;
+  chain_id: string | null;
+  metadata: {
+    intent?: 'analysis' | 'search' | 'conversation';
+    fileReference?: boolean;
+  } | null;
   role?: {
     name: string;
     tag: string;
+    special_capabilities?: string[];
   } | null;
 }
 
@@ -53,6 +60,22 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
   const messageCount = messages?.length || 0;
   const maxMessages = hasSubscription ? Infinity : (freeTierLimits?.max_messages_per_thread || 10);
 
+  const getMessageClasses = (message: Message) => {
+    const baseClasses = "rounded-lg transition-all duration-300";
+    const alignmentClasses = message.role_id ? "mr-auto" : "ml-auto flex-row-reverse";
+    const highlightClasses = highlightedMessageId === message.id 
+      ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
+      : "";
+    
+    return cn(
+      baseClasses,
+      alignmentClasses,
+      highlightClasses,
+      message.metadata?.intent === 'analysis' && "border-l-2 border-blue-500",
+      message.metadata?.intent === 'search' && "border-l-2 border-green-500"
+    );
+  };
+
   return (
     <ScrollArea className="h-full">
       <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -80,15 +103,7 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
             <div
               key={message.id}
               id={message.id}
-              className={`flex gap-2 sm:gap-3 max-w-[95%] sm:max-w-[80%] transition-all duration-300 rounded-lg ${
-                message.role_id 
-                  ? "mr-auto" 
-                  : "ml-auto flex-row-reverse"
-              } ${
-                highlightedMessageId === message.id 
-                  ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
-                  : ""
-              }`}
+              className={`flex gap-2 sm:gap-3 max-w-[95%] sm:max-w-[80%] ${getMessageClasses(message)}`}
             >
               {message.role && (
                 <Avatar className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
