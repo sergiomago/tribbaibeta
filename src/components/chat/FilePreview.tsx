@@ -2,6 +2,7 @@ import { FileText, Image as ImageIcon, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { Json } from "@/integrations/supabase/types";
 
 interface FilePreviewProps {
   fileMetadata: {
@@ -26,7 +27,10 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const { data: analysisResult, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
-      if (!fileMetadata.file_id) return null;
+      if (!fileMetadata.file_id) return {
+        analysis_result: null,
+        analysis_status: null
+      };
       
       const { data, error } = await supabase
         .from('analyzed_files')
@@ -35,7 +39,17 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         .maybeSingle();
         
       if (error) throw error;
-      return data;
+      
+      if (!data) return {
+        analysis_result: null,
+        analysis_status: null
+      };
+
+      // Transform the data to match our expected type
+      return {
+        analysis_result: data.analysis_result as { content: string } | null,
+        analysis_status: data.analysis_status
+      };
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
@@ -110,7 +124,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       {analysisResult?.analysis_result && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{(analysisResult.analysis_result as { content: string }).content}</p>
+          <p>{analysisResult.analysis_result.content}</p>
         </div>
       )}
     </div>
