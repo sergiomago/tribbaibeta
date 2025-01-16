@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { Session, User } from "@supabase/supabase-js";
+import { Session, User, AuthError, AuthApiError } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 interface AuthContextType {
@@ -53,6 +53,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
+  const getErrorMessage = (error: AuthError) => {
+    if (error instanceof AuthApiError) {
+      switch (error.status) {
+        case 400:
+          if (error.message.includes('Invalid login credentials')) {
+            return 'Invalid email or password. Please check your credentials and try again.';
+          }
+          if (error.message.includes('Email not confirmed')) {
+            return 'Please verify your email address before signing in.';
+          }
+          break;
+        case 422:
+          return 'Invalid email format. Please enter a valid email address.';
+        case 429:
+          return 'Too many login attempts. Please try again later.';
+      }
+    }
+    return error.message;
+  };
+
   const handleAuthError = (error: any) => {
     console.error("Auth error:", error);
     
@@ -73,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Handle other auth errors
     toast({
       title: "Authentication error",
-      description: error.message,
+      description: getErrorMessage(error),
       variant: "destructive",
     });
   };
