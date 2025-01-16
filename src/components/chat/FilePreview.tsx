@@ -1,0 +1,75 @@
+import { FileText, Image as ImageIcon, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+
+interface FilePreviewProps {
+  fileMetadata: {
+    file_path: string;
+    file_name: string;
+    content_type: string;
+    size: number;
+  };
+}
+
+export function FilePreview({ fileMetadata }: FilePreviewProps) {
+  const isImage = fileMetadata.content_type.startsWith('image/');
+  
+  const handleDownload = async () => {
+    try {
+      const { data, error } = await supabase.storage
+        .from('analysis_files')
+        .download(fileMetadata.file_path);
+        
+      if (error) throw error;
+      
+      // Create a download link
+      const url = URL.createObjectURL(data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileMetadata.file_name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+    }
+  };
+
+  if (isImage) {
+    return (
+      <div className="relative group max-w-md">
+        <img
+          src={`${supabase.storage.from('analysis_files').getPublicUrl(fileMetadata.file_path).data.publicUrl}`}
+          alt={fileMetadata.file_name}
+          className="rounded-lg max-w-full h-auto"
+        />
+        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleDownload}
+            className="bg-background/80 backdrop-blur-sm"
+          >
+            <Download className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/50 max-w-md">
+      <FileText className="h-8 w-8 text-muted-foreground" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{fileMetadata.file_name}</p>
+        <p className="text-xs text-muted-foreground">
+          {(fileMetadata.size / 1024 / 1024).toFixed(2)} MB
+        </p>
+      </div>
+      <Button variant="ghost" size="sm" onClick={handleDownload}>
+        <Download className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}

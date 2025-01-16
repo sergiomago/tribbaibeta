@@ -101,7 +101,7 @@ serve(async (req) => {
       .insert({
         thread_id: threadId,
         content: `File uploaded: ${fileName}`,
-        message_type: 'file',
+        message_type: file.type.startsWith('image/') ? 'image' : 'file',
         metadata: {
           file_id: fileRecord.id,
           file_name: fileName,

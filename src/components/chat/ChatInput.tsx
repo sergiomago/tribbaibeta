@@ -132,6 +132,7 @@ export function ChatInput({
 
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('threadId', threadId);
 
       const { error } = await supabase.functions.invoke("upload-file", {
         body: formData,
@@ -143,6 +144,8 @@ export function ChatInput({
         title: "File uploaded",
         description: "Your file has been uploaded successfully.",
       });
+      
+      onMessageSent?.();
     } catch (error) {
       console.error("Error uploading file:", error);
       toast({
@@ -168,6 +171,7 @@ export function ChatInput({
 
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('threadId', threadId);
 
       const { error } = await supabase.functions.invoke("upload-file", {
         body: formData,
@@ -179,6 +183,8 @@ export function ChatInput({
         title: "Image uploaded",
         description: "Your image has been uploaded successfully.",
       });
+      
+      onMessageSent?.();
     } catch (error) {
       console.error("Error uploading image:", error);
       toast({
