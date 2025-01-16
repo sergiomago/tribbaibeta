@@ -300,31 +300,40 @@ export type Database = {
       }
       role_interactions: {
         Row: {
+          conversation_depth: number | null
           created_at: string
           id: string
           initiator_role_id: string
+          interaction_context: Json | null
           interaction_type: string
           metadata: Json | null
+          parent_interaction_id: string | null
           relevance_score: number | null
           responder_role_id: string
           thread_id: string
         }
         Insert: {
+          conversation_depth?: number | null
           created_at?: string
           id?: string
           initiator_role_id: string
+          interaction_context?: Json | null
           interaction_type: string
           metadata?: Json | null
+          parent_interaction_id?: string | null
           relevance_score?: number | null
           responder_role_id: string
           thread_id: string
         }
         Update: {
+          conversation_depth?: number | null
           created_at?: string
           id?: string
           initiator_role_id?: string
+          interaction_context?: Json | null
           interaction_type?: string
           metadata?: Json | null
+          parent_interaction_id?: string | null
           relevance_score?: number | null
           responder_role_id?: string
           thread_id?: string
@@ -335,6 +344,13 @@ export type Database = {
             columns: ["initiator_role_id"]
             isOneToOne: false
             referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_interactions_parent_interaction_id_fkey"
+            columns: ["parent_interaction_id"]
+            isOneToOne: false
+            referencedRelation: "role_interactions"
             referencedColumns: ["id"]
           },
           {
@@ -643,6 +659,13 @@ export type Database = {
           role_id: string
           chain_order: number
         }[]
+      }
+      get_conversation_depth: {
+        Args: {
+          p_thread_id: string
+          p_role_id: string
+        }
+        Returns: number
       }
       get_next_responding_role: {
         Args: {
