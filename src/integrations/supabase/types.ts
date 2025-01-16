@@ -124,6 +124,8 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          message_type: Database["public"]["Enums"]["message_type"] | null
+          metadata: Json | null
           reply_to_message_id: string | null
           response_order: number | null
           role_id: string | null
@@ -137,6 +139,8 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+          metadata?: Json | null
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
@@ -150,6 +154,8 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+          metadata?: Json | null
           reply_to_message_id?: string | null
           response_order?: number | null
           role_id?: string | null
@@ -716,6 +722,7 @@ export type Database = {
         | "average"
         | "poor"
         | "needs_improvement"
+      message_type: "text" | "file" | "analysis"
     }
     CompositeTypes: {
       [_ in never]: never
