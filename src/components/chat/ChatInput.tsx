@@ -31,7 +31,7 @@ export function ChatInput({
   const { toast } = useToast();
   const { hasSubscription } = useSubscription();
 
-  // Query to check if thread has roles
+  // Query to check if thread has roles with updated configuration
   const { data: threadRoles } = useQuery({
     queryKey: ["thread-roles", threadId],
     queryFn: async () => {
@@ -46,6 +46,9 @@ export function ChatInput({
       return data;
     },
     enabled: !!threadId,
+    staleTime: 0, // Don't use stale data
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: true // Refetch when window regains focus
   });
 
   // Check if special roles are present
