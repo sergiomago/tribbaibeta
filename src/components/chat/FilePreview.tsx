@@ -27,10 +27,12 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const { data: analysisResult, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
-      if (!fileMetadata.file_id) return {
-        analysis_result: null,
-        analysis_status: null
-      };
+      if (!fileMetadata.file_id) {
+        return {
+          analysis_result: null,
+          analysis_status: null
+        };
+      }
       
       const { data, error } = await supabase
         .from('analyzed_files')
