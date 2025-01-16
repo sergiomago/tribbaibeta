@@ -9,6 +9,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { Json } from "@/integrations/supabase/types";
 
+interface MessageMetadata {
+  intent?: 'analysis' | 'search' | 'conversation';
+  fileReference?: boolean;
+}
+
 interface Message {
   id: string;
   content: string;
@@ -65,9 +70,10 @@ export function MessageList({ messages, isLoading, messagesEndRef, threadId }: M
       ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
       : "";
     
-    const intentClass = message.metadata?.intent === 'analysis' 
+    const metadata = message.metadata as MessageMetadata | null;
+    const intentClass = metadata?.intent === 'analysis' 
       ? "border-l-2 border-blue-500" 
-      : message.metadata?.intent === 'search' 
+      : metadata?.intent === 'search' 
         ? "border-l-2 border-green-500" 
         : "";
     
