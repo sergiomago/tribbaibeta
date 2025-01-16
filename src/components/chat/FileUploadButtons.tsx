@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Upload, Image } from "lucide-react";
+import { Upload, Image, Loader2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 
@@ -61,10 +61,16 @@ export function FileUploadButtons({ threadId, onFileUpload, onImageUpload, isUpl
         className="shrink-0"
         disabled={isUploading}
       >
-        <Upload className="h-4 w-4" />
-        {!isMobile && <span className="ml-2">
-          {isUploading ? "Uploading..." : "Upload File"}
-        </span>}
+        {isUploading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Upload className="h-4 w-4" />
+        )}
+        {!isMobile && (
+          <span className="ml-2">
+            {isUploading ? "Uploading..." : "Upload File"}
+          </span>
+        )}
       </Button>
       <Button 
         variant="outline"
@@ -73,10 +79,16 @@ export function FileUploadButtons({ threadId, onFileUpload, onImageUpload, isUpl
         className="shrink-0"
         disabled={isUploading}
       >
-        <Image className="h-4 w-4" />
-        {!isMobile && <span className="ml-2">
-          {isUploading ? "Uploading..." : "Upload Image"}
-        </span>}
+        {isUploading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Image className="h-4 w-4" />
+        )}
+        {!isMobile && (
+          <span className="ml-2">
+            {isUploading ? "Uploading..." : "Upload Image"}
+          </span>
+        )}
       </Button>
     </>
   );

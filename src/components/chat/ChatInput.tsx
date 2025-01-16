@@ -7,7 +7,7 @@ import { UpgradeSubscriptionCard } from "@/components/subscription/UpgradeSubscr
 import { FileUploadButtons } from "./FileUploadButtons";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Send } from "lucide-react";
+import { Send, Loader2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface ChatInputProps {
@@ -231,6 +231,12 @@ export function ChatInput({
               </span>
             )}
           </div>
+          {isUploading && (
+            <div className="text-xs text-muted-foreground text-center">
+              <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
+              Uploading file...
+            </div>
+          )}
           <div className="flex gap-2">
             <FileUploadButtons
               threadId={threadId}
@@ -253,7 +259,10 @@ export function ChatInput({
               className="shrink-0"
             >
               {isSending ? (
-                "Sending..."
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  {!isMobile && <span className="ml-2">Sending...</span>}
+                </>
               ) : (
                 <>
                   <Send className="h-4 w-4" />
