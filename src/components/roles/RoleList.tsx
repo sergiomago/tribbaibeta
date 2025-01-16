@@ -32,7 +32,6 @@ export function RoleList({ roles, isGridView = true, onDelete, onEdit }: RoleLis
           key={role.id}
           role={role}
           onDelete={onDelete}
-          onStartChat={() => {}} // We'll remove this prop in UserRoleListItem later
           onEdit={onEdit}
         />
       ))}

@@ -58,10 +58,6 @@ export function RoleManagement() {
     }
   };
 
-  const handleStartChat = (roleId: string) => {
-    navigate(`/chats?role=${roleId}`);
-  };
-
   const handleEdit = (roleId: string) => {
     navigate(`/roles/${roleId}/edit`);
   };
@@ -86,7 +82,6 @@ export function RoleManagement() {
           roles={roles || []}
           isGridView={isGridView}
           onDelete={handleDelete}
-          onStartChat={handleStartChat}
           onEdit={handleEdit}
         />
       </div>
