@@ -2,7 +2,6 @@ import { FileText, Image as ImageIcon, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Json } from "@/integrations/supabase/types";
 
 interface FilePreviewProps {
   fileMetadata: {
@@ -17,8 +16,9 @@ interface FilePreviewProps {
 interface AnalysisResult {
   analysis_result: {
     content: string;
+    analyzed_at?: string;
   } | null;
-  analysis_status: string | null;
+  analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
@@ -40,19 +40,14 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         
       if (error) throw error;
       
-      if (!data) return {
-        analysis_result: null,
-        analysis_status: null
-      };
-
       return {
-        analysis_result: data.analysis_result as { content: string } | null,
-        analysis_status: data.analysis_status
+        analysis_result: data?.analysis_result as { content: string; analyzed_at?: string } | null,
+        analysis_status: data?.analysis_status as AnalysisResult['analysis_status']
       };
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
-      data?.analysis_status === 'processing' ? 2000 : false,
+      data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
   });
   
   const handleDownload = async () => {
@@ -113,17 +108,28 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         </Button>
       </div>
       
-      {isAnalyzing && (
+      {(isAnalyzing || analysisResult?.analysis_status === 'processing') && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Analyzing file...
         </div>
       )}
       
-      {analysisResult?.analysis_result && (
+      {analysisResult?.analysis_status === 'failed' && (
+        <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
+          Analysis failed. Please try again.
+        </div>
+      )}
+      
+      {analysisResult?.analysis_result && analysisResult.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
           <p>{analysisResult.analysis_result.content}</p>
+          {analysisResult.analysis_result.analyzed_at && (
+            <p className="text-xs mt-2 text-muted-foreground">
+              Analyzed at: {new Date(analysisResult.analysis_result.analyzed_at).toLocaleString()}
+            </p>
+          )}
         </div>
       )}
     </div>
