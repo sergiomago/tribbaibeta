@@ -13,11 +13,11 @@ export default function Login() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN") {
-        navigate("/");
+        navigate("/chats");
         toast({
           title: "Welcome back!",
           description: "Successfully signed in.",
-          duration: 3000, // Auto-dismiss after 3 seconds
+          duration: 3000,
         });
       }
     });
@@ -40,9 +40,9 @@ export default function Login() {
               variables: {
                 default: {
                   colors: {
-                    brand: '#7234f3', // Primary purple from our theme
-                    brandAccent: '#594edf', // Secondary purple from our theme
-                    inputText: 'white', // Make text visible in dark mode
+                    brand: '#7234f3',
+                    brandAccent: '#594edf',
+                    inputText: 'white',
                     inputBackground: 'transparent',
                     inputBorder: 'lightgray',
                   },

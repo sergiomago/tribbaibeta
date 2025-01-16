@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       if (error) throw error;
-      navigate("/");
+      navigate("/chats");
       toast({
         title: "Welcome back!",
         description: "Successfully signed in.",
