@@ -13,16 +13,34 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useState } from "react";
 import { BaseRoleCard } from "./BaseRoleCard";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { useThreadMutations } from "@/hooks/useThreadMutations";
 
 type UserRoleCardProps = {
   role: Tables<"roles">;
   onDelete: (id: string) => void;
-  onStartChat: (id: string) => void;
   onEdit: (id: string) => void;
 };
 
-export const UserRoleCard = ({ role, onDelete, onStartChat, onEdit }: UserRoleCardProps) => {
+export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { createThread } = useThreadMutations();
+
+  const handleStartChat = async () => {
+    if (!user) return;
+    
+    createThread.mutate(
+      { userId: user.id, roleId: role.id },
+      {
+        onSuccess: (thread) => {
+          navigate(`/chats?thread=${thread.id}`);
+        },
+      }
+    );
+  };
 
   return (
     <BaseRoleCard role={role}>
@@ -48,7 +66,8 @@ export const UserRoleCard = ({ role, onDelete, onStartChat, onEdit }: UserRoleCa
           </Button>
           <Button 
             size="sm"
-            onClick={() => onStartChat(role.id)}
+            onClick={handleStartChat}
+            disabled={createThread.isPending}
             className="flex-1 bg-gradient-primary text-primary-foreground hover:opacity-90"
           >
             <MessageCircle className="h-3 w-3 mr-2" />

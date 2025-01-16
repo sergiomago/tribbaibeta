@@ -7,8 +7,9 @@ export function useThreadMutations() {
   const queryClient = useQueryClient();
 
   const createThread = useMutation({
-    mutationFn: async (userId: string) => {
-      const { data, error } = await supabase
+    mutationFn: async ({ userId, roleId }: { userId: string, roleId?: string }) => {
+      // First create the thread
+      const { data: thread, error: threadError } = await supabase
         .from("threads")
         .insert({
           name: "New Chat",
@@ -17,8 +18,21 @@ export function useThreadMutations() {
         .select()
         .single();
 
-      if (error) throw error;
-      return data;
+      if (threadError) throw threadError;
+
+      // If a roleId was provided, associate it with the thread
+      if (roleId) {
+        const { error: roleError } = await supabase
+          .from("thread_roles")
+          .insert({
+            thread_id: thread.id,
+            role_id: roleId,
+          });
+
+        if (roleError) throw roleError;
+      }
+
+      return thread;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["threads"] });
