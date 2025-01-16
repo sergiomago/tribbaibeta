@@ -227,6 +227,7 @@ export function ChatInput({
           </div>
           <div className="flex gap-2">
             <FileUploadButtons
+              threadId={threadId}
               onFileUpload={handleFileUpload}
               onImageUpload={handleImageUpload}
               isUploading={isUploading}
