@@ -38,14 +38,15 @@ export function MessageList({
 
   const getVerificationIcon = (messageId: string) => {
     const memory = memories?.find(m => {
-      const metadata = m.metadata;
-      return typeof metadata === 'object' && metadata?.message_id === messageId;
+      const metadata = m.metadata as Record<string, any>;
+      return metadata?.message_id === messageId;
     });
     
-    if (!memory || typeof memory.metadata !== 'object') return null;
+    if (!memory?.metadata || typeof memory.metadata !== 'object') return null;
 
-    const status = memory.metadata?.verification_status;
-    const score = memory.metadata?.verification_score || 0;
+    const metadata = memory.metadata as Record<string, any>;
+    const status = metadata.verification_status;
+    const score = metadata.verification_score || 0;
 
     switch (status) {
       case 'verified':

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
+import { Message } from "@/types";
 
 export function useMessages(threadId: string | null) {
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
@@ -16,7 +17,7 @@ export function useMessages(threadId: string | null) {
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
       if (error) throw error;
-      return data;
+      return data as Message[];
     },
     enabled: !!threadId,
   });
