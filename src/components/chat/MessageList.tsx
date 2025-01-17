@@ -113,32 +113,39 @@ export function MessageList({
   return (
     <div 
       ref={messageListRef}
-      className="flex-1 overflow-y-auto p-4 space-y-6"
+      className="flex-1 overflow-y-auto p-4 space-y-8"
     >
       {messages.slice(-maxMessages).map((message, index) => (
         <div
           key={message.id}
           id={message.id}
           className={cn(
-            "flex items-start gap-4 transition-colors animate-fade-in",
-            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
+            "flex gap-4 max-w-[85%] animate-fade-in",
+            message.role?.tag === "user" 
+              ? "ml-auto" 
+              : "mr-auto"
           )}
         >
           <div
             className={cn(
-              "rounded-lg px-6 py-4 max-w-[80%] space-y-2 shadow-sm",
+              "rounded-2xl px-6 py-4 space-y-2",
               message.role?.tag === "user"
-                ? "bg-gradient-primary text-primary-foreground"
-                : "bg-muted/50 backdrop-blur-sm border border-border/50"
+                ? "bg-gradient-primary text-primary-foreground rounded-br-sm"
+                : "bg-muted/50 backdrop-blur-sm border border-border/50 rounded-bl-sm"
             )}
           >
             {message.role?.tag !== "user" && (
-              <div className="flex items-center gap-2 text-sm font-semibold">
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary/80">
                 {message.role?.name}
                 {getVerificationIcon(message.id)}
               </div>
             )}
-            <div className="text-sm whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+            <div className={cn(
+              "text-sm whitespace-pre-wrap prose prose-sm max-w-none",
+              message.role?.tag === "user" 
+                ? "prose-invert" 
+                : "dark:prose-invert"
+            )}>
               {message.content}
             </div>
           </div>
