@@ -53,8 +53,7 @@ export class MemoryIndexing {
 
       if (error) throw error;
 
-      // Simple reindexing based on recency and access count
-      const updates = memories.map(memory => ({
+      const updates = memories.map((memory: DatabaseMemory) => ({
         id: memory.id,
         importance_score: this.calculateImportanceScore(memory)
       }));

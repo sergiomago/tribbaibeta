@@ -19,7 +19,7 @@ export interface Memory {
   id: string;
   content: string;
   metadata: MemoryMetadata;
-  embedding?: number[];
+  embedding?: string; // Changed from number[] to string to match DB
   relevance_score?: number;
 }
 
@@ -41,4 +41,6 @@ export interface DatabaseMemory {
   retrieval_count?: number;
   last_retrieved?: string;
   context_chain?: string[];
+  importance_score?: number;
+  confidence_score?: number;
 }

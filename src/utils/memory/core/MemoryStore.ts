@@ -16,12 +16,12 @@ export class MemoryStore {
           role_id: this.roleId,
           content,
           context_type: metadata.context_type || 'general',
-          metadata: metadata,
+          metadata: metadata as Json,
           memory_category: metadata.memory_category || 'general',
           source_type: metadata.source_type || 'direct',
-          importance_score: 1.0,
-          confidence_score: 1.0,
-          relevance_score: 1.0
+          importance_score: metadata.importance_score || 1.0,
+          confidence_score: metadata.confidence_score || 1.0,
+          context_chain: metadata.context_chain || []
         });
 
       if (error) throw error;
@@ -32,7 +32,7 @@ export class MemoryStore {
     }
   }
 
-  async update(memoryId: string, updates: Partial<Memory>): Promise<void> {
+  async update(memoryId: string, updates: Partial<DatabaseMemory>): Promise<void> {
     try {
       const { error } = await supabase
         .from('role_memories')
