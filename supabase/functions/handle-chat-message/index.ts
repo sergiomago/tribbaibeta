@@ -21,6 +21,7 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!supabaseUrl || !supabaseKey || !openaiKey) {
+      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
@@ -57,113 +58,128 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Build response chain
-    console.log('Building response chain:', { threadId, taggedRoleId });
-    const chain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
-    console.log('Response chain built:', chain);
+    // Get thread roles
+    const { data: threadRoles, error: threadRolesError } = await supabase
+      .from('thread_roles')
+      .select('role_id')
+      .eq('thread_id', threadId);
 
-    if (!chain.length) {
-      console.warn('No roles selected for response');
+    if (threadRolesError) {
+      console.error('Error fetching thread roles:', threadRolesError);
+      throw threadRolesError;
+    }
+
+    if (!threadRoles?.length) {
+      console.error('No roles found for thread');
       return new Response(
-        JSON.stringify({ warning: 'No roles available to respond' }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'No roles available in thread' }), 
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    let previousResponse = content;
-    let previousRoleName = "User";
-
-    // Process each role sequentially
-    for (const { roleId, chainOrder } of chain) {
-      console.log('Processing role:', { roleId, chainOrder });
-      
-      const isValidOrder = await validateChainOrder(supabase, threadId, roleId, chainOrder);
-      if (!isValidOrder) {
-        console.log('Invalid chain order, skipping role:', roleId);
-        continue;
+    // Get best responding roles
+    const { data: respondingRoles, error: rolesError } = await supabase.rpc(
+      'get_best_responding_role',
+      { 
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3
       }
+    );
 
-      // Get role details
-      const { data: role, error: roleError } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', roleId)
-        .maybeSingle();
+    if (rolesError) {
+      console.error('Error getting responding roles:', rolesError);
+      throw rolesError;
+    }
 
-      if (roleError) throw roleError;
-      if (!role) {
-        console.error('Role not found:', roleId);
-        continue;
-      }
+    // If no roles meet threshold, select random role
+    let selectedRoleId = respondingRoles?.[0]?.role_id;
+    if (!selectedRoleId) {
+      selectedRoleId = threadRoles[Math.floor(Math.random() * threadRoles.length)].role_id;
+      console.log('Using fallback random role:', selectedRoleId);
+    }
 
-      // Compile context for this role
-      const context = await compileMessageContext(supabase, threadId, roleId, content);
-      console.log('Context compiled for role:', { roleId, contextSize: context.memories?.length });
+    // Get role details
+    const { data: role, error: roleError } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('id', selectedRoleId)
+      .single();
 
-      // Generate response with enhanced context
-      const completion = await openai.chat.completions.create({
-        model: role.model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `${role.instructions}\n\nPrevious response from ${previousRoleName}: ${previousResponse}\n\nYou must acknowledge and build upon the previous response while maintaining your role's perspective and expertise. Consider this context from previous interactions:\n${
-              context.memories?.map(m => `- ${m.content}`).join('\n') || 'No previous context available.'
-            }`
-          },
-          { role: 'user', content }
-        ],
+    if (roleError || !role) {
+      console.error('Error fetching role:', roleError);
+      throw roleError || new Error('Role not found');
+    }
+
+    // Compile context
+    const context = await compileMessageContext(supabase, threadId, selectedRoleId, content);
+    console.log('Context compiled for role:', { roleId: selectedRoleId, contextSize: context.memories?.length });
+
+    // Generate response
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `${role.instructions}\n\nConsider this context from previous interactions:\n${
+            context.memories?.map(m => `- ${m.content}`).join('\n') || 'No previous context available.'
+          }`
+        },
+        { role: 'user', content }
+      ],
+    });
+
+    const responseContent = completion.choices[0].message.content;
+    console.log('Generated response for role:', { roleId: selectedRoleId, responseLength: responseContent?.length });
+
+    // Save role's response
+    const { data: response, error: responseError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        role_id: selectedRoleId,
+        content: responseContent,
+        chain_id: message.id,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          conversation_depth: context.conversationDepth || 1,
+          context_used: context
+        }
+      })
+      .select()
+      .single();
+
+    if (responseError) {
+      console.error('Error saving response:', responseError);
+      throw responseError;
+    }
+
+    // Record interaction
+    const { error: interactionError } = await supabase
+      .from('role_interactions')
+      .insert({
+        thread_id: threadId,
+        initiator_role_id: selectedRoleId,
+        responder_role_id: taggedRoleId || selectedRoleId,
+        interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
+        metadata: {
+          message_id: message.id,
+          response_id: response.id,
+          conversation_depth: context.conversationDepth || 1
+        }
       });
 
-      const responseContent = completion.choices[0].message.content;
-      console.log('Generated response for role:', { roleId, responseLength: responseContent.length });
+    if (interactionError) {
+      console.error('Error recording interaction:', interactionError);
+      // Don't throw here, as the main functionality succeeded
+    }
 
-      // Save role's response
-      const { data: response, error: responseError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          role_id: roleId,
-          content: responseContent,
-          chain_id: message.id,
-          chain_order: chainOrder,
-          response_order: chainOrder,
-          metadata: {
-            timestamp: new Date().toISOString(),
-            previous_role: previousRoleName,
-            conversation_depth: chainOrder,
-            context_used: context
-          }
-        })
-        .select()
-        .single();
-
-      if (responseError) throw responseError;
-      console.log('Saved response:', { responseId: response.id });
-
-      await updateChainProgress(supabase, threadId, response.id, chainOrder);
-
-      // Record interaction and update memory
-      await Promise.all([
-        supabase
-          .from('role_interactions')
-          .insert({
-            thread_id: threadId,
-            initiator_role_id: roleId,
-            responder_role_id: taggedRoleId || roleId,
-            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
-            metadata: {
-              message_id: message.id,
-              response_id: response.id,
-              conversation_depth: chainOrder,
-              relevance_score: context.relevance_score || 0
-            }
-          }),
-        updateContextualMemory(supabase, roleId, responseContent, context)
-      ]);
-
-      // Update context for next role
-      previousResponse = responseContent;
-      previousRoleName = role.name;
+    // Update memory
+    try {
+      await updateContextualMemory(supabase, selectedRoleId, responseContent, context);
+    } catch (memoryError) {
+      console.error('Error updating memory:', memoryError);
+      // Don't throw here, as the main functionality succeeded
     }
 
     return new Response(
