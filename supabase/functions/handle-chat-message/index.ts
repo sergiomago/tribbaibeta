@@ -41,7 +41,19 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
       })
-      .select('messages.*, roles:roles(*)')
+      .select(`
+        id,
+        content,
+        thread_id,
+        tagged_role_id,
+        role_id,
+        roles (
+          id,
+          name,
+          tag,
+          instructions
+        )
+      `)
       .single();
 
     if (messageError) {
@@ -73,20 +85,27 @@ serve(async (req) => {
 
     // Process responses in order
     for (const { role_id, chain_order } of respondingRoles) {
-      // Get role details with explicit table references
-      const { data: role } = await supabase
+      // Get role details
+      const { data: role, error: roleError } = await supabase
         .from('roles')
-        .select('roles.*')
+        .select(`
+          id,
+          name,
+          instructions,
+          model,
+          tag,
+          special_capabilities
+        `)
         .eq('id', role_id)
         .single();
 
-      if (!role) {
-        console.error(`Role ${role_id} not found`);
+      if (roleError || !role) {
+        console.error(`Role ${role_id} not found:`, roleError);
         continue;
       }
 
-      // Get relevant memories for context with explicit role_id reference
-      const { data: memories } = await supabase.rpc(
+      // Get relevant memories for context
+      const { data: memories, error: memoriesError } = await supabase.rpc(
         'get_similar_memories',
         {
           p_embedding: content,
@@ -95,6 +114,10 @@ serve(async (req) => {
           p_role_id: role_id
         }
       );
+
+      if (memoriesError) {
+        console.error('Error fetching memories:', memoriesError);
+      }
 
       const memoryContext = memories?.length 
         ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
@@ -114,7 +137,7 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save role's response with explicit table references
+      // Save role's response
       const { data: roleResponse, error: responseError } = await supabase
         .from('messages')
         .insert({
@@ -124,7 +147,20 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
         })
-        .select('messages.*, roles:roles!messages_role_id_fkey(*)')
+        .select(`
+          id,
+          content,
+          thread_id,
+          role_id,
+          chain_id,
+          chain_order,
+          roles (
+            id,
+            name,
+            tag,
+            instructions
+          )
+        `)
         .single();
 
       if (responseError) {
@@ -132,7 +168,7 @@ serve(async (req) => {
         throw responseError;
       }
 
-      // Store response in role's memory with explicit role_id reference
+      // Store response in role's memory
       await supabase
         .from('role_memories')
         .insert({
@@ -146,7 +182,7 @@ serve(async (req) => {
           }
         });
 
-      // Record interaction with explicit role references
+      // Record interaction
       await supabase
         .from('role_interactions')
         .insert({
