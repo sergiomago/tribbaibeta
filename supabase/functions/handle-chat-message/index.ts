@@ -5,7 +5,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { analyzeMessage, saveMessageAnalysis } from "./messageAnalyzer.ts";
 import { buildResponseChain, validateChainOrder, updateChainProgress } from "./responseChainManager.ts";
 import { compileMessageContext, updateContextualMemory } from "./contextCompiler.ts";
-import { ChatMessage } from "./types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,13 +22,12 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!supabaseUrl || !supabaseKey || !openaiKey) {
-      console.error('Missing environment variables');
       throw new Error('Missing required environment variables');
     }
 
     console.log('Received request to handle-chat-message');
     
-    const { threadId, content, taggedRoleId } = await req.json() as ChatMessage;
+    const { threadId, content, taggedRoleId } = await req.json();
     console.log('Request payload:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
@@ -42,16 +40,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Create embedding for the message content
-    console.log('Creating embedding for message content');
-    const embedding = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: content,
-    });
-
-    console.log('Created embedding for message');
-
-    // Save user message with embedding in metadata
+    // Save user message first without embedding
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -59,7 +48,6 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
         metadata: {
-          embedding: embedding.data[0].embedding,
           timestamp: new Date().toISOString()
         }
       })
@@ -92,15 +80,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Use the embedding for context compilation
-      const context = await compileMessageContext(
-        supabase, 
-        threadId, 
-        roleId, 
-        embedding.data[0].embedding
-      );
-      console.log('Context compiled for role:', roleId);
-
+      // Get role details
       const { data: role, error: roleError } = await supabase
         .from('roles')
         .select('*')
@@ -119,9 +99,7 @@ serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `${role.instructions}\n\nRelevant context:\n${
-              context.memories?.map(m => m.content).join('\n') || 'No relevant memories found.'
-            }`
+            content: role.instructions
           },
           { role: 'user', content }
         ],
@@ -130,13 +108,7 @@ serve(async (req) => {
       const responseContent = completion.choices[0].message.content;
       console.log('Generated response for role:', roleId);
 
-      // Create embedding for the response
-      const responseEmbedding = await openai.embeddings.create({
-        model: "text-embedding-ada-002",
-        input: responseContent,
-      });
-
-      // Save role's response with embedding
+      // Save role's response
       const { data: response, error: responseError } = await supabase
         .from('messages')
         .insert({
@@ -147,7 +119,6 @@ serve(async (req) => {
           chain_order: chainOrder,
           response_order: chainOrder,
           metadata: {
-            embedding: responseEmbedding.data[0].embedding,
             timestamp: new Date().toISOString()
           }
         })
@@ -158,7 +129,6 @@ serve(async (req) => {
       console.log('Saved response:', response);
 
       await updateChainProgress(supabase, threadId, response.id, chainOrder);
-      await updateContextualMemory(supabase, roleId, responseContent, context);
 
       // Record interaction
       await supabase
@@ -171,8 +141,7 @@ serve(async (req) => {
           metadata: {
             message_id: message.id,
             response_id: response.id,
-            memory_count: context.memories?.length || 0,
-            conversation_depth: context.conversationDepth
+            conversation_depth: 1
           }
         });
     }
