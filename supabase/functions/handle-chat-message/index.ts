@@ -40,7 +40,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Save user message first without embedding
+    // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -48,7 +48,8 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
         metadata: {
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          type: 'user_message'
         }
       })
       .select()
@@ -70,7 +71,10 @@ serve(async (req) => {
     const chain = await buildResponseChain(supabase, threadId, taggedRoleId);
     console.log('Response chain built:', chain);
 
-    // Process each role in the chain
+    let previousResponse = content;
+    let previousRoleName = "User";
+
+    // Process each role sequentially
     for (const { roleId, chainOrder } of chain) {
       console.log('Processing role:', { roleId, chainOrder });
       
@@ -81,25 +85,24 @@ serve(async (req) => {
       }
 
       // Get role details
-      const { data: role, error: roleError } = await supabase
+      const { data: role } = await supabase
         .from('roles')
         .select('*')
         .eq('id', roleId)
         .single();
 
-      if (roleError) throw roleError;
       if (!role) {
         console.error('Role not found:', roleId);
         continue;
       }
 
-      // Generate response
+      // Generate response with context
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: role.instructions
+            content: `${role.instructions}\n\nPrevious response from ${previousRoleName}: ${previousResponse}\n\nAcknowledge and build upon the previous response while maintaining your role's perspective and expertise.`
           },
           { role: 'user', content }
         ],
@@ -119,7 +122,9 @@ serve(async (req) => {
           chain_order: chainOrder,
           response_order: chainOrder,
           metadata: {
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            previous_role: previousRoleName,
+            conversation_depth: chainOrder
           }
         })
         .select()
@@ -141,9 +146,13 @@ serve(async (req) => {
           metadata: {
             message_id: message.id,
             response_id: response.id,
-            conversation_depth: 1
+            conversation_depth: chainOrder
           }
         });
+
+      // Update context for next role
+      previousResponse = responseContent;
+      previousRoleName = role.name;
     }
 
     return new Response(
