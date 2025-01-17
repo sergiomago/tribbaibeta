@@ -61,6 +61,14 @@ serve(async (req) => {
     const chain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
     console.log('Response chain built:', chain);
 
+    if (!chain.length) {
+      console.warn('No roles selected for response');
+      return new Response(
+        JSON.stringify({ warning: 'No roles available to respond' }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     let previousResponse = content;
     let previousRoleName = "User";
 

@@ -1,6 +1,5 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ResponseChain } from "./types.ts";
-import { RelevanceScorer } from "./roleSelector.ts";
 
 export async function buildResponseChain(
   supabase: SupabaseClient,
@@ -20,35 +19,68 @@ export async function buildResponseChain(
       }];
     }
 
-    // Get all available roles for this thread
-    const { data: threadRoles } = await supabase
-      .from('thread_roles')
-      .select('role_id, roles(*)')
-      .eq('thread_id', threadId);
-
-    if (!threadRoles?.length) {
-      console.log('No roles found for thread');
-      return [];
-    }
-
-    // Score roles for relevance
-    const relevanceScorer = new RelevanceScorer();
-    const scoredRoles = await Promise.all(
-      threadRoles.map(async (tr) => ({
-        roleId: tr.role_id,
-        score: await relevanceScorer.calculateRelevance(tr.roles, content, threadId, supabase)
-      }))
+    // Get best responding roles based on effectiveness
+    const { data: bestRoles, error: rolesError } = await supabase.rpc(
+      'get_best_responding_role',
+      { 
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3
+      }
     );
 
-    // Filter out low-relevance roles (threshold: 0.3)
-    const relevantRoles = scoredRoles
-      .filter(role => role.score > 0.3)
-      .sort((a, b) => b.score - a.score);
+    if (rolesError) {
+      console.error('Error getting best roles:', rolesError);
+      throw rolesError;
+    }
 
-    // Build chain with ordered roles
-    const chain = relevantRoles.map((role, index) => ({
-      roleId: role.roleId,
-      chainOrder: index + 1
+    console.log('Best responding roles:', bestRoles);
+
+    // If no roles meet the threshold, get all available roles and pick the best one
+    if (!bestRoles?.length) {
+      console.log('No roles met threshold, selecting fallback role');
+      const { data: threadRoles } = await supabase
+        .from('thread_roles')
+        .select('role_id, roles(*)')
+        .eq('thread_id', threadId);
+
+      if (!threadRoles?.length) {
+        console.log('No roles found for thread');
+        return [];
+      }
+
+      // Calculate effectiveness for all roles and pick the best one
+      const scoredRoles = await Promise.all(
+        threadRoles.map(async (tr) => {
+          const { data: score } = await supabase.rpc(
+            'calculate_role_effectiveness',
+            {
+              p_role_id: tr.role_id,
+              p_thread_id: threadId,
+              p_context: content
+            }
+          );
+          return {
+            roleId: tr.role_id,
+            score: score || 0
+          };
+        })
+      );
+
+      // Sort by score and take the best one
+      const bestRole = scoredRoles.sort((a, b) => b.score - a.score)[0];
+      if (bestRole) {
+        return [{
+          roleId: bestRole.roleId,
+          chainOrder: 1
+        }];
+      }
+    }
+
+    // Map the best roles to chain format
+    const chain = bestRoles.map((role) => ({
+      roleId: role.role_id,
+      chainOrder: role.chain_order
     }));
 
     console.log('Built response chain:', chain);
@@ -97,12 +129,28 @@ export async function updateChainProgress(
   console.log('Updating chain progress:', { threadId, messageId, chainOrder });
 
   try {
-    const { error } = await supabase
+    // Update the message with chain order
+    const { error: messageError } = await supabase
       .from('messages')
       .update({ chain_order: chainOrder })
       .eq('id', messageId);
 
-    if (error) throw error;
+    if (messageError) throw messageError;
+
+    // Update conversation state metrics
+    const { error: stateError } = await supabase
+      .from('conversation_states')
+      .update({
+        chain_metrics: supabase.sql`jsonb_set(
+          chain_metrics,
+          '{successful_chains}',
+          (chain_metrics->'successful_chains') || jsonb_build_array(${chainOrder})
+        )`
+      })
+      .eq('thread_id', threadId);
+
+    if (stateError) throw stateError;
+
     console.log('Chain progress updated successfully');
   } catch (error) {
     console.error('Error updating chain progress:', error);
