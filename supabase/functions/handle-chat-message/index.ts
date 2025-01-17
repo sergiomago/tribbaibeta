@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { analyzeMessage, saveMessageAnalysis } from "./messageAnalyzer.ts";
 import { buildResponseChain, validateChainOrder, updateChainProgress } from "./responseChainManager.ts";
 import { compileMessageContext, updateContextualMemory } from "./contextCompiler.ts";
 
@@ -25,8 +24,6 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    console.log('Received request to handle-chat-message');
-    
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Request payload:', { threadId, content, taggedRoleId });
 
@@ -60,15 +57,8 @@ serve(async (req) => {
       throw messageError;
     }
 
-    console.log('Saved user message:', message);
-
-    // Analyze message
-    const analysis = await analyzeMessage(content, openai);
-    await saveMessageAnalysis(supabase, threadId, message.id, analysis);
-    console.log('Message analysis completed');
-
-    // Build response chain
-    const chain = await buildResponseChain(supabase, threadId, taggedRoleId);
+    // Build response chain with enhanced role selection
+    const chain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
     console.log('Response chain built:', chain);
 
     let previousResponse = content;
@@ -96,13 +86,18 @@ serve(async (req) => {
         continue;
       }
 
-      // Generate response with context
+      // Compile context for this role
+      const context = await compileMessageContext(supabase, threadId, roleId, content);
+
+      // Generate response with enhanced context
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `${role.instructions}\n\nPrevious response from ${previousRoleName}: ${previousResponse}\n\nAcknowledge and build upon the previous response while maintaining your role's perspective and expertise.`
+            content: `${role.instructions}\n\nPrevious response from ${previousRoleName}: ${previousResponse}\n\nYou must acknowledge and build upon the previous response while maintaining your role's perspective and expertise. Consider this context from previous interactions:\n${
+              context.memories.map(m => `- ${m.content}`).join('\n')
+            }`
           },
           { role: 'user', content }
         ],
@@ -124,7 +119,8 @@ serve(async (req) => {
           metadata: {
             timestamp: new Date().toISOString(),
             previous_role: previousRoleName,
-            conversation_depth: chainOrder
+            conversation_depth: chainOrder,
+            context_used: context
           }
         })
         .select()
@@ -135,20 +131,24 @@ serve(async (req) => {
 
       await updateChainProgress(supabase, threadId, response.id, chainOrder);
 
-      // Record interaction
-      await supabase
-        .from('role_interactions')
-        .insert({
-          thread_id: threadId,
-          initiator_role_id: roleId,
-          responder_role_id: taggedRoleId || roleId,
-          interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
-          metadata: {
-            message_id: message.id,
-            response_id: response.id,
-            conversation_depth: chainOrder
-          }
-        });
+      // Record interaction and update memory
+      await Promise.all([
+        supabase
+          .from('role_interactions')
+          .insert({
+            thread_id: threadId,
+            initiator_role_id: roleId,
+            responder_role_id: taggedRoleId || roleId,
+            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
+            metadata: {
+              message_id: message.id,
+              response_id: response.id,
+              conversation_depth: chainOrder,
+              relevance_score: context.relevance_score
+            }
+          }),
+        updateContextualMemory(supabase, roleId, responseContent, context)
+      ]);
 
       // Update context for next role
       previousResponse = responseContent;

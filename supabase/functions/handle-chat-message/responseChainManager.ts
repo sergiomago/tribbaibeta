@@ -1,29 +1,58 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ResponseChain } from "./types.ts";
+import { RelevanceScorer } from "./roleSelector.ts";
 
 export async function buildResponseChain(
   supabase: SupabaseClient,
   threadId: string,
+  content: string,
   taggedRoleId?: string
 ): Promise<ResponseChain[]> {
   console.log('Building response chain:', { threadId, taggedRoleId });
 
   try {
-    const { data: chain, error } = await supabase.rpc(
-      'get_conversation_chain',
-      { 
-        p_thread_id: threadId,
-        p_tagged_role_id: taggedRoleId 
-      }
+    // If a role is tagged, only that role should respond
+    if (taggedRoleId) {
+      console.log('Tagged role response chain');
+      return [{
+        roleId: taggedRoleId,
+        chainOrder: 1
+      }];
+    }
+
+    // Get all available roles for this thread
+    const { data: threadRoles } = await supabase
+      .from('thread_roles')
+      .select('role_id, roles(*)')
+      .eq('thread_id', threadId);
+
+    if (!threadRoles?.length) {
+      console.log('No roles found for thread');
+      return [];
+    }
+
+    // Score roles for relevance
+    const relevanceScorer = new RelevanceScorer();
+    const scoredRoles = await Promise.all(
+      threadRoles.map(async (tr) => ({
+        roleId: tr.role_id,
+        score: await relevanceScorer.calculateRelevance(tr.roles, content, threadId, supabase)
+      }))
     );
 
-    if (error) throw error;
+    // Filter out low-relevance roles (threshold: 0.3)
+    const relevantRoles = scoredRoles
+      .filter(role => role.score > 0.3)
+      .sort((a, b) => b.score - a.score);
 
-    console.log('Response chain built:', chain);
-    return chain.map((item: any) => ({
-      roleId: item.role_id,
-      chainOrder: item.chain_order
+    // Build chain with ordered roles
+    const chain = relevantRoles.map((role, index) => ({
+      roleId: role.roleId,
+      chainOrder: index + 1
     }));
+
+    console.log('Built response chain:', chain);
+    return chain;
   } catch (error) {
     console.error('Error building response chain:', error);
     throw error;

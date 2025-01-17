@@ -1,65 +1,84 @@
-import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-export async function selectResponders(
-  supabase: SupabaseClient,
-  threadId: string,
-  analysis: string,
-  openai: OpenAI
-) {
-  console.log('Selecting responders based on analysis...');
-  
-  const { data: availableRoles } = await supabase
-    .from('thread_roles')
-    .select('role_id, roles(*)') 
-    .eq('thread_id', threadId);
-
-  // If no roles are found, return empty array instead of throwing error
-  if (!availableRoles?.length) {
-    console.log('No roles found for thread:', threadId);
-    return [];
+export class RelevanceScorer {
+  private async getKeywordRelevance(instructions: string, content: string): Promise<number> {
+    const normalizedContent = content.toLowerCase();
+    const normalizedInstructions = instructions.toLowerCase();
+    
+    // Extract key terms from instructions
+    const keyTerms = normalizedInstructions
+      .split(/[\s.,!?]+/)
+      .filter(term => term.length > 3);
+    
+    // Count matching terms
+    const matchingTerms = keyTerms.filter(term => 
+      normalizedContent.includes(term)
+    );
+    
+    return matchingTerms.length / Math.max(keyTerms.length, 1);
   }
 
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: `Select the most appropriate roles to handle this conversation from: ${
-          availableRoles.map(r => `${r.roles.name} (${r.roles.tag})`).join(', ')
-        }`
-      },
-      { role: 'user', content: analysis }
-    ],
-  });
+  private async getRoleHistory(
+    roleId: string,
+    threadId: string,
+    supabase: SupabaseClient
+  ): Promise<number> {
+    const { count } = await supabase
+      .from('role_interactions')
+      .select('*', { count: 'exact' })
+      .eq('thread_id', threadId)
+      .eq('initiator_role_id', roleId);
+    
+    // Normalize interaction count (max 10 interactions)
+    return Math.min((count || 0) / 10, 1);
+  }
 
-  const selectedRoles = availableRoles
-    .filter(role => completion.choices[0].message.content.includes(role.roles.tag))
-    .map(role => role.role_id);
+  private getCapabilityMatch(capabilities: string[] | null, content: string): number {
+    if (!capabilities?.length) return 0;
 
-  await supabase
-    .from('conversation_states')
-    .update({
-      current_state: 'response_generation',
-      active_roles: selectedRoles
-    })
-    .eq('thread_id', threadId);
+    const contentLower = content.toLowerCase();
+    const relevantKeywords: Record<string, string[]> = {
+      'web_search': ['search', 'find', 'look up', 'research'],
+      'doc_analysis': ['analyze', 'review', 'document', 'read'],
+      'creative': ['create', 'design', 'imagine', 'name', 'brand'],
+      'technical': ['code', 'build', 'develop', 'implement'],
+      'strategic': ['plan', 'strategy', 'business', 'market']
+    };
 
-  return selectedRoles;
-}
-
-export async function getRelevantMemories(
-  supabase: SupabaseClient,
-  roleId: string,
-  content: string
-) {
-  const { data: memories } = await supabase
-    .rpc('get_similar_memories', {
-      p_embedding: content,
-      p_match_threshold: 0.7,
-      p_match_count: 5,
-      p_role_id: roleId
+    let matches = 0;
+    capabilities.forEach(cap => {
+      const keywords = relevantKeywords[cap] || [];
+      if (keywords.some(keyword => contentLower.includes(keyword))) {
+        matches++;
+      }
     });
 
-  return memories || [];
+    return matches / capabilities.length;
+  }
+
+  async calculateRelevance(
+    role: any,
+    content: string,
+    threadId: string,
+    supabase: SupabaseClient
+  ): Promise<number> {
+    const [keywordScore, historyScore, capabilityScore] = await Promise.all([
+      this.getKeywordRelevance(role.instructions, content),
+      this.getRoleHistory(role.id, threadId, supabase),
+      Promise.resolve(this.getCapabilityMatch(role.special_capabilities, content))
+    ]);
+
+    // Weighted scoring
+    const weights = {
+      keyword: 0.4,
+      history: 0.2,
+      capability: 0.4
+    };
+
+    return (
+      keywordScore * weights.keyword +
+      historyScore * weights.history +
+      capabilityScore * weights.capability
+    );
+  }
 }
