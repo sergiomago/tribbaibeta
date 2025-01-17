@@ -2,6 +2,7 @@ import { FileText, Image as ImageIcon, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { Tables } from "@/integrations/supabase/types";
 
 interface FilePreviewProps {
   fileMetadata: {
@@ -13,39 +14,27 @@ interface FilePreviewProps {
   };
 }
 
-interface AnalysisResult {
-  analysis_result: {
-    content: string;
-    analyzed_at?: string;
-  } | null;
-  analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null;
-}
+type AnalyzedFile = Tables<"analyzed_files">;
 
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
+  const { data: analyzedFile, isLoading: isAnalyzing } = useQuery<AnalyzedFile | null>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
-        return {
-          analysis_result: null,
-          analysis_status: null
-        };
+        return null;
       }
       
       const { data, error } = await supabase
         .from('analyzed_files')
-        .select('analysis_result, analysis_status')
+        .select()
         .eq('id', fileMetadata.file_id)
         .maybeSingle();
         
       if (error) throw error;
       
-      return {
-        analysis_result: data?.analysis_result as AnalysisResult['analysis_result'],
-        analysis_status: data?.analysis_status as AnalysisResult['analysis_status']
-      };
+      return data;
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
@@ -110,26 +99,26 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         </Button>
       </div>
       
-      {(isAnalyzing || analysisData?.analysis_status === 'processing') && (
+      {(isAnalyzing || analyzedFile?.analysis_status === 'processing') && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Analyzing file...
         </div>
       )}
       
-      {analysisData?.analysis_status === 'failed' && (
+      {analyzedFile?.analysis_status === 'failed' && (
         <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
           Analysis failed. Please try again.
         </div>
       )}
       
-      {analysisData?.analysis_result && analysisData.analysis_status === 'completed' && (
+      {analyzedFile?.analysis_result && analyzedFile.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{analysisData.analysis_result.content}</p>
-          {analysisData.analysis_result.analyzed_at && (
+          <p>{(analyzedFile.analysis_result as { content: string })?.content}</p>
+          {(analyzedFile.analysis_result as { analyzed_at?: string })?.analyzed_at && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at).toLocaleString()}
+              Analyzed at: {new Date((analyzedFile.analysis_result as { analyzed_at: string }).analyzed_at).toLocaleString()}
             </p>
           )}
         </div>
