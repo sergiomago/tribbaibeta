@@ -19,7 +19,7 @@ export type Message = {
     verification_status?: string | undefined;
     verification_score?: number | undefined;
     [key: string]: any; // Allow for additional metadata properties
-  } | null;
+  } | string | null; // Allow for string or null since Json type can be string
   message_type: 'text' | 'file' | 'analysis';
   role?: {
     name: string;

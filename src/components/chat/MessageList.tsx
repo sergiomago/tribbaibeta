@@ -37,8 +37,12 @@ export function MessageList({
   }, [messages]);
 
   const getVerificationIcon = (messageId: string) => {
-    const memory = memories?.find(m => m.metadata?.message_id === messageId);
-    if (!memory) return null;
+    const memory = memories?.find(m => {
+      const metadata = m.metadata;
+      return typeof metadata === 'object' && metadata?.message_id === messageId;
+    });
+    
+    if (!memory || typeof memory.metadata !== 'object') return null;
 
     const status = memory.metadata?.verification_status;
     const score = memory.metadata?.verification_score || 0;
