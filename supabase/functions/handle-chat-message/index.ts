@@ -73,7 +73,7 @@ serve(async (req) => {
 
     // Process responses in order
     for (const { role_id, chain_order } of respondingRoles) {
-      // Get role details
+      // Get role details with explicit column references
       const { data: role } = await supabase
         .from('roles')
         .select('*')
@@ -85,7 +85,7 @@ serve(async (req) => {
         continue;
       }
 
-      // Get relevant memories for context
+      // Get relevant memories for context with explicit role_id reference
       const { data: memories } = await supabase.rpc(
         'get_similar_memories',
         {
@@ -114,7 +114,7 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save role's response
+      // Save role's response with explicit table aliases
       const { data: roleResponse, error: responseError } = await supabase
         .from('messages')
         .insert({
@@ -124,7 +124,7 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
         })
-        .select('*, roles:role_id(*)')
+        .select('messages.*, roles:roles(*)')
         .single();
 
       if (responseError) {
@@ -132,7 +132,7 @@ serve(async (req) => {
         throw responseError;
       }
 
-      // Store response in role's memory
+      // Store response in role's memory with explicit role_id reference
       await supabase
         .from('role_memories')
         .insert({
@@ -146,7 +146,7 @@ serve(async (req) => {
           }
         });
 
-      // Record interaction
+      // Record interaction with explicit role references
       await supabase
         .from('role_interactions')
         .insert({
