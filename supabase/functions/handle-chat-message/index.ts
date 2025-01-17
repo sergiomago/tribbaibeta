@@ -19,7 +19,6 @@ serve(async (req) => {
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!supabaseUrl || !supabaseKey || !openaiKey) {
-      console.error('Missing required environment variables');
       throw new Error('Configuration error: Missing required environment variables');
     }
 
@@ -42,12 +41,12 @@ serve(async (req) => {
         tagged_role_id: taggedRoleId || null,
       })
       .select(`
-        id,
-        content,
-        thread_id,
-        tagged_role_id,
-        role_id,
-        roles (
+        messages.id,
+        messages.content,
+        messages.thread_id,
+        messages.tagged_role_id,
+        messages.role_id,
+        sender:roles!messages_role_id_fkey (
           id,
           name,
           tag,
@@ -76,8 +75,6 @@ serve(async (req) => {
       console.error('Error getting responding roles:', rolesError);
       throw rolesError;
     }
-
-    console.log('Selected responding roles:', respondingRoles);
 
     if (!respondingRoles?.length) {
       throw new Error('No suitable roles found for response');
@@ -148,13 +145,13 @@ serve(async (req) => {
           chain_order,
         })
         .select(`
-          id,
-          content,
-          thread_id,
-          role_id,
-          chain_id,
-          chain_order,
-          roles (
+          messages.id,
+          messages.content,
+          messages.thread_id,
+          messages.role_id,
+          messages.chain_id,
+          messages.chain_order,
+          responder:roles!messages_role_id_fkey (
             id,
             name,
             tag,
