@@ -44,13 +44,17 @@ serve(async (req) => {
       throw threadError;
     }
 
-    // Save user message
+    // Save user message with initial metadata
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
+        metadata: {
+          verification_status: 'needs_verification',
+          verification_score: 0,
+        }
       })
       .select()
       .single();
@@ -107,8 +111,8 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save role's response
-      await supabase
+      // Save role's response with verification metadata
+      const { error: responseError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
@@ -117,7 +121,17 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
           response_order: chain_order,
+          metadata: {
+            verification_status: 'needs_verification',
+            verification_score: 0,
+            message_id: message.id
+          }
         });
+
+      if (responseError) {
+        console.error('Error saving response:', responseError);
+        throw responseError;
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {
