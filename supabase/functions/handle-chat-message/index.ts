@@ -9,7 +9,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -22,59 +21,30 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! });
 
-    // Initialize OpenAI
-    const openai = new OpenAI({
-      apiKey: Deno.env.get('OPENAI_API_KEY')!,
-    });
-
-    // Get thread owner
-    const { data: thread, error: threadError } = await supabase
-      .from('threads')
-      .select('user_id')
-      .eq('id', threadId)
-      .single();
-
-    if (threadError) {
-      console.error('Error fetching thread:', threadError);
-      throw threadError;
-    }
-
-    // Save user message with initial metadata
+    // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
-        metadata: {
-          verification_status: 'needs_verification',
-          verification_score: 0,
-        }
       })
       .select()
       .single();
 
-    if (messageError) {
-      console.error('Error saving message:', messageError);
-      throw messageError;
-    }
+    if (messageError) throw messageError;
 
     // Get conversation chain
-    const { data: chain, error: chainError } = await supabase
+    const { data: chain } = await supabase
       .rpc('get_conversation_chain', {
         p_thread_id: threadId,
         p_tagged_role_id: taggedRoleId
       });
-
-    if (chainError) {
-      console.error('Error getting conversation chain:', chainError);
-      throw chainError;
-    }
 
     // Process each role in the chain
     for (const { role_id, chain_order } of chain) {
@@ -95,7 +65,7 @@ serve(async (req) => {
           p_role_id: role_id
         });
 
-      // Generate response using OpenAI
+      // Generate response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
@@ -111,8 +81,8 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save role's response with verification metadata
-      const { error: responseError } = await supabase
+      // Save role's response
+      const { data: response, error: responseError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
@@ -121,17 +91,26 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
           response_order: chain_order,
+        })
+        .select()
+        .single();
+
+      if (responseError) throw responseError;
+
+      // Record interaction
+      await supabase
+        .from('role_interactions')
+        .insert({
+          thread_id: threadId,
+          initiator_role_id: role_id,
+          responder_role_id: taggedRoleId || role_id,
+          interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
           metadata: {
-            verification_status: 'needs_verification',
-            verification_score: 0,
-            message_id: message.id
+            message_id: message.id,
+            response_id: response.id,
+            memory_count: memories?.length || 0,
           }
         });
-
-      if (responseError) {
-        console.error('Error saving response:', responseError);
-        throw responseError;
-      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

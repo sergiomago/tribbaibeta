@@ -26,7 +26,10 @@ export class ChainTracker {
   async getChainMessages(chainId: string): Promise<any[]> {
     const { data, error } = await supabase
       .from('messages')
-      .select('*')
+      .select(`
+        *,
+        role:roles!messages_role_id_fkey(name, tag)
+      `)
       .eq('chain_id', chainId)
       .order('chain_order', { ascending: true });
 
@@ -45,5 +48,18 @@ export class ChainTracker {
 
     if (error) throw error;
     return data?.chain_id || null;
+  }
+
+  async getChainDepth(chainId: string): Promise<number> {
+    const { data, error } = await supabase
+      .from('messages')
+      .select('chain_order')
+      .eq('chain_id', chainId)
+      .order('chain_order', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) throw error;
+    return data?.chain_order || 0;
   }
 }
