@@ -41,7 +41,7 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
       })
-      .select()
+      .select('messages.*, roles:roles(*)')
       .single();
 
     if (messageError) {
@@ -73,10 +73,10 @@ serve(async (req) => {
 
     // Process responses in order
     for (const { role_id, chain_order } of respondingRoles) {
-      // Get role details with explicit column references
+      // Get role details with explicit table references
       const { data: role } = await supabase
         .from('roles')
-        .select('*')
+        .select('roles.*')
         .eq('id', role_id)
         .single();
 
@@ -114,7 +114,7 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
-      // Save role's response with explicit table aliases
+      // Save role's response with explicit table references
       const { data: roleResponse, error: responseError } = await supabase
         .from('messages')
         .insert({
@@ -124,7 +124,7 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
         })
-        .select('messages.*, roles:roles(*)')
+        .select('messages.*, roles:roles!messages_role_id_fkey(*)')
         .single();
 
       if (responseError) {
