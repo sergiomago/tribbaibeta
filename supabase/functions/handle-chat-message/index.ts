@@ -2,6 +2,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { analyzeMessage, saveMessageAnalysis } from "./messageAnalyzer.ts";
+import { buildResponseChain, validateChainOrder, updateChainProgress } from "./responseChainManager.ts";
+import { compileMessageContext, updateContextualMemory } from "./contextCompiler.ts";
+import { ChatMessage } from "./types.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { threadId, content, taggedRoleId } = await req.json();
+    const { threadId, content, taggedRoleId } = await req.json() as ChatMessage;
     console.log('Received request:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
@@ -39,31 +43,30 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get conversation chain
-    const { data: chain } = await supabase
-      .rpc('get_conversation_chain', {
-        p_thread_id: threadId,
-        p_tagged_role_id: taggedRoleId
-      });
+    // Analyze message
+    const analysis = await analyzeMessage(content, openai);
+    await saveMessageAnalysis(supabase, threadId, message.id, analysis);
+
+    // Build response chain
+    const chain = await buildResponseChain(supabase, threadId, taggedRoleId);
 
     // Process each role in the chain
-    for (const { role_id, chain_order } of chain) {
+    for (const { roleId, chainOrder } of chain) {
+      // Validate chain order
+      const isValidOrder = await validateChainOrder(supabase, threadId, roleId, chainOrder);
+      if (!isValidOrder) continue;
+
+      // Compile context
+      const context = await compileMessageContext(supabase, threadId, roleId, content);
+
+      // Get role details
       const { data: role } = await supabase
         .from('roles')
         .select('*')
-        .eq('id', role_id)
+        .eq('id', roleId)
         .single();
 
       if (!role) continue;
-
-      // Get relevant memories
-      const { data: memories } = await supabase
-        .rpc('get_similar_memories', {
-          p_embedding: content,
-          p_match_threshold: 0.7,
-          p_match_count: 5,
-          p_role_id: role_id
-        });
 
       // Generate response
       const completion = await openai.chat.completions.create({
@@ -72,7 +75,7 @@ serve(async (req) => {
           {
             role: 'system',
             content: `${role.instructions}\n\nRelevant context:\n${
-              memories?.map(m => m.content).join('\n') || 'No relevant memories found.'
+              context.memories?.map(m => m.content).join('\n') || 'No relevant memories found.'
             }`
           },
           { role: 'user', content }
@@ -86,29 +89,36 @@ serve(async (req) => {
         .from('messages')
         .insert({
           thread_id: threadId,
-          role_id: role_id,
+          role_id: roleId,
           content: responseContent,
           chain_id: message.id,
-          chain_order,
-          response_order: chain_order,
+          chain_order: chainOrder,
+          response_order: chainOrder,
         })
         .select()
         .single();
 
       if (responseError) throw responseError;
 
+      // Update chain progress
+      await updateChainProgress(supabase, threadId, response.id, chainOrder);
+
+      // Update contextual memory
+      await updateContextualMemory(supabase, roleId, responseContent, context);
+
       // Record interaction
       await supabase
         .from('role_interactions')
         .insert({
           thread_id: threadId,
-          initiator_role_id: role_id,
-          responder_role_id: taggedRoleId || role_id,
+          initiator_role_id: roleId,
+          responder_role_id: taggedRoleId || roleId,
           interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
           metadata: {
             message_id: message.id,
             response_id: response.id,
-            memory_count: memories?.length || 0,
+            memory_count: context.memories?.length || 0,
+            conversation_depth: context.conversationDepth
           }
         });
     }
