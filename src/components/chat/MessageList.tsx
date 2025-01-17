@@ -1,190 +1,109 @@
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar } from "@/components/ui/avatar";
-import { Loader2 } from "lucide-react";
-import { ThreadSearch } from "./ThreadSearch";
-import { useState } from "react";
-import { useSubscription } from "@/contexts/SubscriptionContext";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useRef } from "react";
+import { Message } from "@/types";
+import { MessageControls } from "./MessageControls";
 import { cn } from "@/lib/utils";
-import { Json } from "@/integrations/supabase/types";
-import { FilePreview } from "./FilePreview";
-
-interface MessageMetadata {
-  intent?: 'analysis' | 'search' | 'conversation';
-  fileReference?: boolean;
-  file_id?: string;
-  file_name?: string;
-  file_path?: string;
-  content_type?: string;
-  size?: number;
-}
-
-interface Message {
-  id: string;
-  content: string;
-  role_id: string | null;
-  created_at: string;
-  response_order: number | null;
-  chain_id: string | null;
-  metadata: Json | null;
-  message_type?: 'text' | 'file' | 'image' | 'analysis';
-  role?: {
-    name: string;
-    tag: string;
-    special_capabilities?: string[];
-  } | null;
-}
+import { useMemoryManagement } from "@/hooks/useMemoryManagement";
+import { Shield, ShieldCheck, ShieldX, AlertCircle } from "lucide-react";
+import { Tooltip } from "@/components/ui/tooltip";
 
 interface MessageListProps {
-  messages: Message[] | undefined;
-  isLoading: boolean;
-  messagesEndRef: React.RefObject<HTMLDivElement>;
+  messages: Message[];
   threadId: string | null;
+  messageListRef: React.RefObject<HTMLDivElement>;
+  messagesEndRef: React.RefObject<HTMLDivElement>;
+  maxMessages?: number;
 }
 
-export function MessageList({ messages, isLoading, messagesEndRef, threadId }: MessageListProps) {
-  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-  const { hasSubscription } = useSubscription();
+export function MessageList({
+  messages,
+  threadId,
+  messageListRef,
+  messagesEndRef,
+  maxMessages = Infinity,
+}: MessageListProps) {
+  const lastMessageRef = useRef<HTMLDivElement>(null);
+  const { memories } = useMemoryManagement(threadId);
 
-  const { data: freeTierLimits } = useQuery({
-    queryKey: ["free-tier-limits"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("free_tier_limits")
-        .select("*")
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const scrollToMessage = (messageId: string) => {
-    setHighlightedMessageId(messageId);
-    const messageElement = document.getElementById(messageId);
-    if (messageElement) {
-      messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+  useEffect(() => {
+    if (lastMessageRef.current) {
+      lastMessageRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  };
+  }, [messages]);
 
-  const messageCount = messages?.length || 0;
-  const maxMessages = hasSubscription ? Infinity : (freeTierLimits?.max_messages_per_thread || 10);
+  const getVerificationIcon = (messageId: string) => {
+    const memory = memories?.find(m => m.metadata?.message_id === messageId);
+    if (!memory) return null;
 
-  const getMessageClasses = (message: Message) => {
-    const baseClasses = "rounded-lg transition-all duration-300";
-    const alignmentClasses = message.role_id ? "mr-auto" : "ml-auto flex-row-reverse";
-    const highlightClasses = highlightedMessageId === message.id 
-      ? "bg-yellow-100 dark:bg-yellow-900/30 animate-highlight"
-      : "";
-    
-    const metadata = message.metadata as MessageMetadata | null;
-    const intentClass = metadata?.intent === 'analysis' 
-      ? "border-l-2 border-blue-500" 
-      : metadata?.intent === 'search' 
-        ? "border-l-2 border-green-500" 
-        : "";
-    
-    return cn(
-      baseClasses,
-      alignmentClasses,
-      highlightClasses,
-      intentClass
-    );
-  };
+    const status = memory.metadata?.verification_status;
+    const score = memory.metadata?.verification_score || 0;
 
-  const renderMessageContent = (message: Message) => {
-    if (message.message_type === 'file' || message.message_type === 'image') {
-      const metadata = message.metadata as MessageMetadata;
-      if (metadata?.file_path) {
+    switch (status) {
+      case 'verified':
         return (
-          <div className="space-y-2">
-            {message.content && (
-              <div className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">
-                {message.content}
-              </div>
-            )}
-            <FilePreview
-              fileMetadata={{
-                file_path: metadata.file_path,
-                file_name: metadata.file_name || 'Unnamed file',
-                content_type: metadata.content_type || 'application/octet-stream',
-                size: metadata.size || 0,
-              }}
-            />
-          </div>
+          <Tooltip content={`Verified (Score: ${(score * 100).toFixed(1)}%)`}>
+            <ShieldCheck className="h-4 w-4 text-green-500" />
+          </Tooltip>
         );
-      }
+      case 'partially_verified':
+        return (
+          <Tooltip content={`Partially Verified (Score: ${(score * 100).toFixed(1)}%)`}>
+            <Shield className="h-4 w-4 text-yellow-500" />
+          </Tooltip>
+        );
+      case 'needs_verification':
+        return (
+          <Tooltip content="Needs Verification">
+            <AlertCircle className="h-4 w-4 text-orange-500" />
+          </Tooltip>
+        );
+      case 'contradicted':
+        return (
+          <Tooltip content="Contradicted Information">
+            <ShieldX className="h-4 w-4 text-red-500" />
+          </Tooltip>
+        );
+      default:
+        return null;
     }
-
-    return (
-      <div className="text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">
-        {message.content}
-      </div>
-    );
   };
 
   return (
-    <ScrollArea className="h-full">
-      <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <ThreadSearch 
-          messages={messages || []} 
-          onMatchFound={scrollToMessage}
-        />
-        {!hasSubscription && threadId && (
-          <div className="text-xs text-muted-foreground text-center py-1">
-            {messageCount}/{maxMessages} messages used
-          </div>
-        )}
-      </div>
-      <div className="space-y-3 max-w-[95%] sm:max-w-4xl mx-auto p-2 sm:p-4">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : messages?.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No messages yet. Start the conversation!
-          </div>
-        ) : (
-          messages?.map((message) => (
-            <div
-              key={message.id}
-              id={message.id}
-              className={`flex gap-2 sm:gap-3 max-w-[95%] sm:max-w-[80%] ${getMessageClasses(message)}`}
-            >
-              {message.role && (
-                <Avatar className="h-6 w-6 sm:h-8 sm:w-8 bg-gradient-primary text-primary-foreground ring-2 ring-primary/10">
-                  <span className="text-[10px] sm:text-xs font-semibold">
-                    {message.role.tag}
-                  </span>
-                </Avatar>
-              )}
-              <div className={`flex-1 ${message.role_id ? "" : "text-right"}`}>
-                {message.role && (
-                  <div className="flex items-center gap-1 sm:gap-2 mb-0.5 sm:mb-1">
-                    <div className="font-semibold text-xs sm:text-sm text-primary">
-                      {message.role.name}
-                    </div>
-                    <div className="text-[10px] sm:text-xs text-muted-foreground">
-                      {new Date(message.created_at).toLocaleTimeString()}
-                    </div>
-                  </div>
-                )}
-                <div 
-                  className={`p-2 sm:p-4 rounded-lg ${
-                    message.role_id
-                      ? "bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm shadow-sm hover:shadow-md transition-shadow"
-                      : "bg-primary/10 text-left"
-                  }`}
-                >
-                  {renderMessageContent(message)}
-                </div>
+    <div 
+      ref={messageListRef}
+      className="flex-1 overflow-y-auto p-4 space-y-4"
+    >
+      {messages.slice(-maxMessages).map((message, index) => (
+        <div
+          key={message.id}
+          id={message.id}
+          className={cn(
+            "flex items-start gap-4 transition-colors",
+            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
+          )}
+        >
+          <div
+            className={cn(
+              "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
+              message.role?.tag === "user"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted"
+            )}
+          >
+            {message.role?.tag !== "user" && (
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {message.role?.name}
+                {getVerificationIcon(message.id)}
               </div>
-            </div>
-          ))
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-    </ScrollArea>
+            )}
+            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+            <MessageControls message={message} />
+          </div>
+          {index === messages.length - 1 && (
+            <div ref={lastMessageRef} />
+          )}
+        </div>
+      ))}
+      <div ref={messagesEndRef} />
+    </div>
   );
 }
