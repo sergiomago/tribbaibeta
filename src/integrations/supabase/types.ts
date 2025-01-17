@@ -374,6 +374,7 @@ export type Database = {
           access_count: number | null
           confidence_score: number | null
           content: string
+          context_chain: Json | null
           context_relevance: number | null
           context_source: string | null
           context_type: string
@@ -386,12 +387,16 @@ export type Database = {
           interaction_id: string | null
           last_accessed: string | null
           last_reinforced: string | null
+          last_retrieved: string | null
           last_verified: string | null
+          memory_category: string | null
           memory_type: string | null
           metadata: Json | null
           reinforcement_count: number | null
           relevance_score: number | null
+          retrieval_count: number | null
           role_id: string | null
+          source_type: string | null
           topic_vector: string | null
           verification_score: number | null
           verification_status: string | null
@@ -400,6 +405,7 @@ export type Database = {
           access_count?: number | null
           confidence_score?: number | null
           content: string
+          context_chain?: Json | null
           context_relevance?: number | null
           context_source?: string | null
           context_type: string
@@ -412,12 +418,16 @@ export type Database = {
           interaction_id?: string | null
           last_accessed?: string | null
           last_reinforced?: string | null
+          last_retrieved?: string | null
           last_verified?: string | null
+          memory_category?: string | null
           memory_type?: string | null
           metadata?: Json | null
           reinforcement_count?: number | null
           relevance_score?: number | null
+          retrieval_count?: number | null
           role_id?: string | null
+          source_type?: string | null
           topic_vector?: string | null
           verification_score?: number | null
           verification_status?: string | null
@@ -426,6 +436,7 @@ export type Database = {
           access_count?: number | null
           confidence_score?: number | null
           content?: string
+          context_chain?: Json | null
           context_relevance?: number | null
           context_source?: string | null
           context_type?: string
@@ -438,12 +449,16 @@ export type Database = {
           interaction_id?: string | null
           last_accessed?: string | null
           last_reinforced?: string | null
+          last_retrieved?: string | null
           last_verified?: string | null
+          memory_category?: string | null
           memory_type?: string | null
           metadata?: Json | null
           reinforcement_count?: number | null
           relevance_score?: number | null
+          retrieval_count?: number | null
           role_id?: string | null
+          source_type?: string | null
           topic_vector?: string | null
           verification_score?: number | null
           verification_status?: string | null
