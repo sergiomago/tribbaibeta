@@ -11,7 +11,7 @@ export async function compileMessageContext(
 
   try {
     // Get relevant memories
-    const { data: memories } = await supabase.rpc(
+    const { data: memories, error: memoriesError } = await supabase.rpc(
       'get_similar_memories',
       {
         p_embedding: content,
@@ -21,8 +21,10 @@ export async function compileMessageContext(
       }
     );
 
+    if (memoriesError) throw memoriesError;
+
     // Get conversation depth
-    const { data: depth } = await supabase.rpc(
+    const { data: depth, error: depthError } = await supabase.rpc(
       'get_conversation_depth',
       { 
         p_thread_id: threadId,
@@ -30,8 +32,10 @@ export async function compileMessageContext(
       }
     );
 
+    if (depthError) throw depthError;
+
     // Get recent interactions
-    const { data: interactions } = await supabase
+    const { data: interactions, error: interactionsError } = await supabase
       .from('role_interactions')
       .select(`
         *,
@@ -41,6 +45,8 @@ export async function compileMessageContext(
       .eq('thread_id', threadId)
       .order('created_at', { ascending: false })
       .limit(5);
+
+    if (interactionsError) throw interactionsError;
 
     const context: MessageContext = {
       memories: memories || [],

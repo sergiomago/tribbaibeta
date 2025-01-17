@@ -2,13 +2,11 @@ export interface ChatMessage {
   threadId: string;
   content: string;
   taggedRoleId?: string;
-  metadata?: Record<string, any>;
 }
 
 export interface ResponseChain {
   roleId: string;
   chainOrder: number;
-  messageId?: string;
 }
 
 export interface AnalysisResult {
@@ -19,8 +17,11 @@ export interface AnalysisResult {
 }
 
 export interface MessageContext {
-  memories: any[];
-  previousInteractions: any[];
+  memories?: any[];
+  previousInteractions?: any[];
   conversationDepth: number;
-  chainContext?: Record<string, any>;
+  chainContext: {
+    lastUpdated: string;
+    contextType: string;
+  };
 }

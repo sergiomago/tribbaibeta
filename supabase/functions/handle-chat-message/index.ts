@@ -13,6 +13,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -41,7 +42,10 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error saving message:', messageError);
+      throw messageError;
+    }
 
     // Analyze message
     const analysis = await analyzeMessage(content, openai);
@@ -98,7 +102,10 @@ serve(async (req) => {
         .select()
         .single();
 
-      if (responseError) throw responseError;
+      if (responseError) {
+        console.error('Error saving response:', responseError);
+        throw responseError;
+      }
 
       // Update chain progress
       await updateChainProgress(supabase, threadId, response.id, chainOrder);
@@ -123,9 +130,15 @@ serve(async (req) => {
         });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: true }), 
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
+    );
   } catch (error) {
     console.error('Error in handle-chat-message:', error);
     return new Response(
