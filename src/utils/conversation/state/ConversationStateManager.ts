@@ -64,7 +64,18 @@ export class ConversationStateManager {
       .maybeSingle();
 
     if (error) throw error;
-    return data;
+    if (!data) return null;
+
+    // Transform snake_case to camelCase
+    return {
+      id: data.id,
+      threadId: data.thread_id,
+      currentState: data.current_state,
+      activeRoles: data.active_roles,
+      metadata: data.metadata,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    };
   }
 
   async updateMetadata(metadata: Record<string, any>): Promise<void> {
