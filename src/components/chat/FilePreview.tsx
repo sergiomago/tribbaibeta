@@ -19,11 +19,11 @@ type AnalyzedFile = Tables<"analyzed_files">;
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analyzedFile, isLoading: isAnalyzing } = useQuery<AnalyzedFile | null>({
+  const { data: analyzedFile, isLoading: isAnalyzing } = useQuery<AnalyzedFile>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
-        return null;
+        throw new Error('No file ID provided');
       }
       
       const { data, error } = await supabase
@@ -33,12 +33,15 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         .maybeSingle();
         
       if (error) throw error;
+      if (!data) throw new Error('File not found');
       
       return data;
     },
     enabled: !!fileMetadata.file_id && !isImage,
-    refetchInterval: (data: AnalyzedFile | null) => 
-      data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data as AnalyzedFile | undefined;
+      return data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false;
+    },
   });
   
   const handleDownload = async () => {
