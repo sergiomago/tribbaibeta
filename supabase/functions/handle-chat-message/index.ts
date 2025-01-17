@@ -57,7 +57,8 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Build response chain with enhanced role selection
+    // Build response chain
+    console.log('Building response chain:', { threadId, taggedRoleId });
     const chain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
     console.log('Response chain built:', chain);
 
@@ -83,12 +84,13 @@ serve(async (req) => {
       }
 
       // Get role details
-      const { data: role } = await supabase
+      const { data: role, error: roleError } = await supabase
         .from('roles')
         .select('*')
         .eq('id', roleId)
-        .single();
+        .maybeSingle();
 
+      if (roleError) throw roleError;
       if (!role) {
         console.error('Role not found:', roleId);
         continue;
@@ -96,6 +98,7 @@ serve(async (req) => {
 
       // Compile context for this role
       const context = await compileMessageContext(supabase, threadId, roleId, content);
+      console.log('Context compiled for role:', { roleId, contextSize: context.memories?.length });
 
       // Generate response with enhanced context
       const completion = await openai.chat.completions.create({
@@ -104,7 +107,7 @@ serve(async (req) => {
           {
             role: 'system',
             content: `${role.instructions}\n\nPrevious response from ${previousRoleName}: ${previousResponse}\n\nYou must acknowledge and build upon the previous response while maintaining your role's perspective and expertise. Consider this context from previous interactions:\n${
-              context.memories.map(m => `- ${m.content}`).join('\n')
+              context.memories?.map(m => `- ${m.content}`).join('\n') || 'No previous context available.'
             }`
           },
           { role: 'user', content }
@@ -112,7 +115,7 @@ serve(async (req) => {
       });
 
       const responseContent = completion.choices[0].message.content;
-      console.log('Generated response for role:', roleId);
+      console.log('Generated response for role:', { roleId, responseLength: responseContent.length });
 
       // Save role's response
       const { data: response, error: responseError } = await supabase
@@ -135,7 +138,7 @@ serve(async (req) => {
         .single();
 
       if (responseError) throw responseError;
-      console.log('Saved response:', response);
+      console.log('Saved response:', { responseId: response.id });
 
       await updateChainProgress(supabase, threadId, response.id, chainOrder);
 
@@ -152,7 +155,7 @@ serve(async (req) => {
               message_id: message.id,
               response_id: response.id,
               conversation_depth: chainOrder,
-              relevance_score: context.relevance_score
+              relevance_score: context.relevance_score || 0
             }
           }),
         updateContextualMemory(supabase, roleId, responseContent, context)

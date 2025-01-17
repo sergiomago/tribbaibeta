@@ -19,68 +19,51 @@ export async function buildResponseChain(
       }];
     }
 
-    // Get best responding roles based on effectiveness
-    const { data: bestRoles, error: rolesError } = await supabase.rpc(
-      'get_best_responding_role',
-      { 
-        p_thread_id: threadId,
-        p_context: content,
-        p_threshold: 0.3
-      }
+    // Get thread roles if no specific role is tagged
+    const { data: threadRoles, error: threadRolesError } = await supabase
+      .from('thread_roles')
+      .select('role_id')
+      .eq('thread_id', threadId);
+
+    if (threadRolesError) throw threadRolesError;
+    
+    if (!threadRoles?.length) {
+      console.log('No roles found for thread');
+      return [];
+    }
+
+    // Calculate effectiveness for all roles
+    const scoredRoles = await Promise.all(
+      threadRoles.map(async (tr) => {
+        const { data: score } = await supabase.rpc(
+          'calculate_role_effectiveness',
+          {
+            p_role_id: tr.role_id,
+            p_thread_id: threadId,
+            p_context: content
+          }
+        );
+        return {
+          roleId: tr.role_id,
+          score: score || 0
+        };
+      })
     );
 
-    if (rolesError) {
-      console.error('Error getting best roles:', rolesError);
-      throw rolesError;
+    // Sort by score and ensure at least one role responds
+    const sortedRoles = scoredRoles.sort((a, b) => b.score - a.score);
+    const threshold = 0.3;
+    
+    // Get roles that meet the threshold, or at least the best one
+    const selectedRoles = sortedRoles.filter(role => role.score >= threshold);
+    if (!selectedRoles.length && sortedRoles.length > 0) {
+      selectedRoles.push(sortedRoles[0]); // Include the best role even if below threshold
     }
 
-    console.log('Best responding roles:', bestRoles);
-
-    // If no roles meet the threshold, get all available roles and pick the best one
-    if (!bestRoles?.length) {
-      console.log('No roles met threshold, selecting fallback role');
-      const { data: threadRoles } = await supabase
-        .from('thread_roles')
-        .select('role_id, roles(*)')
-        .eq('thread_id', threadId);
-
-      if (!threadRoles?.length) {
-        console.log('No roles found for thread');
-        return [];
-      }
-
-      // Calculate effectiveness for all roles and pick the best one
-      const scoredRoles = await Promise.all(
-        threadRoles.map(async (tr) => {
-          const { data: score } = await supabase.rpc(
-            'calculate_role_effectiveness',
-            {
-              p_role_id: tr.role_id,
-              p_thread_id: threadId,
-              p_context: content
-            }
-          );
-          return {
-            roleId: tr.role_id,
-            score: score || 0
-          };
-        })
-      );
-
-      // Sort by score and take the best one
-      const bestRole = scoredRoles.sort((a, b) => b.score - a.score)[0];
-      if (bestRole) {
-        return [{
-          roleId: bestRole.roleId,
-          chainOrder: 1
-        }];
-      }
-    }
-
-    // Map the best roles to chain format
-    const chain = bestRoles.map((role) => ({
-      roleId: role.role_id,
-      chainOrder: role.chain_order
+    // Map to chain format with order
+    const chain = selectedRoles.map((role, index) => ({
+      roleId: role.roleId,
+      chainOrder: index + 1
     }));
 
     console.log('Built response chain:', chain);
