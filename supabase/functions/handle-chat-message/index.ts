@@ -26,7 +26,7 @@ serve(async (req) => {
     const openai = new OpenAI({ apiKey: openaiKey });
 
     const { threadId, content, taggedRoleId } = await req.json();
-    console.log('Request payload:', { threadId, content, taggedRoleId });
+    console.log('Processing message:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
       throw new Error('Missing required fields');
@@ -55,6 +55,8 @@ serve(async (req) => {
       });
 
     if (rolesError) throw rolesError;
+    console.log('Selected responding roles:', respondingRoles);
+
     if (!respondingRoles?.length) {
       throw new Error('No suitable roles found for response');
     }
@@ -69,13 +71,26 @@ serve(async (req) => {
 
       if (!role) continue;
 
+      // Get relevant memories for context
+      const { data: memories } = await supabase
+        .rpc('get_similar_memories', {
+          p_embedding: content,
+          p_match_threshold: 0.7,
+          p_match_count: 5,
+          p_role_id: role_id
+        });
+
+      const memoryContext = memories?.length 
+        ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+        : '';
+
       // Generate response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: role.instructions
+            content: `${role.instructions}\n\n${memoryContext}`
           },
           { role: 'user', content }
         ],
@@ -84,15 +99,19 @@ serve(async (req) => {
       const responseContent = completion.choices[0].message.content;
 
       // Save role's response
-      await supabase
+      const { data: roleResponse, error: responseError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
           role_id: role_id,
           content: responseContent,
           chain_id: message.id,
-          chain_order: chain_order,
-        });
+          chain_order,
+        })
+        .select()
+        .single();
+
+      if (responseError) throw responseError;
 
       // Update role interaction metrics
       await supabase
@@ -102,8 +121,26 @@ serve(async (req) => {
           initiator_role_id: role_id,
           responder_role_id: taggedRoleId || role_id,
           interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
-          effectiveness_score: 1.0, // Initial score, will be updated based on future interactions
-          chain_position: chain_order
+          effectiveness_score: 1.0,
+          chain_position: chain_order,
+          metadata: {
+            context_type: 'conversation',
+            memory_count: memories?.length || 0
+          }
+        });
+
+      // Store response in role's memory
+      await supabase
+        .from('role_memories')
+        .insert({
+          role_id: role_id,
+          content: responseContent,
+          context_type: 'conversation',
+          metadata: {
+            message_id: roleResponse.id,
+            thread_id: threadId,
+            chain_order: chain_order
+          }
         });
     }
 
