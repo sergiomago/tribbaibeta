@@ -66,13 +66,13 @@ export class ConversationStateManager {
     if (error) throw error;
     if (!data) return null;
 
-    // Transform snake_case to camelCase
+    // Transform snake_case to camelCase and ensure metadata is an object
     return {
       id: data.id,
       threadId: data.thread_id,
       currentState: data.current_state,
       activeRoles: data.active_roles,
-      metadata: data.metadata,
+      metadata: typeof data.metadata === 'object' ? data.metadata || {} : {},
       createdAt: data.created_at,
       updatedAt: data.updated_at
     };
