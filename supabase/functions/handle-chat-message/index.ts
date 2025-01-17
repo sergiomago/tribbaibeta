@@ -124,7 +124,7 @@ serve(async (req) => {
           chain_id: message.id,
           chain_order,
         })
-        .select()
+        .select('*, roles:role_id(*)')
         .single();
 
       if (responseError) {
