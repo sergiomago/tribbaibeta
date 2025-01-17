@@ -43,6 +43,7 @@ serve(async (req) => {
     const openai = new OpenAI({ apiKey: openaiKey });
 
     // Create embedding for the message content
+    console.log('Creating embedding for message content');
     const embedding = await openai.embeddings.create({
       model: "text-embedding-ada-002",
       input: content,
@@ -50,7 +51,7 @@ serve(async (req) => {
 
     console.log('Created embedding for message');
 
-    // Save user message with embedding
+    // Save user message with embedding in metadata
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -58,7 +59,8 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
         metadata: {
-          embedding: embedding.data[0].embedding
+          embedding: embedding.data[0].embedding,
+          timestamp: new Date().toISOString()
         }
       })
       .select()
@@ -90,8 +92,13 @@ serve(async (req) => {
         continue;
       }
 
-      // Compile context using the embedding
-      const context = await compileMessageContext(supabase, threadId, roleId, embedding.data[0].embedding);
+      // Use the embedding for context compilation
+      const context = await compileMessageContext(
+        supabase, 
+        threadId, 
+        roleId, 
+        embedding.data[0].embedding
+      );
       console.log('Context compiled for role:', roleId);
 
       const { data: role, error: roleError } = await supabase
@@ -140,7 +147,8 @@ serve(async (req) => {
           chain_order: chainOrder,
           response_order: chainOrder,
           metadata: {
-            embedding: responseEmbedding.data[0].embedding
+            embedding: responseEmbedding.data[0].embedding,
+            timestamp: new Date().toISOString()
           }
         })
         .select()
