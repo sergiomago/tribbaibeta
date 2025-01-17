@@ -54,6 +54,7 @@ export type Database = {
       conversation_states: {
         Row: {
           active_roles: string[] | null
+          chain_metrics: Json | null
           created_at: string
           current_state: Database["public"]["Enums"]["conversation_state"]
           id: string
@@ -63,6 +64,7 @@ export type Database = {
         }
         Insert: {
           active_roles?: string[] | null
+          chain_metrics?: Json | null
           created_at?: string
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
@@ -72,6 +74,7 @@ export type Database = {
         }
         Update: {
           active_roles?: string[] | null
+          chain_metrics?: Json | null
           created_at?: string
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
@@ -300,8 +303,11 @@ export type Database = {
       }
       role_interactions: {
         Row: {
+          chain_effectiveness: number | null
+          chain_position: number | null
           conversation_depth: number | null
           created_at: string
+          effectiveness_score: number | null
           id: string
           initiator_role_id: string
           interaction_context: Json | null
@@ -310,11 +316,15 @@ export type Database = {
           parent_interaction_id: string | null
           relevance_score: number | null
           responder_role_id: string
+          response_quality_metrics: Json | null
           thread_id: string
         }
         Insert: {
+          chain_effectiveness?: number | null
+          chain_position?: number | null
           conversation_depth?: number | null
           created_at?: string
+          effectiveness_score?: number | null
           id?: string
           initiator_role_id: string
           interaction_context?: Json | null
@@ -323,11 +333,15 @@ export type Database = {
           parent_interaction_id?: string | null
           relevance_score?: number | null
           responder_role_id: string
+          response_quality_metrics?: Json | null
           thread_id: string
         }
         Update: {
+          chain_effectiveness?: number | null
+          chain_position?: number | null
           conversation_depth?: number | null
           created_at?: string
+          effectiveness_score?: number | null
           id?: string
           initiator_role_id?: string
           interaction_context?: Json | null
@@ -336,6 +350,7 @@ export type Database = {
           parent_interaction_id?: string | null
           relevance_score?: number | null
           responder_role_id?: string
+          response_quality_metrics?: Json | null
           thread_id?: string
         }
         Relationships: [
@@ -668,6 +683,14 @@ export type Database = {
             }
             Returns: unknown
           }
+      calculate_role_effectiveness: {
+        Args: {
+          p_role_id: string
+          p_thread_id: string
+          p_context: string
+        }
+        Returns: number
+      }
       calculate_text_similarity: {
         Args: {
           text1: string
@@ -702,6 +725,18 @@ export type Database = {
           user_id: string
         }
         Returns: number
+      }
+      get_best_responding_role: {
+        Args: {
+          p_thread_id: string
+          p_context: string
+          p_threshold?: number
+        }
+        Returns: {
+          role_id: string
+          score: number
+          chain_order: number
+        }[]
       }
       get_conversation_chain: {
         Args: {
