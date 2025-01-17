@@ -15,11 +15,11 @@ export type Message = {
   chain_order: number | null;
   search_vector: unknown | null;
   metadata: {
-    message_id?: string;
-    verification_status?: string;
-    verification_score?: number;
+    message_id?: string | undefined;
+    verification_status?: string | undefined;
+    verification_score?: number | undefined;
     [key: string]: any; // Allow for additional metadata properties
-  };
+  } | null;
   message_type: 'text' | 'file' | 'analysis';
   role?: {
     name: string;
