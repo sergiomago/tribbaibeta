@@ -2,6 +2,30 @@ import { Tables } from "@/integrations/supabase/types";
 
 export type Role = Tables<"roles">;
 
+export type Message = {
+  id: string;
+  thread_id: string;
+  role_id: string | null;
+  content: string;
+  created_at: string;
+  tagged_role_id: string | null;
+  reply_to_message_id: string | null;
+  response_order: number | null;
+  chain_id: string | null;
+  chain_order: number | null;
+  search_vector: unknown | null;
+  metadata: {
+    message_id?: string;
+    verification_status?: string;
+    verification_score?: number;
+  };
+  message_type: 'text' | 'file' | 'analysis';
+  role?: {
+    name: string;
+    tag: string;
+  };
+};
+
 export type ConversationState = {
   id: string;
   thread_id: string;
