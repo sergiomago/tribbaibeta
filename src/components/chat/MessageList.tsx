@@ -131,8 +131,8 @@ export function MessageList({
               className={cn(
                 "max-w-[85%] rounded-2xl px-6 py-4 space-y-2",
                 message.role?.tag === "user" 
-                  ? "bg-gradient-primary text-primary-foreground rounded-br-sm" 
-                  : "bg-muted/50 backdrop-blur-sm border border-border/50 rounded-bl-sm dark:bg-gray-800/50 dark:border-gray-700"
+                  ? "bg-gradient-primary text-white ml-auto rounded-br-sm" 
+                  : "bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-bl-sm"
               )}
             >
               {message.role?.tag !== "user" && (
