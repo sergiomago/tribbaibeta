@@ -19,17 +19,25 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Received request to handle-chat-message');
+    
     const { threadId, content, taggedRoleId } = await req.json() as ChatMessage;
-    console.log('Received request:', { threadId, content, taggedRoleId });
+    console.log('Request payload:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
-      throw new Error('Missing required fields: threadId and content are required');
+      console.error('Missing required fields');
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: threadId and content are required' }), 
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! });
+
+    console.log('Initialized Supabase and OpenAI clients');
 
     // Save user message
     const { data: message, error: messageError } = await supabase
@@ -47,21 +55,31 @@ serve(async (req) => {
       throw messageError;
     }
 
+    console.log('Saved user message:', message);
+
     // Analyze message
     const analysis = await analyzeMessage(content, openai);
     await saveMessageAnalysis(supabase, threadId, message.id, analysis);
+    console.log('Message analysis completed');
 
     // Build response chain
     const chain = await buildResponseChain(supabase, threadId, taggedRoleId);
+    console.log('Response chain built:', chain);
 
     // Process each role in the chain
     for (const { roleId, chainOrder } of chain) {
+      console.log('Processing role:', { roleId, chainOrder });
+      
       // Validate chain order
       const isValidOrder = await validateChainOrder(supabase, threadId, roleId, chainOrder);
-      if (!isValidOrder) continue;
+      if (!isValidOrder) {
+        console.log('Invalid chain order, skipping role:', roleId);
+        continue;
+      }
 
       // Compile context
       const context = await compileMessageContext(supabase, threadId, roleId, content);
+      console.log('Context compiled for role:', roleId);
 
       // Get role details
       const { data: role } = await supabase
@@ -70,7 +88,10 @@ serve(async (req) => {
         .eq('id', roleId)
         .single();
 
-      if (!role) continue;
+      if (!role) {
+        console.error('Role not found:', roleId);
+        continue;
+      }
 
       // Generate response
       const completion = await openai.chat.completions.create({
@@ -87,6 +108,7 @@ serve(async (req) => {
       });
 
       const responseContent = completion.choices[0].message.content;
+      console.log('Generated response for role:', roleId);
 
       // Save role's response
       const { data: response, error: responseError } = await supabase
@@ -106,6 +128,8 @@ serve(async (req) => {
         console.error('Error saving response:', responseError);
         throw responseError;
       }
+
+      console.log('Saved response:', response);
 
       // Update chain progress
       await updateChainProgress(supabase, threadId, response.id, chainOrder);
@@ -132,22 +156,18 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true }), 
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in handle-chat-message:', error);
     return new Response(
-      JSON.stringify({
+      JSON.stringify({ 
         error: error instanceof Error ? error.message : 'An unknown error occurred',
-      }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        details: error instanceof Error ? error.stack : undefined
+      }), 
+      { 
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
