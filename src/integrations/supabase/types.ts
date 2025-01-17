@@ -377,6 +377,8 @@ export type Database = {
           context_relevance: number | null
           context_source: string | null
           context_type: string
+          contradiction_check_status: string | null
+          contradiction_references: Json | null
           created_at: string
           embedding: string | null
           id: string
@@ -384,12 +386,15 @@ export type Database = {
           interaction_id: string | null
           last_accessed: string | null
           last_reinforced: string | null
+          last_verified: string | null
           memory_type: string | null
           metadata: Json | null
           reinforcement_count: number | null
           relevance_score: number | null
           role_id: string | null
           topic_vector: string | null
+          verification_score: number | null
+          verification_status: string | null
         }
         Insert: {
           access_count?: number | null
@@ -398,6 +403,8 @@ export type Database = {
           context_relevance?: number | null
           context_source?: string | null
           context_type: string
+          contradiction_check_status?: string | null
+          contradiction_references?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -405,12 +412,15 @@ export type Database = {
           interaction_id?: string | null
           last_accessed?: string | null
           last_reinforced?: string | null
+          last_verified?: string | null
           memory_type?: string | null
           metadata?: Json | null
           reinforcement_count?: number | null
           relevance_score?: number | null
           role_id?: string | null
           topic_vector?: string | null
+          verification_score?: number | null
+          verification_status?: string | null
         }
         Update: {
           access_count?: number | null
@@ -419,6 +429,8 @@ export type Database = {
           context_relevance?: number | null
           context_source?: string | null
           context_type?: string
+          contradiction_check_status?: string | null
+          contradiction_references?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -426,12 +438,15 @@ export type Database = {
           interaction_id?: string | null
           last_accessed?: string | null
           last_reinforced?: string | null
+          last_verified?: string | null
           memory_type?: string | null
           metadata?: Json | null
           reinforcement_count?: number | null
           relevance_score?: number | null
           role_id?: string | null
           topic_vector?: string | null
+          verification_score?: number | null
+          verification_status?: string | null
         }
         Relationships: [
           {
