@@ -20,3 +20,21 @@ export interface RoleSelectionCriteria {
   specialCapabilities: string[];
   requiredTags?: string[];
 }
+
+export interface RoleInteraction {
+  id: string;
+  initiatorRoleId: string;
+  responderRoleId: string;
+  threadId: string;
+  interactionType: string;
+  metadata: Record<string, any>;
+  conversationDepth: number;
+  createdAt: string;
+}
+
+export interface TaggingMetadata {
+  role_name: string;
+  role_tag: string;
+  tagging_timestamp: string;
+  special_capabilities: string[];
+}
