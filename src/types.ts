@@ -18,6 +18,7 @@ export type Message = {
     message_id?: string;
     verification_status?: string;
     verification_score?: number;
+    [key: string]: any; // Allow for additional metadata properties
   };
   message_type: 'text' | 'file' | 'analysis';
   role?: {
