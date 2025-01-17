@@ -121,21 +121,19 @@ export function MessageList({
           id={message.id}
           className={cn(
             "flex gap-4 max-w-[85%] animate-fade-in",
-            message.role?.tag === "user" 
-              ? "ml-auto" 
-              : "mr-auto"
+            message.role?.tag === "user" ? "ml-auto" : "mr-auto"
           )}
         >
           <div
             className={cn(
               "rounded-2xl px-6 py-4 space-y-2",
-              message.role?.tag === "user"
-                ? "bg-gradient-primary text-primary-foreground rounded-br-sm"
-                : "bg-muted/50 backdrop-blur-sm border border-border/50 rounded-bl-sm"
+              message.role?.tag === "user" 
+                ? "bg-gradient-primary text-primary-foreground rounded-br-sm" 
+                : "bg-muted/50 backdrop-blur-sm border border-border/50 rounded-bl-sm dark:bg-gray-800/50 dark:border-gray-700"
             )}
           >
             {message.role?.tag !== "user" && (
-              <div className="flex items-center gap-2 text-sm font-semibold text-primary/80">
+              <div className="flex items-center gap-2 text-sm font-semibold text-primary">
                 {message.role?.name}
                 {getVerificationIcon(message.id)}
               </div>
@@ -144,7 +142,7 @@ export function MessageList({
               "text-sm whitespace-pre-wrap prose prose-sm max-w-none",
               message.role?.tag === "user" 
                 ? "prose-invert" 
-                : "dark:prose-invert"
+                : "prose-gray dark:prose-invert"
             )}>
               {message.content}
             </div>
