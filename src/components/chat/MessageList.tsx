@@ -107,49 +107,38 @@ export function MessageList({
   };
 
   if (isLoading) {
-    return <div className="flex-1 p-4 text-muted-foreground">Loading messages...</div>;
+    return <div className="flex-1 p-4">Loading messages...</div>;
   }
 
   return (
     <div 
       ref={messageListRef}
-      className="flex-1 overflow-y-auto p-4 space-y-8"
+      className="flex-1 overflow-y-auto p-4 space-y-4"
     >
       {messages.slice(-maxMessages).map((message, index) => (
         <div
           key={message.id}
           id={message.id}
-          className="flex w-full"
+          className={cn(
+            "flex items-start gap-4 transition-colors",
+            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
+          )}
         >
           <div
             className={cn(
-              "flex w-full",
-              message.role?.tag === "user" ? "justify-end" : "justify-start"
+              "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
+              message.role?.tag === "user"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted"
             )}
           >
-            <div
-              className={cn(
-                "max-w-[85%] rounded-2xl px-6 py-4 space-y-2",
-                message.role?.tag === "user" 
-                  ? "bg-gradient-primary text-white ml-auto rounded-br-sm" 
-                  : "bg-gray-100 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-bl-sm"
-              )}
-            >
-              {message.role?.tag !== "user" && (
-                <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                  {message.role?.name}
-                  {getVerificationIcon(message.id)}
-                </div>
-              )}
-              <div className={cn(
-                "text-sm whitespace-pre-wrap prose prose-sm max-w-none",
-                message.role?.tag === "user" 
-                  ? "prose-invert" 
-                  : "prose-gray dark:prose-invert"
-              )}>
-                {message.content}
+            {message.role?.tag !== "user" && (
+              <div className="flex items-center gap-2 text-sm font-medium">
+                {message.role?.name}
+                {getVerificationIcon(message.id)}
               </div>
-            </div>
+            )}
+            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
           </div>
           {index === messages.length - 1 && (
             <div ref={lastMessageRef} />
