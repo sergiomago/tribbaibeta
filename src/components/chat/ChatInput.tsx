@@ -10,6 +10,7 @@ import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { useQuery } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
 
 interface ChatInputProps {
   threadId: string;
