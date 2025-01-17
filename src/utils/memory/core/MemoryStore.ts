@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DatabaseMemory, Memory, MemoryMetadata } from "../types/memory";
+import { Json } from "@/integrations/supabase/types";
 
 export class MemoryStore {
   private roleId: string;
@@ -16,12 +17,12 @@ export class MemoryStore {
           role_id: this.roleId,
           content,
           context_type: metadata.context_type || 'general',
-          metadata: metadata as Json,
+          metadata: metadata as unknown as Json,
           memory_category: metadata.memory_category || 'general',
           source_type: metadata.source_type || 'direct',
           importance_score: metadata.importance_score || 1.0,
           confidence_score: metadata.confidence_score || 1.0,
-          context_chain: metadata.context_chain || []
+          context_chain: (metadata.context_chain || []) as unknown as Json
         });
 
       if (error) throw error;

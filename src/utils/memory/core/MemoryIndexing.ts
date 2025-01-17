@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { DatabaseMemory } from "../types/memory";
+import { Json } from "@/integrations/supabase/types";
 
 export class MemoryIndexing {
   private roleId: string;
@@ -30,7 +31,7 @@ export class MemoryIndexing {
       const { error } = await supabase
         .from('role_memories')
         .update({
-          context_chain: contextChain,
+          context_chain: contextChain as Json,
           updated_at: new Date().toISOString()
         })
         .eq('id', memoryId);
@@ -53,7 +54,7 @@ export class MemoryIndexing {
 
       if (error) throw error;
 
-      const updates = memories.map((memory: DatabaseMemory) => ({
+      const updates = (memories as DatabaseMemory[]).map((memory) => ({
         id: memory.id,
         importance_score: this.calculateImportanceScore(memory)
       }));

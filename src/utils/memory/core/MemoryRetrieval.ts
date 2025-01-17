@@ -19,7 +19,7 @@ export class MemoryRetrieval {
         .limit(limit);
 
       if (error) throw error;
-      return data || [];
+      return data as DatabaseMemory[];
     } catch (error) {
       console.error('Error retrieving memories by category:', error);
       throw error;
@@ -37,7 +37,7 @@ export class MemoryRetrieval {
         .limit(limit);
 
       if (error) throw error;
-      return data || [];
+      return data as DatabaseMemory[];
     } catch (error) {
       console.error('Error retrieving memories by context type:', error);
       throw error;
@@ -54,7 +54,7 @@ export class MemoryRetrieval {
         .limit(limit);
 
       if (error) throw error;
-      return data || [];
+      return data as DatabaseMemory[];
     } catch (error) {
       console.error('Error retrieving most relevant memories:', error);
       throw error;
