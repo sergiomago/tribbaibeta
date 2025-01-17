@@ -17,12 +17,18 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Received request to handle-chat-message');
+    
+    const { threadId, content, taggedRoleId } = await req.json();
+    console.log('Request payload:', { threadId, content, taggedRoleId });
+
+    if (!threadId || !content) {
+      throw new Error('Missing required fields: threadId and content are required');
+    }
+
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
-
-    const { threadId, content, taggedRoleId } = await req.json();
-    console.log('Received request:', { threadId, content, taggedRoleId });
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -35,7 +41,10 @@ serve(async (req) => {
       .eq('thread_id', threadId)
       .maybeSingle();
 
+    console.log('Current conversation state:', state);
+
     if (!state) {
+      console.log('Initializing new conversation state');
       await supabase
         .from('conversation_states')
         .insert({
@@ -45,56 +54,77 @@ serve(async (req) => {
     }
 
     // Save user message
+    console.log('Saving user message');
     const userMessage = await saveUserMessage(supabase, threadId, content, taggedRoleId);
+    console.log('User message saved:', userMessage);
 
     // Handle conversation based on state
     let analysis;
     let selectedRoles;
 
     if (!taggedRoleId) {
+      console.log('No role tagged, performing initial analysis');
       analysis = await handleInitialAnalysis(supabase, threadId, content, openai);
+      console.log('Analysis complete:', analysis);
+      
       selectedRoles = await selectResponders(supabase, threadId, analysis, openai);
+      console.log('Selected roles:', selectedRoles);
     } else {
+      console.log('Role tagged, using tagged role');
       selectedRoles = [taggedRoleId];
     }
 
     // Generate responses from selected roles
+    console.log('Generating responses from selected roles');
     for (const roleId of selectedRoles) {
-      const memories = await getRelevantMemories(supabase, roleId, content);
-      const { savedMessage, role } = await generateRoleResponse(
-        supabase,
-        threadId,
-        roleId,
-        userMessage,
-        memories,
-        openai
-      );
+      try {
+        console.log(`Processing role ${roleId}`);
+        const memories = await getRelevantMemories(supabase, roleId, content);
+        console.log(`Retrieved ${memories?.length || 0} relevant memories`);
 
-      // Store in role's memory
-      await storeRoleMemory(supabase, roleId, savedMessage.content, {
-        thread_id: threadId,
-        user_message: content,
-        message_id: savedMessage.id,
-        timestamp: new Date().getTime(),
-      });
+        const { savedMessage, role } = await generateRoleResponse(
+          supabase,
+          threadId,
+          roleId,
+          userMessage,
+          memories,
+          openai
+        );
+        console.log(`Generated response for role ${role.name}`);
 
-      // Record interaction
-      await recordInteraction(
-        supabase,
-        threadId,
-        roleId,
-        taggedRoleId,
-        analysis,
-        memories?.length || 0
-      );
+        // Store in role's memory
+        await storeRoleMemory(supabase, roleId, savedMessage.content, {
+          thread_id: threadId,
+          user_message: content,
+          message_id: savedMessage.id,
+          timestamp: new Date().getTime(),
+        });
+        console.log(`Stored memory for role ${roleId}`);
 
-      // Update memory relevance
-      if (memories?.length) {
-        await updateMemoryRelevance(supabase, memories);
+        // Record interaction
+        await recordInteraction(
+          supabase,
+          threadId,
+          roleId,
+          taggedRoleId,
+          analysis,
+          memories?.length || 0
+        );
+        console.log(`Recorded interaction for role ${roleId}`);
+
+        // Update memory relevance
+        if (memories?.length) {
+          await updateMemoryRelevance(supabase, memories);
+          console.log(`Updated memory relevance for ${memories.length} memories`);
+        }
+      } catch (error) {
+        console.error(`Error processing role ${roleId}:`, error);
+        throw error;
       }
     }
 
     // Update state to completion
+    console.log('Updating conversation state to completion');
     await supabase
       .from('conversation_states')
       .update({
