@@ -19,8 +19,23 @@ serve(async (req) => {
   }
 
   try {
+    // Validate environment variables
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const openaiKey = Deno.env.get('OPENAI_API_KEY');
+
+    if (!supabaseUrl || !supabaseKey || !openaiKey) {
+      console.error('Missing environment variables:', {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasSupabaseKey: !!supabaseKey,
+        hasOpenAIKey: !!openaiKey
+      });
+      throw new Error('Missing required environment variables');
+    }
+
     console.log('Received request to handle-chat-message');
     
+    // Parse and validate request body
     const { threadId, content, taggedRoleId } = await req.json() as ChatMessage;
     console.log('Request payload:', { threadId, content, taggedRoleId });
 
@@ -32,10 +47,9 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY')! });
+    const openai = new OpenAI({ apiKey: openaiKey });
 
     console.log('Initialized Supabase and OpenAI clients');
 
@@ -58,9 +72,14 @@ serve(async (req) => {
     console.log('Saved user message:', message);
 
     // Analyze message
-    const analysis = await analyzeMessage(content, openai);
-    await saveMessageAnalysis(supabase, threadId, message.id, analysis);
-    console.log('Message analysis completed');
+    try {
+      const analysis = await analyzeMessage(content, openai);
+      await saveMessageAnalysis(supabase, threadId, message.id, analysis);
+      console.log('Message analysis completed');
+    } catch (error) {
+      console.error('Error in message analysis:', error);
+      throw error;
+    }
 
     // Build response chain
     const chain = await buildResponseChain(supabase, threadId, taggedRoleId);
@@ -70,88 +89,98 @@ serve(async (req) => {
     for (const { roleId, chainOrder } of chain) {
       console.log('Processing role:', { roleId, chainOrder });
       
-      // Validate chain order
-      const isValidOrder = await validateChainOrder(supabase, threadId, roleId, chainOrder);
-      if (!isValidOrder) {
-        console.log('Invalid chain order, skipping role:', roleId);
-        continue;
-      }
+      try {
+        // Validate chain order
+        const isValidOrder = await validateChainOrder(supabase, threadId, roleId, chainOrder);
+        if (!isValidOrder) {
+          console.log('Invalid chain order, skipping role:', roleId);
+          continue;
+        }
 
-      // Compile context
-      const context = await compileMessageContext(supabase, threadId, roleId, content);
-      console.log('Context compiled for role:', roleId);
+        // Compile context
+        const context = await compileMessageContext(supabase, threadId, roleId, content);
+        console.log('Context compiled for role:', roleId);
 
-      // Get role details
-      const { data: role } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', roleId)
-        .single();
+        // Get role details
+        const { data: role, error: roleError } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', roleId)
+          .single();
 
-      if (!role) {
-        console.error('Role not found:', roleId);
-        continue;
-      }
+        if (roleError) {
+          console.error('Error fetching role:', roleError);
+          throw roleError;
+        }
 
-      // Generate response
-      const completion = await openai.chat.completions.create({
-        model: role.model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `${role.instructions}\n\nRelevant context:\n${
-              context.memories?.map(m => m.content).join('\n') || 'No relevant memories found.'
-            }`
-          },
-          { role: 'user', content }
-        ],
-      });
+        if (!role) {
+          console.error('Role not found:', roleId);
+          continue;
+        }
 
-      const responseContent = completion.choices[0].message.content;
-      console.log('Generated response for role:', roleId);
-
-      // Save role's response
-      const { data: response, error: responseError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          role_id: roleId,
-          content: responseContent,
-          chain_id: message.id,
-          chain_order: chainOrder,
-          response_order: chainOrder,
-        })
-        .select()
-        .single();
-
-      if (responseError) {
-        console.error('Error saving response:', responseError);
-        throw responseError;
-      }
-
-      console.log('Saved response:', response);
-
-      // Update chain progress
-      await updateChainProgress(supabase, threadId, response.id, chainOrder);
-
-      // Update contextual memory
-      await updateContextualMemory(supabase, roleId, responseContent, context);
-
-      // Record interaction
-      await supabase
-        .from('role_interactions')
-        .insert({
-          thread_id: threadId,
-          initiator_role_id: roleId,
-          responder_role_id: taggedRoleId || roleId,
-          interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
-          metadata: {
-            message_id: message.id,
-            response_id: response.id,
-            memory_count: context.memories?.length || 0,
-            conversation_depth: context.conversationDepth
-          }
+        // Generate response
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `${role.instructions}\n\nRelevant context:\n${
+                context.memories?.map(m => m.content).join('\n') || 'No relevant memories found.'
+              }`
+            },
+            { role: 'user', content }
+          ],
         });
+
+        const responseContent = completion.choices[0].message.content;
+        console.log('Generated response for role:', roleId);
+
+        // Save role's response
+        const { data: response, error: responseError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: roleId,
+            content: responseContent,
+            chain_id: message.id,
+            chain_order: chainOrder,
+            response_order: chainOrder,
+          })
+          .select()
+          .single();
+
+        if (responseError) {
+          console.error('Error saving response:', responseError);
+          throw responseError;
+        }
+
+        console.log('Saved response:', response);
+
+        // Update chain progress
+        await updateChainProgress(supabase, threadId, response.id, chainOrder);
+
+        // Update contextual memory
+        await updateContextualMemory(supabase, roleId, responseContent, context);
+
+        // Record interaction
+        await supabase
+          .from('role_interactions')
+          .insert({
+            thread_id: threadId,
+            initiator_role_id: roleId,
+            responder_role_id: taggedRoleId || roleId,
+            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
+            metadata: {
+              message_id: message.id,
+              response_id: response.id,
+              memory_count: context.memories?.length || 0,
+              conversation_depth: context.conversationDepth
+            }
+          });
+      } catch (error) {
+        console.error(`Error processing role ${roleId}:`, error);
+        throw error;
+      }
     }
 
     return new Response(
