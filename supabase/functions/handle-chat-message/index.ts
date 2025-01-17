@@ -14,25 +14,22 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize clients
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const openaiKey = Deno.env.get('OPENAI_API_KEY');
 
     if (!supabaseUrl || !supabaseKey || !openaiKey) {
-      console.error('Missing required environment variables');
       throw new Error('Missing required environment variables');
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Parse request
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Request payload:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
-      throw new Error('Missing required fields: threadId and content are required');
+      throw new Error('Missing required fields');
     }
 
     // Save user message
@@ -46,71 +43,68 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (messageError) {
-      console.error('Error saving message:', messageError);
-      throw messageError;
+    if (messageError) throw messageError;
+
+    // Get responding roles using improved selection
+    const { data: respondingRoles, error: rolesError } = await supabase
+      .rpc('get_best_responding_role', {
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3,
+        p_max_roles: taggedRoleId ? 1 : 3
+      });
+
+    if (rolesError) throw rolesError;
+    if (!respondingRoles?.length) {
+      throw new Error('No suitable roles found for response');
     }
 
-    // Get thread roles
-    const { data: threadRoles, error: threadRolesError } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
+    // Process responses in order
+    for (const { role_id, chain_order } of respondingRoles) {
+      const { data: role } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', role_id)
+        .single();
 
-    if (threadRolesError) {
-      console.error('Error fetching thread roles:', threadRolesError);
-      throw threadRolesError;
-    }
+      if (!role) continue;
 
-    if (!threadRoles?.length) {
-      throw new Error('No roles found for thread');
-    }
+      // Generate response
+      const completion = await openai.chat.completions.create({
+        model: role.model || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: role.instructions
+          },
+          { role: 'user', content }
+        ],
+      });
 
-    // Select a role to respond
-    const selectedRoleId = taggedRoleId || threadRoles[Math.floor(Math.random() * threadRoles.length)].role_id;
+      const responseContent = completion.choices[0].message.content;
 
-    // Get role details
-    const { data: role, error: roleError } = await supabase
-      .from('roles')
-      .select('*')
-      .eq('id', selectedRoleId)
-      .single();
+      // Save role's response
+      await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          role_id: role_id,
+          content: responseContent,
+          chain_id: message.id,
+          chain_order: chain_order,
+        });
 
-    if (roleError || !role) {
-      console.error('Error fetching role:', roleError);
-      throw roleError || new Error('Role not found');
-    }
-
-    // Generate response
-    const completion = await openai.chat.completions.create({
-      model: role.model || 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: role.instructions
-        },
-        { role: 'user', content }
-      ],
-    });
-
-    const responseContent = completion.choices[0].message.content;
-    console.log('Generated response:', { roleId: selectedRoleId, contentLength: responseContent?.length });
-
-    // Save role's response
-    const { data: response, error: responseError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        role_id: selectedRoleId,
-        content: responseContent,
-        chain_id: message.id,
-      })
-      .select()
-      .single();
-
-    if (responseError) {
-      console.error('Error saving response:', responseError);
-      throw responseError;
+      // Update role interaction metrics
+      await supabase
+        .from('role_interactions')
+        .insert({
+          thread_id: threadId,
+          initiator_role_id: role_id,
+          responder_role_id: taggedRoleId || role_id,
+          interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
+          effectiveness_score: 1.0, // Initial score, will be updated based on future interactions
+          chain_position: chain_order
+        });
     }
 
     return new Response(

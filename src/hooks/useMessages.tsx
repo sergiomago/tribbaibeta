@@ -12,7 +12,11 @@ export function useMessages(threadId: string | null) {
         .from("messages")
         .select(`
           *,
-          role:roles!messages_role_id_fkey(name, tag)
+          role:roles!messages_role_id_fkey(
+            name, 
+            tag,
+            special_capabilities
+          )
         `)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
