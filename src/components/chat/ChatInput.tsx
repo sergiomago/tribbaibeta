@@ -9,6 +9,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
+import { useQuery } from "@tanstack/react-query";
 
 interface ChatInputProps {
   threadId: string;
@@ -31,7 +32,30 @@ export function ChatInput({
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
+  // Query to check if thread has special capability roles
+  const { data: threadRoles } = useQuery({
+    queryKey: ["thread-roles", threadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("thread_roles")
+        .select(`
+          role:roles (
+            special_capabilities
+          )
+        `)
+        .eq("thread_id", threadId);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const hasSpecialRoles = threadRoles?.some(tr => 
+    tr.role?.special_capabilities?.length > 0
+  );
+
   const handleSend = async () => {
+    if (!message.trim()) return;
+    
     setIsSending(true);
     try {
       const { error } = await supabase.functions.invoke("handle-chat-message", {
@@ -93,12 +117,12 @@ export function ChatInput({
   const fileHandler = FileHandler({ onFileUpload: handleFileUpload });
 
   return (
-    <div className="border-t bg-background mt-auto">
+    <div className="border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <MessageCounter messageCount={messageCount} maxMessages={maxMessages} />
-      <div className="p-2 sm:p-4">
-        <div className="flex flex-col gap-2 max-w-[95%] sm:max-w-4xl mx-auto">
+      <div className="p-4">
+        <div className="flex flex-col gap-4 max-w-[95%] sm:max-w-4xl mx-auto">
           {isUploading && (
-            <div className="text-xs text-muted-foreground text-center">
+            <div className="text-xs text-muted-foreground text-center animate-pulse">
               <Loader2 className="h-4 w-4 animate-spin inline-block mr-2" />
               Uploading file...
             </div>
@@ -109,12 +133,14 @@ export function ChatInput({
             maxMessages={maxMessages}
           >
             <div className="flex gap-2">
-              <FileUploadButtons
-                threadId={threadId}
-                onFileUpload={(e) => fileHandler.handleFileUpload(e, 'document')}
-                onImageUpload={(e) => fileHandler.handleFileUpload(e, 'image')}
-                isUploading={isUploading}
-              />
+              {hasSpecialRoles && (
+                <FileUploadButtons
+                  threadId={threadId}
+                  onFileUpload={(e) => fileHandler.handleFileUpload(e, 'document')}
+                  onImageUpload={(e) => fileHandler.handleFileUpload(e, 'image')}
+                  isUploading={isUploading}
+                />
+              )}
               <Input
                 placeholder={disabled ? "Message limit reached" : "Type your message..."}
                 className="flex-1 text-base sm:text-sm"
@@ -125,9 +151,12 @@ export function ChatInput({
               />
               <Button 
                 onClick={handleSend} 
-                disabled={isSending || disabled}
+                disabled={isSending || disabled || !message.trim()}
                 size={isMobile ? "sm" : "default"}
-                className="shrink-0"
+                className={cn(
+                  "shrink-0",
+                  !message.trim() ? "opacity-50" : "bg-gradient-primary hover:bg-gradient-secondary"
+                )}
               >
                 {isSending ? (
                   <>

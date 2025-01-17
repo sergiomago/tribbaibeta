@@ -107,38 +107,40 @@ export function MessageList({
   };
 
   if (isLoading) {
-    return <div className="flex-1 p-4">Loading messages...</div>;
+    return <div className="flex-1 p-4 text-muted-foreground">Loading messages...</div>;
   }
 
   return (
     <div 
       ref={messageListRef}
-      className="flex-1 overflow-y-auto p-4 space-y-4"
+      className="flex-1 overflow-y-auto p-4 space-y-6"
     >
       {messages.slice(-maxMessages).map((message, index) => (
         <div
           key={message.id}
           id={message.id}
           className={cn(
-            "flex items-start gap-4 transition-colors",
+            "flex items-start gap-4 transition-colors animate-fade-in",
             message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
           )}
         >
           <div
             className={cn(
-              "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
+              "rounded-lg px-6 py-4 max-w-[80%] space-y-2 shadow-sm",
               message.role?.tag === "user"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted"
+                ? "bg-gradient-primary text-primary-foreground"
+                : "bg-muted/50 backdrop-blur-sm border border-border/50"
             )}
           >
             {message.role?.tag !== "user" && (
-              <div className="flex items-center gap-2 text-sm font-medium">
+              <div className="flex items-center gap-2 text-sm font-semibold">
                 {message.role?.name}
                 {getVerificationIcon(message.id)}
               </div>
             )}
-            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+            <div className="text-sm whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+              {message.content}
+            </div>
           </div>
           {index === messages.length - 1 && (
             <div ref={lastMessageRef} />
