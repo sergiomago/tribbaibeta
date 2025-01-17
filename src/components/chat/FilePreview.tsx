@@ -37,7 +37,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       return data;
     },
     enabled: !!fileMetadata.file_id && !isImage,
-    refetchInterval: (data) => 
+    refetchInterval: (data: AnalyzedFile | null) => 
       data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
   });
   
