@@ -19,10 +19,18 @@ export async function buildResponseChain(
       }];
     }
 
-    // Get thread roles if no specific role is tagged
+    // Get thread roles with their capabilities
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
-      .select('role_id')
+      .select(`
+        role_id,
+        role:roles (
+          id,
+          special_capabilities,
+          instructions,
+          model
+        )
+      `)
       .eq('thread_id', threadId);
 
     if (threadRolesError) throw threadRolesError;
@@ -32,7 +40,7 @@ export async function buildResponseChain(
       return [];
     }
 
-    // Calculate effectiveness for all roles
+    // Calculate effectiveness for all roles with enhanced specialization scoring
     const scoredRoles = await Promise.all(
       threadRoles.map(async (tr) => {
         const { data: score } = await supabase.rpc(
@@ -43,9 +51,17 @@ export async function buildResponseChain(
             p_context: content
           }
         );
+
+        // Additional scoring based on special capabilities
+        const capabilityScore = tr.role.special_capabilities?.reduce((acc: number, cap: string) => {
+          const isRelevant = content.toLowerCase().includes(cap.toLowerCase());
+          return acc + (isRelevant ? 0.2 : 0);
+        }, 0) || 0;
+
         return {
           roleId: tr.role_id,
-          score: score || 0
+          score: (score || 0) + capabilityScore,
+          model: tr.role.model
         };
       })
     );

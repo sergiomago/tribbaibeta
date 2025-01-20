@@ -9,24 +9,56 @@ export async function generateRoleResponse(
   memories: any[],
   openai: OpenAI
 ) {
+  // Get role details with capabilities
   const { data: role } = await supabase
     .from('roles')
-    .select('*')
+    .select('*, thread_roles!inner(*)')
     .eq('id', roleId)
+    .eq('thread_roles.thread_id', threadId)
     .single();
 
   if (!role) throw new Error(`Role ${roleId} not found`);
 
+  // Get previous messages for context
+  const { data: previousMessages } = await supabase
+    .from('messages')
+    .select(`
+      content,
+      role:roles (name, tag),
+      chain_order,
+      created_at
+    `)
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const conversationContext = previousMessages
+    ?.map(msg => `${msg.role?.name || 'User'}: ${msg.content}`)
+    .reverse()
+    .join('\n');
+
   const memoryContext = memories?.length 
     ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
     : '';
+
+  // Build specialized system prompt based on role capabilities
+  let systemPrompt = role.instructions;
+  
+  if (role.special_capabilities?.length) {
+    systemPrompt += '\n\nSpecial Capabilities:\n';
+    role.special_capabilities.forEach((capability: string) => {
+      systemPrompt += `- You can use ${capability}\n`;
+    });
+  }
+
+  systemPrompt += `\n\n${memoryContext}\n\nRecent conversation:\n${conversationContext}`;
 
   const completion = await openai.chat.completions.create({
     model: role.model || 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
-        content: `${role.instructions}\n\n${memoryContext}`
+        content: systemPrompt
       },
       { role: 'user', content: userMessage.content }
     ],
@@ -34,6 +66,7 @@ export async function generateRoleResponse(
 
   const responseContent = completion.choices[0].message.content;
 
+  // Save response
   const { data: savedMessage } = await supabase
     .from('messages')
     .insert({
@@ -44,6 +77,9 @@ export async function generateRoleResponse(
     })
     .select()
     .single();
+
+  // Record interaction
+  await recordInteraction(supabase, threadId, roleId, userMessage.tagged_role_id, null, memories?.length || 0);
 
   return { savedMessage, role };
 }
