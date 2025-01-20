@@ -75,7 +75,7 @@ serve(async (req) => {
     // Step 4: Process responses for each role
     for (const role of roles) {
       try {
-        // Get relevant memories
+        // Get relevant memories and previous context
         const { data: memories } = await supabase.rpc(
           'get_similar_memories',
           {
@@ -86,9 +86,24 @@ serve(async (req) => {
           }
         );
 
+        // Get previous messages in thread for context
+        const { data: previousMessages } = await supabase
+          .from('messages')
+          .select('content, role:roles(name)')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const conversationContext = previousMessages
+          ?.map(msg => `${msg.role?.name || 'User'}: ${msg.content}`)
+          .reverse()
+          .join('\n');
+
         const memoryContext = memories?.length 
           ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
           : '';
+
+        const systemPrompt = `${role.instructions}\n\n${memoryContext}\n\nRecent conversation:\n${conversationContext}`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
@@ -96,7 +111,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `${role.instructions}\n\n${memoryContext}`
+              content: systemPrompt
             },
             { role: 'user', content }
           ],
@@ -121,13 +136,21 @@ serve(async (req) => {
           continue;
         }
 
-        // Store memory
+        // Store memory with context
         await supabase
           .from('role_memories')
           .insert({
             role_id: role.id,
             content: responseContent,
             context_type: 'conversation',
+            conversation_context: {
+              thread_id: threadId,
+              message_id: roleResponse.id,
+              previous_messages: previousMessages?.map(m => ({ 
+                content: m.content, 
+                role: m.role?.name 
+              }))
+            },
             metadata: {
               message_id: roleResponse.id,
               thread_id: threadId

@@ -390,11 +390,13 @@ export type Database = {
           confidence_score: number | null
           content: string
           context_chain: Json | null
+          context_effectiveness: number | null
           context_relevance: number | null
           context_source: string | null
           context_type: string
           contradiction_check_status: string | null
           contradiction_references: Json | null
+          conversation_context: Json | null
           created_at: string
           embedding: string | null
           id: string
@@ -405,9 +407,12 @@ export type Database = {
           last_retrieved: string | null
           last_verified: string | null
           memory_category: string | null
+          memory_chain_position: number | null
           memory_type: string | null
           metadata: Json | null
+          previous_context_id: string | null
           reinforcement_count: number | null
+          related_memories: string[] | null
           relevance_score: number | null
           retrieval_count: number | null
           role_id: string | null
@@ -421,11 +426,13 @@ export type Database = {
           confidence_score?: number | null
           content: string
           context_chain?: Json | null
+          context_effectiveness?: number | null
           context_relevance?: number | null
           context_source?: string | null
           context_type: string
           contradiction_check_status?: string | null
           contradiction_references?: Json | null
+          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -436,9 +443,12 @@ export type Database = {
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
+          memory_chain_position?: number | null
           memory_type?: string | null
           metadata?: Json | null
+          previous_context_id?: string | null
           reinforcement_count?: number | null
+          related_memories?: string[] | null
           relevance_score?: number | null
           retrieval_count?: number | null
           role_id?: string | null
@@ -452,11 +462,13 @@ export type Database = {
           confidence_score?: number | null
           content?: string
           context_chain?: Json | null
+          context_effectiveness?: number | null
           context_relevance?: number | null
           context_source?: string | null
           context_type?: string
           contradiction_check_status?: string | null
           contradiction_references?: Json | null
+          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -467,9 +479,12 @@ export type Database = {
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
+          memory_chain_position?: number | null
           memory_type?: string | null
           metadata?: Json | null
+          previous_context_id?: string | null
           reinforcement_count?: number | null
+          related_memories?: string[] | null
           relevance_score?: number | null
           retrieval_count?: number | null
           role_id?: string | null
