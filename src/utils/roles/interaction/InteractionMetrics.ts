@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { Json } from "@/integrations/supabase/types";
 
 interface InteractionMetrics {
   wasLeader: boolean;
@@ -46,9 +47,9 @@ export async function updateRoleInteractionMetrics(
       .single();
 
     if (currentMetrics?.effectiveness_metrics) {
-      const current = currentMetrics.effectiveness_metrics as EffectivenessMetrics;
+      const current = currentMetrics.effectiveness_metrics as unknown as EffectivenessMetrics;
       
-      const updatedMetrics = {
+      const updatedMetrics: EffectivenessMetrics = {
         topic_matches: current.topic_matches + (metrics.topicMatchScore > 0.7 ? 1 : 0),
         avg_relevance_score: (
           current.avg_relevance_score * 
@@ -67,7 +68,7 @@ export async function updateRoleInteractionMetrics(
       await supabase
         .from('roles')
         .update({ 
-          effectiveness_metrics: updatedMetrics as unknown as Json 
+          effectiveness_metrics: updatedMetrics as unknown as Json
         })
         .eq('id', roleId);
     }
