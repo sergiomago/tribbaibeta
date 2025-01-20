@@ -56,33 +56,46 @@ export type Database = {
           active_roles: string[] | null
           chain_metrics: Json | null
           created_at: string
+          current_leader_role_id: string | null
           current_state: Database["public"]["Enums"]["conversation_state"]
           id: string
           metadata: Json | null
           thread_id: string
+          topic_context: Json | null
           updated_at: string
         }
         Insert: {
           active_roles?: string[] | null
           chain_metrics?: Json | null
           created_at?: string
+          current_leader_role_id?: string | null
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
           metadata?: Json | null
           thread_id: string
+          topic_context?: Json | null
           updated_at?: string
         }
         Update: {
           active_roles?: string[] | null
           chain_metrics?: Json | null
           created_at?: string
+          current_leader_role_id?: string | null
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
           metadata?: Json | null
           thread_id?: string
+          topic_context?: Json | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "conversation_states_current_leader_role_id_fkey"
+            columns: ["current_leader_role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conversation_states_thread_id_fkey"
             columns: ["thread_id"]
@@ -318,8 +331,11 @@ export type Database = {
           relevance_score: number | null
           responder_role_id: string
           response_quality_metrics: Json | null
+          response_quality_score: number | null
           specialization_score: number | null
           thread_id: string
+          topic_match_score: number | null
+          was_leader: boolean | null
         }
         Insert: {
           chain_effectiveness?: number | null
@@ -337,8 +353,11 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id: string
           response_quality_metrics?: Json | null
+          response_quality_score?: number | null
           specialization_score?: number | null
           thread_id: string
+          topic_match_score?: number | null
+          was_leader?: boolean | null
         }
         Update: {
           chain_effectiveness?: number | null
@@ -356,8 +375,11 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id?: string
           response_quality_metrics?: Json | null
+          response_quality_score?: number | null
           specialization_score?: number | null
           thread_id?: string
+          topic_match_score?: number | null
+          was_leader?: boolean | null
         }
         Relationships: [
           {
@@ -522,6 +544,7 @@ export type Database = {
           capability_metadata: Json | null
           created_at: string
           description: string | null
+          effectiveness_metrics: Json | null
           expertise_areas: string[] | null
           id: string
           instructions: string
@@ -531,6 +554,8 @@ export type Database = {
           name: string
           package_name: string | null
           package_order: number | null
+          primary_topics: string[] | null
+          response_priority: number | null
           response_style: Json | null
           source: string
           special_capabilities: string[] | null
@@ -544,6 +569,7 @@ export type Database = {
           capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          effectiveness_metrics?: Json | null
           expertise_areas?: string[] | null
           id?: string
           instructions: string
@@ -553,6 +579,8 @@ export type Database = {
           name: string
           package_name?: string | null
           package_order?: number | null
+          primary_topics?: string[] | null
+          response_priority?: number | null
           response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
@@ -566,6 +594,7 @@ export type Database = {
           capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          effectiveness_metrics?: Json | null
           expertise_areas?: string[] | null
           id?: string
           instructions?: string
@@ -575,6 +604,8 @@ export type Database = {
           name?: string
           package_name?: string | null
           package_order?: number | null
+          primary_topics?: string[] | null
+          response_priority?: number | null
           response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
