@@ -41,28 +41,16 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get responding roles based on new protocol
-    let respondingRoles;
-    if (taggedRoleId) {
-      // Direct tagging - single role response
-      respondingRoles = [{
-        role_id: taggedRoleId,
-        score: 1.0,
-        chain_order: 1
-      }];
-    } else {
-      // Get best responding roles (max 3)
-      const { data: roles } = await supabase.rpc(
-        'get_best_responding_role',
-        { 
-          p_thread_id: threadId,
-          p_context: content,
-          p_threshold: 0.3,
-          p_max_roles: 3
-        }
-      );
-      respondingRoles = roles;
-    }
+    // Get responding roles based on effectiveness
+    const { data: respondingRoles } = await supabase.rpc(
+      'get_best_responding_role',
+      { 
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3,
+        p_max_roles: 3
+      }
+    );
 
     console.log('Selected responding roles:', respondingRoles);
 
