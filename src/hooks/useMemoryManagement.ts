@@ -1,12 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { createMemoryContextManager } from "@/utils/memory/contextManager";
 
 export function useMemoryManagement(roleId: string | null) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const memoryContextManager = roleId ? createMemoryContextManager(roleId) : null;
 
   // Get all memories including consolidated ones
   const { data: memories, isLoading: isLoadingMemories } = useQuery({
@@ -26,27 +24,33 @@ export function useMemoryManagement(roleId: string | null) {
     enabled: !!roleId,
   });
 
-  // Store new memory with enhanced context
+  // Store new memory with enhanced metadata
   const storeMemory = useMutation({
-    mutationFn: async ({ 
-      content, 
-      contextType, 
-      metadata = {},
-      previousContextId = null 
-    }: { 
+    mutationFn: async ({ content, contextType, metadata }: { 
       content: string; 
       contextType: string; 
-      metadata?: any;
-      previousContextId?: string | null;
+      metadata?: any; 
     }) => {
-      if (!roleId || !memoryContextManager) throw new Error("No role selected");
+      if (!roleId) throw new Error("No role selected");
       
-      await memoryContextManager.storeMemoryWithContext(content, contextType, {
-        ...metadata,
-        previous_context_id: previousContextId,
-        memory_type: 'conversation',
-        importance_score: 1.0,
-      });
+      const { error } = await supabase
+        .from("role_memories")
+        .insert({
+          role_id: roleId,
+          content,
+          context_type: contextType,
+          metadata: {
+            ...metadata,
+            timestamp: Date.now(),
+            consolidated: false,
+            memory_type: 'conversation',
+            importance_score: 1.0,
+          },
+          relevance_score: 1.0,
+          confidence_score: 1.0,
+        });
+      
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["role-memories", roleId] });
@@ -64,16 +68,50 @@ export function useMemoryManagement(roleId: string | null) {
     },
   });
 
-  // Get relevant memories for current context
-  const getRelevantMemories = async (content: string) => {
-    if (!roleId || !memoryContextManager) return [];
-    return await memoryContextManager.retrieveRelevantMemories(content);
+  // Reinforce memory and update its importance
+  const reinforceMemory = useMutation({
+    mutationFn: async (memoryId: string) => {
+      const { error } = await supabase
+        .from("role_memories")
+        .update({
+          reinforcement_count: 1,  // Changed from string to number
+          last_reinforced: new Date().toISOString(),
+          importance_score: 1.1,  // Changed from string to number
+        })
+        .eq("id", memoryId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["role-memories", roleId] });
+    },
+    onError: (error) => {
+      console.error("Error reinforcing memory:", error);
+    },
+  });
+
+  // Get consolidated memories for a specific context
+  const getConsolidatedMemories = async (contextType: string) => {
+    if (!roleId) return [];
+    
+    const { data, error } = await supabase
+      .from("role_memories")
+      .select("*")
+      .eq("role_id", roleId)
+      .eq("context_type", "consolidated")
+      .eq("memory_type", contextType)
+      .order("importance_score", { ascending: false })
+      .limit(5);
+
+    if (error) throw error;
+    return data;
   };
 
   return {
     memories,
     isLoadingMemories,
     storeMemory,
-    getRelevantMemories,
+    reinforceMemory,
+    getConsolidatedMemories,
   };
 }

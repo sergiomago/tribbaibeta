@@ -68,11 +68,11 @@ export class RelevanceScorer {
       Promise.resolve(this.getCapabilityMatch(role.special_capabilities, content))
     ]);
 
-    // Enhanced weighted scoring with capability emphasis
+    // Weighted scoring
     const weights = {
-      keyword: 0.35,
-      history: 0.25,
-      capability: 0.4  // Increased weight for capabilities
+      keyword: 0.4,
+      history: 0.2,
+      capability: 0.4
     };
 
     return (

@@ -7,31 +7,22 @@ export async function buildResponseChain(
   content: string,
   taggedRoleId?: string
 ): Promise<ResponseChain[]> {
-  console.log('Building interactive response chain:', { threadId, taggedRoleId });
+  console.log('Building response chain:', { threadId, taggedRoleId });
 
   try {
-    // If a role is tagged, create a focused chain with that role
+    // If a role is tagged, only that role should respond
     if (taggedRoleId) {
-      console.log('Creating focused chain for tagged role');
+      console.log('Tagged role response chain');
       return [{
         roleId: taggedRoleId,
         chainOrder: 1
       }];
     }
 
-    // Get thread roles with their capabilities and recent performance
+    // Get thread roles if no specific role is tagged
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
-      .select(`
-        role_id,
-        role:roles (
-          id,
-          special_capabilities,
-          instructions,
-          model,
-          tag
-        )
-      `)
+      .select('role_id')
       .eq('thread_id', threadId);
 
     if (threadRolesError) throw threadRolesError;
@@ -41,10 +32,9 @@ export async function buildResponseChain(
       return [];
     }
 
-    // Calculate effectiveness scores with enhanced context awareness
+    // Calculate effectiveness for all roles
     const scoredRoles = await Promise.all(
       threadRoles.map(async (tr) => {
-        // Get role's effectiveness score
         const { data: score } = await supabase.rpc(
           'calculate_role_effectiveness',
           {
@@ -53,65 +43,30 @@ export async function buildResponseChain(
             p_context: content
           }
         );
-
-        // Get recent interactions to analyze role synergy
-        const { data: recentInteractions } = await supabase
-          .from('role_interactions')
-          .select('effectiveness_score, chain_effectiveness')
-          .eq('thread_id', threadId)
-          .eq('initiator_role_id', tr.role_id)
-          .order('created_at', { ascending: false })
-          .limit(3);
-
-        // Calculate synergy score from recent interactions
-        const synergyScore = recentInteractions?.reduce((acc, interaction) => 
-          acc + (interaction.chain_effectiveness || 0), 0) / (recentInteractions?.length || 1);
-
-        // Additional scoring based on special capabilities
-        const capabilityScore = tr.role.special_capabilities?.reduce((acc: number, cap: string) => {
-          const isRelevant = content.toLowerCase().includes(cap.toLowerCase());
-          return acc + (isRelevant ? 0.2 : 0);
-        }, 0) || 0;
-
-        // Combined score with weighted components
-        const combinedScore = (
-          (score || 0) * 0.4 +  // Base effectiveness
-          synergyScore * 0.3 +  // Role synergy
-          capabilityScore * 0.3  // Capability relevance
-        );
-
         return {
           roleId: tr.role_id,
-          score: combinedScore,
-          model: tr.role.model,
-          tag: tr.role.tag
+          score: score || 0
         };
       })
     );
 
-    // Sort by score and ensure optimal chain length
+    // Sort by score and ensure at least one role responds
     const sortedRoles = scoredRoles.sort((a, b) => b.score - a.score);
     const threshold = 0.3;
     
-    // Select roles that meet the threshold or are specifically needed
-    const selectedRoles = sortedRoles.filter(role => 
-      role.score >= threshold || 
-      role.tag === '@docanalyst' || // Always include analyst for document context
-      role.tag === '@web' // Always include web researcher for external context
-    );
-
-    // Ensure at least one role responds
+    // Get roles that meet the threshold, or at least the best one
+    const selectedRoles = sortedRoles.filter(role => role.score >= threshold);
     if (!selectedRoles.length && sortedRoles.length > 0) {
-      selectedRoles.push(sortedRoles[0]);
+      selectedRoles.push(sortedRoles[0]); // Include the best role even if below threshold
     }
 
-    // Map to chain format with optimized order
+    // Map to chain format with order
     const chain = selectedRoles.map((role, index) => ({
       roleId: role.roleId,
       chainOrder: index + 1
     }));
 
-    console.log('Built interactive response chain:', chain);
+    console.log('Built response chain:', chain);
     return chain;
   } catch (error) {
     console.error('Error building response chain:', error);
@@ -160,13 +115,7 @@ export async function updateChainProgress(
     // Update the message with chain order
     const { error: messageError } = await supabase
       .from('messages')
-      .update({ 
-        chain_order: chainOrder,
-        metadata: {
-          chain_position: chainOrder,
-          timestamp: new Date().toISOString()
-        }
-      })
+      .update({ chain_order: chainOrder })
       .eq('id', messageId);
 
     if (messageError) throw messageError;

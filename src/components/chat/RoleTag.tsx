@@ -1,43 +1,24 @@
-import { Role } from "@/types/role";
-import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
+import { Tables } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
-import { useRoleMetrics } from "@/hooks/useRoleMetrics";
 
-export interface RoleTagProps {
-  role: Role;
-  onRemove?: () => void;
+interface RoleTagProps {
+  role: Tables<"roles">;
+  onRemove: () => void;
   className?: string;
-  threadId?: string;
 }
 
-export function RoleTag({ role, onRemove, className, threadId }: RoleTagProps) {
-  const { data: metrics } = useRoleMetrics(role.id, threadId || '');
-  
+export function RoleTag({ role, onRemove, className }: RoleTagProps) {
   return (
-    <Badge 
-      variant="secondary" 
-      className={cn(
-        "flex items-center gap-1 pr-1 hover:bg-secondary/80", 
-        className
-      )}
-    >
-      <span className="truncate">
-        {role.alias || role.name}
-        {metrics && metrics > 0.7 && " ⭐"}
-      </span>
-      {onRemove && (
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onRemove();
-          }}
-          className="ml-1 rounded-full hover:bg-secondary-foreground/10"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      )}
-    </Badge>
+    <div className={cn("flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm", className)}>
+      <span className="font-medium text-primary">{role.name}</span>
+      <span className="text-xs text-gray-500">{role.tag}</span>
+      <button
+        className="ml-1 rounded-full hover:bg-primary/20 p-1"
+        onClick={onRemove}
+      >
+        <X className="h-3 w-3 text-primary" />
+      </button>
+    </div>
   );
 }

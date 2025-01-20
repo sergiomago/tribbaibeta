@@ -56,46 +56,33 @@ export type Database = {
           active_roles: string[] | null
           chain_metrics: Json | null
           created_at: string
-          current_leader_role_id: string | null
           current_state: Database["public"]["Enums"]["conversation_state"]
           id: string
           metadata: Json | null
           thread_id: string
-          topic_context: Json | null
           updated_at: string
         }
         Insert: {
           active_roles?: string[] | null
           chain_metrics?: Json | null
           created_at?: string
-          current_leader_role_id?: string | null
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
           metadata?: Json | null
           thread_id: string
-          topic_context?: Json | null
           updated_at?: string
         }
         Update: {
           active_roles?: string[] | null
           chain_metrics?: Json | null
           created_at?: string
-          current_leader_role_id?: string | null
           current_state?: Database["public"]["Enums"]["conversation_state"]
           id?: string
           metadata?: Json | null
           thread_id?: string
-          topic_context?: Json | null
           updated_at?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "conversation_states_current_leader_role_id_fkey"
-            columns: ["current_leader_role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "conversation_states_thread_id_fkey"
             columns: ["thread_id"]
@@ -321,7 +308,6 @@ export type Database = {
           conversation_depth: number | null
           created_at: string
           effectiveness_score: number | null
-          expertise_relevance: number | null
           id: string
           initiator_role_id: string
           interaction_context: Json | null
@@ -331,11 +317,7 @@ export type Database = {
           relevance_score: number | null
           responder_role_id: string
           response_quality_metrics: Json | null
-          response_quality_score: number | null
-          specialization_score: number | null
           thread_id: string
-          topic_match_score: number | null
-          was_leader: boolean | null
         }
         Insert: {
           chain_effectiveness?: number | null
@@ -343,7 +325,6 @@ export type Database = {
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
-          expertise_relevance?: number | null
           id?: string
           initiator_role_id: string
           interaction_context?: Json | null
@@ -353,11 +334,7 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id: string
           response_quality_metrics?: Json | null
-          response_quality_score?: number | null
-          specialization_score?: number | null
           thread_id: string
-          topic_match_score?: number | null
-          was_leader?: boolean | null
         }
         Update: {
           chain_effectiveness?: number | null
@@ -365,7 +342,6 @@ export type Database = {
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
-          expertise_relevance?: number | null
           id?: string
           initiator_role_id?: string
           interaction_context?: Json | null
@@ -375,11 +351,7 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id?: string
           response_quality_metrics?: Json | null
-          response_quality_score?: number | null
-          specialization_score?: number | null
           thread_id?: string
-          topic_match_score?: number | null
-          was_leader?: boolean | null
         }
         Relationships: [
           {
@@ -418,13 +390,11 @@ export type Database = {
           confidence_score: number | null
           content: string
           context_chain: Json | null
-          context_effectiveness: number | null
           context_relevance: number | null
           context_source: string | null
           context_type: string
           contradiction_check_status: string | null
           contradiction_references: Json | null
-          conversation_context: Json | null
           created_at: string
           embedding: string | null
           id: string
@@ -435,12 +405,9 @@ export type Database = {
           last_retrieved: string | null
           last_verified: string | null
           memory_category: string | null
-          memory_chain_position: number | null
           memory_type: string | null
           metadata: Json | null
-          previous_context_id: string | null
           reinforcement_count: number | null
-          related_memories: string[] | null
           relevance_score: number | null
           retrieval_count: number | null
           role_id: string | null
@@ -454,13 +421,11 @@ export type Database = {
           confidence_score?: number | null
           content: string
           context_chain?: Json | null
-          context_effectiveness?: number | null
           context_relevance?: number | null
           context_source?: string | null
           context_type: string
           contradiction_check_status?: string | null
           contradiction_references?: Json | null
-          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -471,12 +436,9 @@ export type Database = {
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
-          memory_chain_position?: number | null
           memory_type?: string | null
           metadata?: Json | null
-          previous_context_id?: string | null
           reinforcement_count?: number | null
-          related_memories?: string[] | null
           relevance_score?: number | null
           retrieval_count?: number | null
           role_id?: string | null
@@ -490,13 +452,11 @@ export type Database = {
           confidence_score?: number | null
           content?: string
           context_chain?: Json | null
-          context_effectiveness?: number | null
           context_relevance?: number | null
           context_source?: string | null
           context_type?: string
           contradiction_check_status?: string | null
           contradiction_references?: Json | null
-          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
@@ -507,12 +467,9 @@ export type Database = {
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
-          memory_chain_position?: number | null
           memory_type?: string | null
           metadata?: Json | null
-          previous_context_id?: string | null
           reinforcement_count?: number | null
-          related_memories?: string[] | null
           relevance_score?: number | null
           retrieval_count?: number | null
           role_id?: string | null
@@ -541,22 +498,15 @@ export type Database = {
       roles: {
         Row: {
           alias: string | null
-          capability_metadata: Json | null
           created_at: string
           description: string | null
-          effectiveness_metrics: Json | null
-          expertise_areas: string[] | null
           id: string
           instructions: string
-          interaction_preferences: Json | null
           is_template: boolean | null
           model: string
           name: string
           package_name: string | null
           package_order: number | null
-          primary_topics: string[] | null
-          response_priority: number | null
-          response_style: Json | null
           source: string
           special_capabilities: string[] | null
           tag: string
@@ -566,22 +516,15 @@ export type Database = {
         }
         Insert: {
           alias?: string | null
-          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
-          effectiveness_metrics?: Json | null
-          expertise_areas?: string[] | null
           id?: string
           instructions: string
-          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name: string
           package_name?: string | null
           package_order?: number | null
-          primary_topics?: string[] | null
-          response_priority?: number | null
-          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -591,22 +534,15 @@ export type Database = {
         }
         Update: {
           alias?: string | null
-          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
-          effectiveness_metrics?: Json | null
-          expertise_areas?: string[] | null
           id?: string
           instructions?: string
-          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name?: string
           package_name?: string | null
           package_order?: number | null
-          primary_topics?: string[] | null
-          response_priority?: number | null
-          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -752,14 +688,6 @@ export type Database = {
           p_role_id: string
           p_thread_id: string
           p_context: string
-        }
-        Returns: number
-      }
-      calculate_role_specialization_score: {
-        Args: {
-          p_role_id: string
-          p_context: string
-          p_thread_id: string
         }
         Returns: number
       }
