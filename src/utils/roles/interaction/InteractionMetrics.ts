@@ -25,13 +25,13 @@ export async function updateRoleInteractionMetrics(
       .from('role_interactions')
       .insert({
         initiator_role_id: roleId,
+        responder_role_id: roleId, // Self-interaction for now
         thread_id: threadId,
         was_leader: metrics.wasLeader,
         response_quality_score: metrics.responseQualityScore,
         topic_match_score: metrics.topicMatchScore,
         effectiveness_score: metrics.effectivenessScore,
         interaction_type: metrics.wasLeader ? 'lead_response' : 'support_response',
-        responder_role_id: roleId, // Self-interaction for now
         metadata: {
           timestamp: new Date().toISOString(),
           interaction_type: metrics.wasLeader ? 'lead_response' : 'supporting_response'
@@ -48,7 +48,7 @@ export async function updateRoleInteractionMetrics(
     if (currentMetrics?.effectiveness_metrics) {
       const current = currentMetrics.effectiveness_metrics as EffectivenessMetrics;
       
-      const updatedMetrics: EffectivenessMetrics = {
+      const updatedMetrics = {
         topic_matches: current.topic_matches + (metrics.topicMatchScore > 0.7 ? 1 : 0),
         avg_relevance_score: (
           current.avg_relevance_score * 
@@ -66,7 +66,9 @@ export async function updateRoleInteractionMetrics(
 
       await supabase
         .from('roles')
-        .update({ effectiveness_metrics: updatedMetrics })
+        .update({ 
+          effectiveness_metrics: updatedMetrics as unknown as Json 
+        })
         .eq('id', roleId);
     }
   } catch (error) {

@@ -24,7 +24,7 @@ export function RoleTag({ role, onRemove, className, threadId }: RoleTagProps) {
     >
       <span className="truncate">
         {role.alias || role.name}
-        {metrics?.effectiveness > 0.7 && " ⭐"}
+        {metrics && metrics > 0.7 && " ⭐"}
       </span>
       {onRemove && (
         <button
