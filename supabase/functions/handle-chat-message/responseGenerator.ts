@@ -19,54 +19,73 @@ export async function generateRoleResponse(
 
   if (!role) throw new Error(`Role ${roleId} not found`);
 
-  // Get previous messages for context
+  // Get previous messages for interactive context
   const { data: previousMessages } = await supabase
     .from('messages')
     .select(`
       content,
-      role:roles (name, tag),
+      role:roles (name, tag, special_capabilities),
       chain_order,
-      created_at
+      created_at,
+      metadata
     `)
     .eq('thread_id', threadId)
     .order('created_at', { ascending: false })
     .limit(5);
 
+  // Build rich conversation context
   const conversationContext = previousMessages
-    ?.map(msg => `${msg.role?.name || 'User'}: ${msg.content}`)
+    ?.map(msg => {
+      const roleInfo = msg.role?.name ? 
+        `${msg.role.name} (${msg.role.tag})${msg.role.special_capabilities?.length ? 
+          ` with capabilities: ${msg.role.special_capabilities.join(', ')}` : 
+          ''}` : 
+        'User';
+      return `${roleInfo}: ${msg.content}`;
+    })
     .reverse()
     .join('\n');
 
+  // Process memories for relevant context
   const memoryContext = memories?.length 
-    ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+    ? `Relevant context from your memory:\n${memories.map(m => 
+        `[Relevance: ${m.similarity.toFixed(2)}] ${m.content}`
+      ).join('\n\n')}`
     : '';
 
-  // Build specialized system prompt based on role capabilities
-  let systemPrompt = role.instructions;
+  // Build specialized system prompt
+  let systemPrompt = role.instructions + '\n\n';
   
+  // Add interactive chain awareness
+  systemPrompt += `You are part of an interactive response chain. ${
+    previousMessages?.length ? 
+    'Build upon previous responses and maintain conversation coherence. ' : 
+    'You are starting a new conversation thread. '
+  }`;
+
+  // Add capability-specific instructions
   if (role.special_capabilities?.length) {
-    systemPrompt += '\n\nSpecial Capabilities:\n';
+    systemPrompt += '\nYour special capabilities:\n';
     role.special_capabilities.forEach((capability: string) => {
       systemPrompt += `- You can use ${capability}\n`;
     });
   }
 
+  // Add context sections
   systemPrompt += `\n\n${memoryContext}\n\nRecent conversation:\n${conversationContext}`;
 
+  // Generate response
   const completion = await openai.chat.completions.create({
     model: role.model || 'gpt-4o-mini',
     messages: [
-      {
-        role: 'system',
-        content: systemPrompt
-      },
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userMessage.content }
     ],
   });
 
   const responseContent = completion.choices[0].message.content;
 
-  // Save response
+  // Save response with enhanced metadata
   const { data: savedMessage } = await supabase
     .from('messages')
     .insert({
@@ -74,12 +93,25 @@ export async function generateRoleResponse(
       role_id: roleId,
       content: responseContent,
       chain_id: userMessage.id,
+      metadata: {
+        response_type: 'interactive_chain',
+        previous_context: previousMessages?.map(m => m.id),
+        used_memories: memories?.map(m => m.id),
+        timestamp: new Date().toISOString()
+      }
     })
     .select()
     .single();
 
-  // Record interaction
-  await recordInteraction(supabase, threadId, roleId, userMessage.tagged_role_id, null, memories?.length || 0);
+  // Record interaction with enhanced metrics
+  await recordInteraction(
+    supabase, 
+    threadId, 
+    roleId, 
+    userMessage.tagged_role_id, 
+    previousMessages?.length || 0,
+    memories?.length || 0
+  );
 
   return { savedMessage, role };
 }
@@ -89,7 +121,7 @@ export async function recordInteraction(
   threadId: string,
   roleId: string,
   taggedRoleId: string | null,
-  analysis: string | null,
+  contextMessageCount: number,
   memoryCount: number
 ) {
   await supabase
@@ -98,11 +130,12 @@ export async function recordInteraction(
       thread_id: threadId,
       initiator_role_id: roleId,
       responder_role_id: taggedRoleId || roleId,
-      interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
+      interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
       metadata: {
-        context_type: 'conversation',
-        analysis: analysis || null,
-        memory_count: memoryCount
+        context_type: 'interactive_chain',
+        context_message_count: contextMessageCount,
+        memory_count: memoryCount,
+        timestamp: new Date().toISOString()
       }
     });
 }
