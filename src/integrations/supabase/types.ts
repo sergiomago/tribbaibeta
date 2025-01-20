@@ -308,6 +308,7 @@ export type Database = {
           conversation_depth: number | null
           created_at: string
           effectiveness_score: number | null
+          expertise_relevance: number | null
           id: string
           initiator_role_id: string
           interaction_context: Json | null
@@ -317,6 +318,7 @@ export type Database = {
           relevance_score: number | null
           responder_role_id: string
           response_quality_metrics: Json | null
+          specialization_score: number | null
           thread_id: string
         }
         Insert: {
@@ -325,6 +327,7 @@ export type Database = {
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_relevance?: number | null
           id?: string
           initiator_role_id: string
           interaction_context?: Json | null
@@ -334,6 +337,7 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id: string
           response_quality_metrics?: Json | null
+          specialization_score?: number | null
           thread_id: string
         }
         Update: {
@@ -342,6 +346,7 @@ export type Database = {
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_relevance?: number | null
           id?: string
           initiator_role_id?: string
           interaction_context?: Json | null
@@ -351,6 +356,7 @@ export type Database = {
           relevance_score?: number | null
           responder_role_id?: string
           response_quality_metrics?: Json | null
+          specialization_score?: number | null
           thread_id?: string
         }
         Relationships: [
@@ -513,15 +519,19 @@ export type Database = {
       roles: {
         Row: {
           alias: string | null
+          capability_metadata: Json | null
           created_at: string
           description: string | null
+          expertise_areas: string[] | null
           id: string
           instructions: string
+          interaction_preferences: Json | null
           is_template: boolean | null
           model: string
           name: string
           package_name: string | null
           package_order: number | null
+          response_style: Json | null
           source: string
           special_capabilities: string[] | null
           tag: string
@@ -531,15 +541,19 @@ export type Database = {
         }
         Insert: {
           alias?: string | null
+          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          expertise_areas?: string[] | null
           id?: string
           instructions: string
+          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name: string
           package_name?: string | null
           package_order?: number | null
+          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -549,15 +563,19 @@ export type Database = {
         }
         Update: {
           alias?: string | null
+          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          expertise_areas?: string[] | null
           id?: string
           instructions?: string
+          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name?: string
           package_name?: string | null
           package_order?: number | null
+          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -703,6 +721,14 @@ export type Database = {
           p_role_id: string
           p_thread_id: string
           p_context: string
+        }
+        Returns: number
+      }
+      calculate_role_specialization_score: {
+        Args: {
+          p_role_id: string
+          p_context: string
+          p_thread_id: string
         }
         Returns: number
       }
