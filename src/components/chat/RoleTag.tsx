@@ -1,48 +1,43 @@
+import { Role } from "@/types/role";
 import { Badge } from "@/components/ui/badge";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { useRoleMetrics } from "@/hooks/useRoleMetrics";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Brain } from "lucide-react";
 
-interface RoleTagProps {
-  roleId: string;
-  threadId: string;
-  name: string;
-  tag?: string;
+export interface RoleTagProps {
+  role: Role;
+  onRemove?: () => void;
+  className?: string;
+  threadId?: string;
 }
 
-export function RoleTag({ roleId, threadId, name, tag }: RoleTagProps) {
-  const { data: effectiveness } = useRoleMetrics(roleId, threadId);
-
+export function RoleTag({ role, onRemove, className, threadId }: RoleTagProps) {
+  const { data: metrics } = useRoleMetrics(role.id, threadId || '');
+  
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge 
-            variant="secondary"
-            className="flex items-center gap-1 cursor-help"
-          >
-            {name}
-            {effectiveness !== undefined && (
-              <Brain className={`h-3 w-3 ${
-                effectiveness > 0.7 ? 'text-green-500' :
-                effectiveness > 0.4 ? 'text-yellow-500' :
-                'text-red-500'
-              }`} />
-            )}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Role: {tag || name}</p>
-          {effectiveness !== undefined && (
-            <p>Effectiveness: {(effectiveness * 100).toFixed(0)}%</p>
-          )}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Badge 
+      variant="secondary" 
+      className={cn(
+        "flex items-center gap-1 pr-1 hover:bg-secondary/80", 
+        className
+      )}
+    >
+      <span className="truncate">
+        {role.alias || role.name}
+        {metrics?.effectiveness > 0.7 && " ⭐"}
+      </span>
+      {onRemove && (
+        <button
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="ml-1 rounded-full hover:bg-secondary-foreground/10"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      )}
+    </Badge>
   );
 }

@@ -7,6 +7,13 @@ interface InteractionMetrics {
   effectivenessScore: number;
 }
 
+interface EffectivenessMetrics {
+  topic_matches: number;
+  avg_relevance_score: number;
+  leader_success_rate: number;
+  successful_responses: number;
+}
+
 export async function updateRoleInteractionMetrics(
   roleId: string,
   threadId: string,
@@ -23,34 +30,38 @@ export async function updateRoleInteractionMetrics(
         response_quality_score: metrics.responseQualityScore,
         topic_match_score: metrics.topicMatchScore,
         effectiveness_score: metrics.effectivenessScore,
+        interaction_type: metrics.wasLeader ? 'lead_response' : 'support_response',
+        responder_role_id: roleId, // Self-interaction for now
         metadata: {
           timestamp: new Date().toISOString(),
           interaction_type: metrics.wasLeader ? 'lead_response' : 'supporting_response'
         }
       });
 
-    // Update role effectiveness metrics
+    // Get current metrics
     const { data: currentMetrics } = await supabase
       .from('roles')
       .select('effectiveness_metrics')
       .eq('id', roleId)
       .single();
 
-    if (currentMetrics) {
-      const updatedMetrics = {
-        topic_matches: currentMetrics.effectiveness_metrics.topic_matches + (metrics.topicMatchScore > 0.7 ? 1 : 0),
+    if (currentMetrics?.effectiveness_metrics) {
+      const current = currentMetrics.effectiveness_metrics as EffectivenessMetrics;
+      
+      const updatedMetrics: EffectivenessMetrics = {
+        topic_matches: current.topic_matches + (metrics.topicMatchScore > 0.7 ? 1 : 0),
         avg_relevance_score: (
-          currentMetrics.effectiveness_metrics.avg_relevance_score * 
-          currentMetrics.effectiveness_metrics.successful_responses + 
+          current.avg_relevance_score * 
+          current.successful_responses + 
           metrics.effectivenessScore
-        ) / (currentMetrics.effectiveness_metrics.successful_responses + 1),
+        ) / (current.successful_responses + 1),
         leader_success_rate: metrics.wasLeader ? 
-          (currentMetrics.effectiveness_metrics.leader_success_rate * 
-           currentMetrics.effectiveness_metrics.successful_responses + 
+          (current.leader_success_rate * 
+           current.successful_responses + 
            (metrics.responseQualityScore > 0.7 ? 1 : 0)) / 
-          (currentMetrics.effectiveness_metrics.successful_responses + 1) :
-          currentMetrics.effectiveness_metrics.leader_success_rate,
-        successful_responses: currentMetrics.effectiveness_metrics.successful_responses + 1
+          (current.successful_responses + 1) :
+          current.leader_success_rate,
+        successful_responses: current.successful_responses + 1
       };
 
       await supabase
