@@ -53,7 +53,7 @@ serve(async (req) => {
     if (!userMessage) throw new Error('Failed to save user message');
     console.log('User message saved:', userMessage);
 
-    // Get responding roles with proper structure handling
+    // Get responding roles with proper parameter types
     const { data: respondingRoles, error: rolesError } = await supabase.rpc(
       'get_best_responding_role',
       {
@@ -64,7 +64,11 @@ serve(async (req) => {
       }
     );
 
-    if (rolesError) throw rolesError;
+    if (rolesError) {
+      console.error('Error getting responding roles:', rolesError);
+      throw rolesError;
+    }
+
     console.log('Response chain built:', respondingRoles);
 
     if (!respondingRoles?.length) {
