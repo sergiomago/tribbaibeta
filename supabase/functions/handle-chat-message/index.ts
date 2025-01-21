@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
+import { processUserMessage, generateRoleResponse } from "./messageProcessor.ts";
 
 const MAX_RECURSION_DEPTH = 3;
 
@@ -24,7 +25,7 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
-    // Initialize Supabase client
+    // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
@@ -32,17 +33,7 @@ serve(async (req) => {
     console.log('Processing message:', { threadId, content, taggedRoleId });
 
     // Save user message
-    const { data: userMessage, error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        content,
-        tagged_role_id: taggedRoleId || null,
-      })
-      .select('id, thread_id, content, tagged_role_id')
-      .single();
-
-    if (messageError) throw messageError;
+    const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
 
     // Get chain depth to prevent infinite recursion
     const { data: chainDepth } = await supabase.rpc(
@@ -64,14 +55,11 @@ serve(async (req) => {
     // Get responding roles
     let respondingRoles;
     if (taggedRoleId) {
-      // If a role is tagged, only that role responds
       respondingRoles = [{
-        role_id: taggedRoleId,
-        score: 1.0,
-        chain_order: 1
+        roleId: taggedRoleId,
+        chainOrder: 1
       }];
     } else {
-      // Get best responding roles based on context
       const { data: roles } = await supabase.rpc(
         'get_best_responding_role',
         { 
@@ -81,7 +69,10 @@ serve(async (req) => {
           p_max_roles: 3
         }
       );
-      respondingRoles = roles;
+      respondingRoles = roles?.map(r => ({
+        roleId: r.role_id,
+        chainOrder: r.chain_order
+      }));
     }
 
     if (!respondingRoles?.length) {
@@ -96,107 +87,28 @@ serve(async (req) => {
 
     // Process responses sequentially
     for (const roleData of respondingRoles) {
-      try {
-        // Get role details
-        const { data: role } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', roleData.role_id)
-          .single();
+      const response = await generateRoleResponse(
+        supabase,
+        openai,
+        threadId,
+        roleData.roleId,
+        userMessage,
+        roleData.chainOrder
+      );
 
-        if (!role) {
-          console.log(`Role ${roleData.role_id} not found, skipping`);
-          continue;
-        }
-
-        // Get conversation history
-        const { data: history } = await supabase.rpc(
-          'get_conversation_history',
-          {
-            p_thread_id: threadId,
-            p_limit: 10
-          }
-        );
-
-        // Get relevant memories
-        const { data: memories } = await supabase.rpc(
-          'get_similar_memories',
-          {
-            p_embedding: content,
-            p_match_threshold: 0.7,
-            p_match_count: 5,
-            p_role_id: role.id
-          }
-        );
-
-        // Prepare context
-        const memoryContext = memories?.length 
-          ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
-          : '';
-
-        const historyContext = history?.length
-          ? `Recent conversation history:\n${history.map(m => 
-              `${m.role ? 'Assistant' : 'User'}: ${m.content}`
-            ).join('\n')}`
-          : '';
-
-        // Generate response
-        const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: `${role.instructions}\n\n${memoryContext}\n\n${historyContext}`
-            },
-            { role: 'user', content }
-          ],
-        });
-
-        const responseContent = completion.choices[0].message.content;
-
-        // Save role's response
-        const { data: savedResponse, error: responseError } = await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            role_id: role.id,
-            content: responseContent,
-            chain_id: userMessage.id,
-            chain_order: roleData.chain_order
-          })
-          .select('id')
-          .single();
-
-        if (responseError) throw responseError;
-
-        // Store memory
-        await supabase
-          .from('role_memories')
-          .insert({
-            role_id: role.id,
-            content: responseContent,
-            context_type: 'conversation',
-            metadata: {
-              message_id: savedResponse.id,
-              thread_id: threadId,
-              chain_order: roleData.chain_order,
-              user_message: content
-            }
-          });
-
-        // Check for tagged roles in response and handle recursively
+      if (response) {
+        // Check for tagged roles in response
         const { data: taggedRoles } = await supabase.rpc(
           'get_tagged_roles',
           {
-            p_content: responseContent,
+            p_content: response.content,
             p_thread_id: threadId
           }
         );
 
         if (taggedRoles?.length) {
           for (const taggedRole of taggedRoles) {
-            // Recursive handling of tagged roles
-            const taggedContent = `@${role.tag} ${responseContent}`;
+            const taggedContent = `@${roleData.roleId} ${response.content}`;
             await fetch(req.url, {
               method: 'POST',
               headers: {
@@ -211,10 +123,6 @@ serve(async (req) => {
             });
           }
         }
-
-      } catch (error) {
-        console.error(`Error processing response for role ${roleData.role_id}:`, error);
-        continue;
       }
     }
 

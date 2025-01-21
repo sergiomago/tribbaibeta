@@ -1,105 +1,133 @@
-import OpenAI from "https://esm.sh/openai@4.26.0";
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { SupabaseClient } from "@supabase/supabase-js";
+import OpenAI from "openai";
+import { Message } from "./types";
 
-export async function handleInitialAnalysis(
+export async function processUserMessage(
   supabase: SupabaseClient,
   threadId: string,
   content: string,
-  openai: OpenAI
-) {
-  console.log('Performing initial analysis...');
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: 'Analyze the user message and determine the primary intent and any special requirements.'
-      },
-      { role: 'user', content }
-    ],
-  });
+  taggedRoleId: string | null
+): Promise<Message> {
+  console.log('Processing user message:', { threadId, content, taggedRoleId });
 
-  const analysis = completion.choices[0].message.content;
-  
-  await supabase
-    .from('conversation_states')
-    .update({
-      current_state: 'role_selection',
-      metadata: { analysis, original_message: content }
-    })
-    .eq('thread_id', threadId);
-
-  return analysis;
-}
-
-export async function saveUserMessage(
-  supabase: SupabaseClient,
-  threadId: string,
-  content: string,
-  taggedRoleId?: string
-) {
-  const { data: message, error } = await supabase
+  const { data: userMessage, error: messageError } = await supabase
     .from('messages')
     .insert({
       thread_id: threadId,
       content,
       tagged_role_id: taggedRoleId || null,
     })
-    .select()
+    .select('id, thread_id, content, tagged_role_id')
     .single();
 
-  if (error) throw error;
-  return message;
+  if (messageError) throw messageError;
+  console.log('User message saved:', userMessage);
+
+  return userMessage;
 }
 
-export async function storeRoleMemory(
+export async function generateRoleResponse(
   supabase: SupabaseClient,
+  openai: OpenAI,
+  threadId: string,
   roleId: string,
-  content: string,
-  metadata: any
+  userMessage: Message,
+  chainOrder: number
 ) {
-  // Store the memory with enhanced metadata
-  const { error } = await supabase
-    .from('role_memories')
-    .insert({
-      role_id: roleId,
-      content,
-      context_type: 'conversation',
-      metadata: {
-        ...metadata,
-        timestamp: Date.now(),
-        memory_type: 'conversation',
-        importance_score: 1.0,
-      },
-      relevance_score: 1.0,
-      confidence_score: 1.0,
+  console.log('Generating role response:', { threadId, roleId, chainOrder });
+
+  try {
+    // Get role details
+    const { data: role } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('id', roleId)
+      .single();
+
+    if (!role) {
+      console.log(`Role ${roleId} not found, skipping`);
+      return null;
+    }
+
+    // Get conversation history
+    const { data: history } = await supabase.rpc(
+      'get_conversation_history',
+      {
+        p_thread_id: threadId,
+        p_limit: 10
+      }
+    );
+
+    // Get relevant memories
+    const { data: memories } = await supabase.rpc(
+      'get_similar_memories',
+      {
+        p_embedding: userMessage.content,
+        p_match_threshold: 0.7,
+        p_match_count: 5,
+        p_role_id: role.id
+      }
+    );
+
+    // Prepare context
+    const memoryContext = memories?.length 
+      ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+      : '';
+
+    const historyContext = history?.length
+      ? `Recent conversation history:\n${history.map(m => 
+          `${m.role ? 'Assistant' : 'User'}: ${m.content}`
+        ).join('\n')}`
+      : '';
+
+    // Generate response
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `${role.instructions}\n\n${memoryContext}\n\n${historyContext}`
+        },
+        { role: 'user', content: userMessage.content }
+      ],
     });
 
-  if (error) {
-    console.error('Error storing role memory:', error);
-    throw error;
-  }
+    const responseContent = completion.choices[0].message.content;
+    console.log('Generated response:', responseContent);
 
-  // Reinforce similar memories
-  const { data: similarMemories } = await supabase.rpc(
-    'get_similar_memories',
-    {
-      p_embedding: content,
-      p_match_threshold: 0.7,
-      p_match_count: 5,
-      p_role_id: roleId
-    }
-  );
+    // Save role's response
+    const { data: savedResponse, error: responseError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        role_id: roleId,
+        content: responseContent,
+        chain_id: userMessage.id,
+        chain_order: chainOrder
+      })
+      .select('id')
+      .single();
 
-  if (similarMemories?.length) {
-    for (const memory of similarMemories) {
-      await supabase
-        .from('role_memories')
-        .update({
-          reinforcement_count: supabase.sql`reinforcement_count + 1`,
-          last_reinforced: new Date().toISOString(),
-        })
-        .eq('id', memory.id);
-    }
+    if (responseError) throw responseError;
+
+    // Store memory
+    await supabase
+      .from('role_memories')
+      .insert({
+        role_id: roleId,
+        content: responseContent,
+        context_type: 'conversation',
+        metadata: {
+          message_id: savedResponse.id,
+          thread_id: threadId,
+          chain_order: chainOrder,
+          user_message: userMessage.content
+        }
+      });
+
+    return savedResponse;
+  } catch (error) {
+    console.error(`Error processing response for role ${roleId}:`, error);
+    return null;
   }
 }

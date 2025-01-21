@@ -1,7 +1,11 @@
-export interface ChatMessage {
-  threadId: string;
+export interface Message {
+  id: string;
+  thread_id: string;
   content: string;
-  taggedRoleId?: string;
+  role_id?: string;
+  tagged_role_id?: string | null;
+  chain_id?: string;
+  chain_order?: number;
 }
 
 export interface ResponseChain {
