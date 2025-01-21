@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { processUserMessage, generateRoleResponse } from "./messageProcessor.ts";
+import { buildResponseChain } from "./responseChain.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +30,7 @@ serve(async (req) => {
 
     // Save user message
     const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
+    console.log('User message saved:', userMessage);
 
     // Get chain depth to prevent infinite recursion
     const { data: chainDepth } = await supabase.rpc(
@@ -47,27 +49,11 @@ serve(async (req) => {
       );
     }
 
-    // Get responding roles
-    let respondingRoles;
-    if (taggedRoleId) {
-      respondingRoles = [{
-        roleId: taggedRoleId,
-        chainOrder: 1
-      }];
-    } else {
-      const { data: roles } = await supabase.rpc(
-        'get_best_responding_role',
-        { 
-          p_thread_id: threadId,
-          p_context: content,
-          p_threshold: 0.3,
-          p_max_roles: 3
-        }
-      );
-      respondingRoles = roles;
-    }
+    // Build response chain
+    const responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
+    console.log('Response chain built:', responseChain);
 
-    if (!respondingRoles?.length) {
+    if (!responseChain?.length) {
       console.log('No suitable roles found to respond');
       return new Response(
         JSON.stringify({ success: true, message: 'No roles available to respond' }), 
@@ -75,10 +61,9 @@ serve(async (req) => {
       );
     }
 
-    console.log('Responding roles:', respondingRoles);
-
     // Process responses sequentially
-    for (const roleData of respondingRoles) {
+    for (const roleData of responseChain) {
+      console.log('Generating response for role:', roleData);
       await generateRoleResponse(
         supabase,
         openai,

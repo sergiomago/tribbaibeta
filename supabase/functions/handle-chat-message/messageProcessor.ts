@@ -1,16 +1,9 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { Message, ResponseChain } from "./types.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { Message } from "./types.ts";
 
 export async function processUserMessage(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   threadId: string,
   content: string,
   taggedRoleId: string | null
@@ -34,7 +27,7 @@ export async function processUserMessage(
 }
 
 export async function generateRoleResponse(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   openai: OpenAI,
   threadId: string,
   roleId: string,
@@ -83,7 +76,7 @@ export async function generateRoleResponse(
 
     const historyContext = history?.length
       ? `Recent conversation history:\n${history.map(m => 
-          `${m.role ? 'Assistant' : 'User'}: ${m.content}`
+          `${m.role ? m.role.name : 'User'}: ${m.content}`
         ).join('\n')}`
       : '';
 
@@ -135,6 +128,6 @@ export async function generateRoleResponse(
     return savedResponse;
   } catch (error) {
     console.error(`Error processing response for role ${roleId}:`, error);
-    return null;
+    throw error;
   }
 }

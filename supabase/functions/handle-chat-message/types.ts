@@ -13,12 +13,10 @@ export interface ResponseChain {
   chainOrder: number;
 }
 
-export interface MessageContext {
-  memories?: any[];
-  previousInteractions?: any[];
-  conversationDepth: number;
-  chainContext: {
-    lastUpdated: string;
-    contextType: string;
-  };
+export interface Role {
+  id: string;
+  name: string;
+  instructions: string;
+  model: string;
+  special_capabilities?: string[];
 }
