@@ -51,6 +51,60 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_states: {
+        Row: {
+          active_roles: string[] | null
+          chain_metrics: Json | null
+          created_at: string
+          current_leader_role_id: string | null
+          current_state: Database["public"]["Enums"]["conversation_state"]
+          id: string
+          metadata: Json | null
+          thread_id: string
+          topic_context: Json | null
+          updated_at: string
+        }
+        Insert: {
+          active_roles?: string[] | null
+          chain_metrics?: Json | null
+          created_at?: string
+          current_leader_role_id?: string | null
+          current_state?: Database["public"]["Enums"]["conversation_state"]
+          id?: string
+          metadata?: Json | null
+          thread_id: string
+          topic_context?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          active_roles?: string[] | null
+          chain_metrics?: Json | null
+          created_at?: string
+          current_leader_role_id?: string | null
+          current_state?: Database["public"]["Enums"]["conversation_state"]
+          id?: string
+          metadata?: Json | null
+          thread_id?: string
+          topic_context?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_states_current_leader_role_id_fkey"
+            columns: ["current_leader_role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_states_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feedback: {
         Row: {
           created_at: string
@@ -260,50 +314,221 @@ export type Database = {
         }
         Relationships: []
       }
+      role_interactions: {
+        Row: {
+          chain_effectiveness: number | null
+          chain_position: number | null
+          conversation_depth: number | null
+          created_at: string
+          effectiveness_score: number | null
+          expertise_relevance: number | null
+          id: string
+          initiator_role_id: string
+          interaction_context: Json | null
+          interaction_type: string
+          metadata: Json | null
+          parent_interaction_id: string | null
+          relevance_score: number | null
+          responder_role_id: string
+          response_quality_metrics: Json | null
+          response_quality_score: number | null
+          specialization_score: number | null
+          thread_id: string
+          topic_match_score: number | null
+          was_leader: boolean | null
+        }
+        Insert: {
+          chain_effectiveness?: number | null
+          chain_position?: number | null
+          conversation_depth?: number | null
+          created_at?: string
+          effectiveness_score?: number | null
+          expertise_relevance?: number | null
+          id?: string
+          initiator_role_id: string
+          interaction_context?: Json | null
+          interaction_type: string
+          metadata?: Json | null
+          parent_interaction_id?: string | null
+          relevance_score?: number | null
+          responder_role_id: string
+          response_quality_metrics?: Json | null
+          response_quality_score?: number | null
+          specialization_score?: number | null
+          thread_id: string
+          topic_match_score?: number | null
+          was_leader?: boolean | null
+        }
+        Update: {
+          chain_effectiveness?: number | null
+          chain_position?: number | null
+          conversation_depth?: number | null
+          created_at?: string
+          effectiveness_score?: number | null
+          expertise_relevance?: number | null
+          id?: string
+          initiator_role_id?: string
+          interaction_context?: Json | null
+          interaction_type?: string
+          metadata?: Json | null
+          parent_interaction_id?: string | null
+          relevance_score?: number | null
+          responder_role_id?: string
+          response_quality_metrics?: Json | null
+          response_quality_score?: number | null
+          specialization_score?: number | null
+          thread_id?: string
+          topic_match_score?: number | null
+          was_leader?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_interactions_initiator_role_id_fkey"
+            columns: ["initiator_role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_interactions_parent_interaction_id_fkey"
+            columns: ["parent_interaction_id"]
+            isOneToOne: false
+            referencedRelation: "role_interactions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_interactions_responder_role_id_fkey"
+            columns: ["responder_role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_interactions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_memories: {
         Row: {
           access_count: number | null
+          confidence_score: number | null
           content: string
+          context_chain: Json | null
+          context_effectiveness: number | null
           context_relevance: number | null
+          context_source: string | null
           context_type: string
+          contradiction_check_status: string | null
+          contradiction_references: Json | null
+          conversation_context: Json | null
           created_at: string
           embedding: string | null
           id: string
+          importance_score: number | null
+          interaction_id: string | null
           last_accessed: string | null
+          last_reinforced: string | null
+          last_retrieved: string | null
+          last_verified: string | null
+          memory_category: string | null
+          memory_chain_position: number | null
+          memory_type: string | null
           metadata: Json | null
+          previous_context_id: string | null
+          reinforcement_count: number | null
+          related_memories: string[] | null
           relevance_score: number | null
+          retrieval_count: number | null
           role_id: string | null
+          source_type: string | null
           topic_vector: string | null
+          verification_score: number | null
+          verification_status: string | null
         }
         Insert: {
           access_count?: number | null
+          confidence_score?: number | null
           content: string
+          context_chain?: Json | null
+          context_effectiveness?: number | null
           context_relevance?: number | null
+          context_source?: string | null
           context_type: string
+          contradiction_check_status?: string | null
+          contradiction_references?: Json | null
+          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
+          importance_score?: number | null
+          interaction_id?: string | null
           last_accessed?: string | null
+          last_reinforced?: string | null
+          last_retrieved?: string | null
+          last_verified?: string | null
+          memory_category?: string | null
+          memory_chain_position?: number | null
+          memory_type?: string | null
           metadata?: Json | null
+          previous_context_id?: string | null
+          reinforcement_count?: number | null
+          related_memories?: string[] | null
           relevance_score?: number | null
+          retrieval_count?: number | null
           role_id?: string | null
+          source_type?: string | null
           topic_vector?: string | null
+          verification_score?: number | null
+          verification_status?: string | null
         }
         Update: {
           access_count?: number | null
+          confidence_score?: number | null
           content?: string
+          context_chain?: Json | null
+          context_effectiveness?: number | null
           context_relevance?: number | null
+          context_source?: string | null
           context_type?: string
+          contradiction_check_status?: string | null
+          contradiction_references?: Json | null
+          conversation_context?: Json | null
           created_at?: string
           embedding?: string | null
           id?: string
+          importance_score?: number | null
+          interaction_id?: string | null
           last_accessed?: string | null
+          last_reinforced?: string | null
+          last_retrieved?: string | null
+          last_verified?: string | null
+          memory_category?: string | null
+          memory_chain_position?: number | null
+          memory_type?: string | null
           metadata?: Json | null
+          previous_context_id?: string | null
+          reinforcement_count?: number | null
+          related_memories?: string[] | null
           relevance_score?: number | null
+          retrieval_count?: number | null
           role_id?: string | null
+          source_type?: string | null
           topic_vector?: string | null
+          verification_score?: number | null
+          verification_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "role_memories_interaction_id_fkey"
+            columns: ["interaction_id"]
+            isOneToOne: false
+            referencedRelation: "role_interactions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "role_memories_role_id_fkey"
             columns: ["role_id"]
@@ -316,15 +541,22 @@ export type Database = {
       roles: {
         Row: {
           alias: string | null
+          capability_metadata: Json | null
           created_at: string
           description: string | null
+          effectiveness_metrics: Json | null
+          expertise_areas: string[] | null
           id: string
           instructions: string
+          interaction_preferences: Json | null
           is_template: boolean | null
           model: string
           name: string
           package_name: string | null
           package_order: number | null
+          primary_topics: string[] | null
+          response_priority: number | null
+          response_style: Json | null
           source: string
           special_capabilities: string[] | null
           tag: string
@@ -334,15 +566,22 @@ export type Database = {
         }
         Insert: {
           alias?: string | null
+          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          effectiveness_metrics?: Json | null
+          expertise_areas?: string[] | null
           id?: string
           instructions: string
+          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name: string
           package_name?: string | null
           package_order?: number | null
+          primary_topics?: string[] | null
+          response_priority?: number | null
+          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -352,15 +591,22 @@ export type Database = {
         }
         Update: {
           alias?: string | null
+          capability_metadata?: Json | null
           created_at?: string
           description?: string | null
+          effectiveness_metrics?: Json | null
+          expertise_areas?: string[] | null
           id?: string
           instructions?: string
+          interaction_preferences?: Json | null
           is_template?: boolean | null
           model?: string
           name?: string
           package_name?: string | null
           package_order?: number | null
+          primary_topics?: string[] | null
+          response_priority?: number | null
+          response_style?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
@@ -501,6 +747,29 @@ export type Database = {
             }
             Returns: unknown
           }
+      calculate_role_effectiveness: {
+        Args: {
+          p_role_id: string
+          p_thread_id: string
+          p_context: string
+        }
+        Returns: number
+      }
+      calculate_role_specialization_score: {
+        Args: {
+          p_role_id: string
+          p_context: string
+          p_thread_id: string
+        }
+        Returns: number
+      }
+      calculate_text_similarity: {
+        Args: {
+          text1: string
+          text2: string
+        }
+        Returns: number
+      }
       can_create_message: {
         Args: {
           thread_id: string
@@ -519,9 +788,33 @@ export type Database = {
         }
         Returns: boolean
       }
+      consolidate_role_memories: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       count_user_roles: {
         Args: {
           user_id: string
+        }
+        Returns: number
+      }
+      get_best_responding_role: {
+        Args: {
+          p_thread_id: string
+          p_context: string
+          p_threshold?: number
+          p_max_roles?: number
+        }
+        Returns: {
+          role_id: string
+          score: number
+          chain_order: number
+        }[]
+      }
+      get_chain_depth: {
+        Args: {
+          p_thread_id: string
+          p_chain_id: string
         }
         Returns: number
       }
@@ -535,12 +828,42 @@ export type Database = {
           chain_order: number
         }[]
       }
+      get_conversation_depth: {
+        Args: {
+          p_thread_id: string
+          p_role_id: string
+        }
+        Returns: number
+      }
+      get_conversation_history: {
+        Args: {
+          p_thread_id: string
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          content: string
+          role_id: string
+          created_at: string
+          chain_id: string
+          chain_order: number
+        }[]
+      }
       get_next_responding_role: {
         Args: {
           thread_id: string
           current_order: number
         }
         Returns: string
+      }
+      get_role_tags: {
+        Args: {
+          p_context: string
+        }
+        Returns: {
+          tag: string
+          relevance: number
+        }[]
       }
       get_similar_memories: {
         Args: {
@@ -553,6 +876,15 @@ export type Database = {
           id: string
           content: string
           similarity: number
+        }[]
+      }
+      get_tagged_roles: {
+        Args: {
+          p_content: string
+          p_thread_id: string
+        }
+        Returns: {
+          role_id: string
         }[]
       }
       halfvec_avg: {
@@ -716,6 +1048,12 @@ export type Database = {
       }
     }
     Enums: {
+      conversation_state:
+        | "initial_analysis"
+        | "role_selection"
+        | "response_generation"
+        | "chain_processing"
+        | "completion"
       experience_rating:
         | "excellent"
         | "good"
