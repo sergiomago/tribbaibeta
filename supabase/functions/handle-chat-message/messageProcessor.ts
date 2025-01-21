@@ -8,6 +8,8 @@ export async function processUserMessage(
   content: string,
   taggedRoleId?: string | null
 ): Promise<Message> {
+  console.log('Processing user message:', { threadId, content, taggedRoleId });
+  
   // Save user message
   const { data: message, error } = await supabase
     .from('messages')
