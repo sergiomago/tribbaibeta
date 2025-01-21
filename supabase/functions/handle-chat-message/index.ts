@@ -1,8 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { processUserMessage } from "./messageProcessor.ts";
-import { buildResponseChain } from "./responseChainManager.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -40,14 +38,36 @@ serve(async (req) => {
     const openai = new OpenAI({ apiKey: openaiKey });
 
     // Save user message
-    const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
+    const { data: userMessage, error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        content,
+        tagged_role_id: taggedRoleId,
+        message_type: 'text'
+      })
+      .select()
+      .maybeSingle();
+
+    if (messageError) throw messageError;
+    if (!userMessage) throw new Error('Failed to save user message');
     console.log('User message saved:', userMessage);
 
-    // Build response chain
-    const responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
-    console.log('Response chain built:', responseChain);
+    // Get responding roles
+    const { data: roles, error: rolesError } = await supabase.rpc(
+      'get_best_responding_role',
+      {
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3,
+        p_max_roles: 3
+      }
+    );
 
-    if (!responseChain?.length) {
+    if (rolesError) throw rolesError;
+    console.log('Response chain built:', roles);
+
+    if (!roles?.length) {
       return new Response(
         JSON.stringify({
           error: 'No roles available',
@@ -62,7 +82,7 @@ serve(async (req) => {
 
     // Generate responses for each role in the chain
     const responses = [];
-    for (const { roleId, chainOrder } of responseChain) {
+    for (const { role_id: roleId, chain_order: chainOrder } of roles) {
       try {
         console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
         
@@ -95,7 +115,7 @@ serve(async (req) => {
         const responseContent = completion.choices[0].message.content;
         console.log(`Generated response for ${role.name}:`, responseContent);
 
-        // Save response - Fixed the query structure
+        // Save response
         const { data: savedMessage, error: saveError } = await supabase
           .from('messages')
           .insert({
@@ -106,7 +126,7 @@ serve(async (req) => {
             chain_order: chainOrder,
             message_type: 'text'
           })
-          .select('*, role:roles(name, tag)')
+          .select('id, content, role_id, created_at, chain_id, chain_order, message_type, role:roles(name, tag)')
           .maybeSingle();
 
         if (saveError) throw saveError;
