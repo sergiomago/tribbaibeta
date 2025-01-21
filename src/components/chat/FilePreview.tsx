@@ -18,6 +18,11 @@ interface FilePreviewProps {
   fileMetadata: FileMetadata;
 }
 
+interface AnalysisResult {
+  content: string;
+  analyzed_at?: string;
+}
+
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
@@ -117,14 +122,17 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       {analysisData?.analysis_result && analysisData.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{typeof analysisData.analysis_result === 'object' && analysisData.analysis_result !== null ? 
-              analysisData.analysis_result.content : 
-              String(analysisData.analysis_result)}</p>
+          <p>
+            {typeof analysisData.analysis_result === 'object' && 
+             analysisData.analysis_result !== null ? 
+              (analysisData.analysis_result as AnalysisResult).content : 
+              String(analysisData.analysis_result)}
+          </p>
           {typeof analysisData.analysis_result === 'object' && 
-           analysisData.analysis_result !== null && 
+           analysisData.analysis_result !== null &&
            'analyzed_at' in analysisData.analysis_result && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at as string).toLocaleString()}
+              Analyzed at: {new Date((analysisData.analysis_result as AnalysisResult).analyzed_at as string).toLocaleString()}
             </p>
           )}
         </div>
