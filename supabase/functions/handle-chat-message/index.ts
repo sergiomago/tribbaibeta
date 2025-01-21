@@ -24,6 +24,7 @@ serve(async (req) => {
       throw new Error('Missing required environment variables');
     }
 
+    // Initialize Supabase client
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
