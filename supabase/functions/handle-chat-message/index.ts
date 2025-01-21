@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { generateRoleResponse, recordInteraction, updateMemoryRelevance } from "./responseGenerator.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -33,7 +32,7 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Save user message
+    // Step 1: Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -49,67 +48,95 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get responding roles in order
-    const { data: roles } = await supabase.rpc(
-      'get_best_responding_role',
-      { 
-        p_thread_id: threadId,
-        p_context: content,
-        p_threshold: 0.3,
-        p_max_roles: 3
-      }
-    );
+    // Step 2: Get responding roles
+    const { data: threadRoles, error: rolesError } = await supabase
+      .from('thread_roles')
+      .select('role_id')
+      .eq('thread_id', threadId);
 
-    if (!roles?.length) {
-      console.log('No roles found for thread');
-      return new Response(
-        JSON.stringify({ success: true }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (rolesError) {
+      console.error('Error getting thread roles:', rolesError);
+      throw rolesError;
     }
 
-    // Process each role sequentially
-    for (const roleData of roles) {
+    const roleIds = threadRoles.map(tr => tr.role_id);
+    
+    // Step 3: Get role details
+    const { data: roles, error: roleDetailsError } = await supabase
+      .from('roles')
+      .select('id, name, instructions, model, tag, special_capabilities')
+      .in('id', roleIds);
+
+    if (roleDetailsError) {
+      console.error('Error getting role details:', roleDetailsError);
+      throw roleDetailsError;
+    }
+
+    // Step 4: Process responses for each role
+    for (const role of roles) {
       try {
-        // Get relevant memories for this role
+        // Get relevant memories
         const { data: memories } = await supabase.rpc(
           'get_similar_memories',
           {
             p_embedding: content,
             p_match_threshold: 0.7,
             p_match_count: 5,
-            p_role_id: roleData.role_id
+            p_role_id: role.id
           }
         );
 
-        // Generate and save response for this role
-        await generateRoleResponse(
-          supabase,
-          threadId,
-          roleData.role_id,
-          message,
-          memories || [],
-          openai
-        );
+        const memoryContext = memories?.length 
+          ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+          : '';
 
-        // Update memory relevance
-        if (memories?.length) {
-          await updateMemoryRelevance(supabase, memories);
+        // Generate response
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `${role.instructions}\n\n${memoryContext}`
+            },
+            { role: 'user', content }
+          ],
+        });
+
+        const responseContent = completion.choices[0].message.content;
+
+        // Save role's response
+        const { data: roleResponse, error: responseError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role.id,
+            content: responseContent,
+            chain_id: message.id,
+          })
+          .select('id')
+          .single();
+
+        if (responseError) {
+          console.error(`Error saving response for role ${role.id}:`, responseError);
+          continue;
         }
 
-        // Record interaction
-        await recordInteraction(
-          supabase,
-          threadId,
-          roleData.role_id,
-          taggedRoleId,
-          null,
-          memories?.length || 0
-        );
+        // Store memory
+        await supabase
+          .from('role_memories')
+          .insert({
+            role_id: role.id,
+            content: responseContent,
+            context_type: 'conversation',
+            metadata: {
+              message_id: roleResponse.id,
+              thread_id: threadId
+            }
+          });
 
       } catch (error) {
-        console.error(`Error processing role ${roleData.role_id}:`, error);
-        continue; // Continue with next role even if one fails
+        console.error(`Error processing response for role ${role.id}:`, error);
+        continue;
       }
     }
 

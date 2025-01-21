@@ -1,21 +1,6 @@
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
-async function getPreviousResponses(
-  supabase: SupabaseClient,
-  threadId: string,
-  chainId: string
-) {
-  const { data: previousResponses } = await supabase
-    .from('messages')
-    .select('content, roles:roles(name)')
-    .eq('thread_id', threadId)
-    .eq('chain_id', chainId)
-    .order('chain_order', { ascending: true });
-    
-  return previousResponses || [];
-}
-
 export async function generateRoleResponse(
   supabase: SupabaseClient,
   threadId: string,
@@ -32,15 +17,6 @@ export async function generateRoleResponse(
 
   if (!role) throw new Error(`Role ${roleId} not found`);
 
-  // Get previous responses in this chain
-  const previousResponses = await getPreviousResponses(supabase, threadId, userMessage.id);
-  
-  const conversationContext = previousResponses.length > 0 
-    ? `Previous responses in this conversation:\n${previousResponses.map(r => 
-        `${r.roles.name}: ${r.content}`
-      ).join('\n')}`
-    : '';
-
   const memoryContext = memories?.length 
     ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
     : '';
@@ -50,7 +26,7 @@ export async function generateRoleResponse(
     messages: [
       {
         role: 'system',
-        content: `${role.instructions}\n\n${memoryContext}\n\n${conversationContext}`
+        content: `${role.instructions}\n\n${memoryContext}`
       },
       { role: 'user', content: userMessage.content }
     ],
