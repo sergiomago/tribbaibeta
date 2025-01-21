@@ -67,12 +67,13 @@ serve(async (req) => {
         console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
         
         // Get role details
-        const { data: role } = await supabase
+        const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('*')
           .eq('id', roleId)
-          .single();
+          .maybeSingle();
 
+        if (roleError) throw roleError;
         if (!role) {
           console.error(`Role ${roleId} not found`);
           continue;
@@ -94,7 +95,7 @@ serve(async (req) => {
         const responseContent = completion.choices[0].message.content;
         console.log(`Generated response for ${role.name}:`, responseContent);
 
-        // Save response
+        // Save response - Fixed the query structure
         const { data: savedMessage, error: saveError } = await supabase
           .from('messages')
           .insert({
@@ -105,13 +106,12 @@ serve(async (req) => {
             chain_order: chainOrder,
             message_type: 'text'
           })
-          .select(`
-            *,
-            role:roles(name, tag)
-          `)
-          .single();
+          .select('*, role:roles(name, tag)')
+          .maybeSingle();
 
         if (saveError) throw saveError;
+        if (!savedMessage) throw new Error('Failed to save message');
+        
         responses.push(savedMessage);
 
       } catch (error) {
