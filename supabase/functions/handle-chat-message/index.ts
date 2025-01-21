@@ -63,6 +63,7 @@ serve(async (req) => {
       );
     }
 
+    // Verify thread has roles assigned
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
       .select('role_id')
@@ -160,7 +161,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: 'Chain building failed',
-          message: error.message
+          message: 'Failed to determine responding roles'
         }),
         { 
           status: 500,
