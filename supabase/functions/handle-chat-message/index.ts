@@ -79,6 +79,13 @@ serve(async (req) => {
       throw messageError;
     }
 
+    // For file messages, we don't need AI responses
+    if (messageType !== 'text') {
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Get conversation chain based on tagged role
     const { data: chain, error: chainError } = await supabase
       .rpc('get_conversation_chain', {
@@ -153,7 +160,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error(`Error processing role ${role.name}:`, error);
-        continue;
+        throw error;
       }
     }
 
