@@ -26,6 +26,15 @@ export async function processMessage(
     .eq('thread_id', threadId)
     .neq('role_id', roleId);
 
+  // Get the sequence of roles
+  const roleSequence = threadRoles?.map(tr => tr.roles.name).join('\n') || '';
+
+  // Find current role's position and adjacent roles
+  const allRoles = threadRoles?.map(tr => tr.roles) || [];
+  const currentPosition = allRoles.findIndex(r => r.id === roleId) + 1;
+  const previousRole = currentPosition > 1 ? allRoles[currentPosition - 2]?.name : 'none';
+  const nextRole = currentPosition < allRoles.length ? allRoles[currentPosition]?.name : 'none';
+
   // Format previous responses for context
   const formattedResponses = previousResponses
     .map(msg => {
@@ -35,20 +44,26 @@ export async function processMessage(
     .join('\n\n');
 
   // Create the enhanced system prompt
-  const otherRoles = threadRoles?.map(tr => tr.roles.name).join(', ') || '';
-  const systemPrompt = `You are ${role.name}${role.alias ? ` (${role.alias})` : ''}, an AI role with the following instructions:
+  const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles in this sequence:
 
-${role.instructions}
+${roleSequence}
 
-You are in a conversation with other AI roles including: ${otherRoles}. When responding:
-- Acknowledge previous speakers by name if they've spoken
-- Reference and build upon specific points they made
-- Add your unique perspective based on your expertise as ${role.name}
-- Maintain a collaborative and constructive tone
-- Stay true to your role's expertise and perspective
+Your position in this conversation is #${currentPosition}. You are speaking after ${previousRole} and will be followed by ${nextRole}.
 
 Previous responses in this conversation:
-${formattedResponses}`;
+${formattedResponses}
+
+When responding, please follow these guidelines:
+1. Acknowledge previous speakers by name and briefly reference the points they made.
+2. Contribute your unique perspective based on your expertise as ${role.name}.
+3. Add to the conversation only if you have relevant knowledge about the topic. If not, politely mention that you don't have additional insights, or that another role might be more knowledgeable.
+4. If you are not the last speaker, you can hint that ${nextRole} may have further insights to offer.
+5. If you are the last speaker, synthesize the conversation in a concise way, ensuring all major points are covered.
+
+Maintain a collaborative, constructive tone, staying true to your role's expertise and personality. As ${role.name}, build on what's already been said while avoiding unnecessary repetition.
+
+Role Instructions:
+${role.instructions}`;
 
   // Generate response
   const completion = await openai.chat.completions.create({
