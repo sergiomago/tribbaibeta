@@ -12,6 +12,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useToast } from "@/hooks/use-toast";
 
+interface Thread {
+  id: string;
+  name: string;
+  last_opened?: string;
+  user_id: string;
+}
+
+interface FreeTierLimits {
+  max_threads: number;
+}
+
 interface ThreadPanelProps {
   selectedThreadId: string | null;
   onThreadSelect: (threadId: string) => void;
@@ -35,8 +46,7 @@ export function ThreadPanel({
 
   useThreadSubscription();
 
-  // Get thread count and free tier limits
-  const { data: threads } = useQuery({
+  const { data: threads } = useQuery<Thread[]>({
     queryKey: ["threads"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -47,7 +57,7 @@ export function ThreadPanel({
     },
   });
 
-  const { data: freeTierLimits } = useQuery({
+  const { data: freeTierLimits } = useQuery<FreeTierLimits>({
     queryKey: ["free-tier-limits"],
     queryFn: async () => {
       const { data, error } = await supabase

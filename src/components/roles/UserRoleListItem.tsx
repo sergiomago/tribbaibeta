@@ -23,6 +23,11 @@ type UserRoleListItemProps = {
   onEdit: (id: string) => void;
 };
 
+interface Thread {
+  id: string;
+  name: string;
+}
+
 export const UserRoleListItem = ({ role, onDelete, onEdit }: UserRoleListItemProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const navigate = useNavigate();
@@ -35,7 +40,7 @@ export const UserRoleListItem = ({ role, onDelete, onEdit }: UserRoleListItemPro
     createThread.mutate(
       { userId: user.id, roleId: role.id },
       {
-        onSuccess: (thread) => {
+        onSuccess: (thread: Thread) => {
           navigate(`/chats?thread=${thread.id}`);
         },
       }

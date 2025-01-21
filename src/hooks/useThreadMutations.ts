@@ -1,38 +1,25 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
+import { Tables } from "@/integrations/supabase/types";
+
+type ThreadResponse = Tables<"threads">;
 
 export function useThreadMutations() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const createThread = useMutation({
     mutationFn: async ({ userId, roleId }: { userId: string, roleId?: string }) => {
-      // First create the thread
-      const { data: thread, error: threadError } = await supabase
-        .from("threads")
-        .insert({
-          name: "New Chat",
-          user_id: userId,
-        })
-        .select()
-        .single();
+      const { data, error } = await supabase
+        .functions.invoke<ThreadResponse>("create-thread-with-state", {
+          body: { p_user_id: userId, p_role_id: roleId }
+        });
 
-      if (threadError) throw threadError;
-
-      // If a roleId was provided, associate it with the thread
-      if (roleId) {
-        const { error: roleError } = await supabase
-          .from("thread_roles")
-          .insert({
-            thread_id: thread.id,
-            role_id: roleId,
-          });
-
-        if (roleError) throw roleError;
-      }
-
-      return thread;
+      if (error) throw error;
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["threads"] });

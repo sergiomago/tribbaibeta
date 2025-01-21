@@ -23,6 +23,11 @@ type UserRoleCardProps = {
   onEdit: (id: string) => void;
 };
 
+interface Thread {
+  id: string;
+  name: string;
+}
+
 export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const navigate = useNavigate();
@@ -35,7 +40,7 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
     createThread.mutate(
       { userId: user.id, roleId: role.id },
       {
-        onSuccess: (thread) => {
+        onSuccess: (thread: Thread) => {
           navigate(`/chats?thread=${thread.id}`);
         },
       }

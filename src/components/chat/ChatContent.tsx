@@ -63,10 +63,12 @@ export function ChatContent({
     <div className="h-full flex flex-col">
       <RoleManagementBar threadId={threadId} />
       <MessageList
-        messages={messages}
+        messages={messages || []}
         isLoading={isLoadingMessages}
         messagesEndRef={messagesEndRef}
         threadId={threadId}
+        messageListRef={messageListRef}
+        maxMessages={maxMessages || messageLimitPerThread}
       />
       <ChatInput 
         threadId={threadId} 

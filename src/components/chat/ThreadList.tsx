@@ -32,7 +32,7 @@ export function ThreadList({
       const { data, error } = await supabase
         .from("threads")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }); // Changed to descending order
       if (error) throw error;
       return data;
     },

@@ -2,6 +2,7 @@ import { FileText, Image as ImageIcon, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { Tables } from "@/integrations/supabase/types";
 
 interface FilePreviewProps {
   fileMetadata: {
@@ -13,40 +14,34 @@ interface FilePreviewProps {
   };
 }
 
-interface AnalysisResult {
-  analysis_result: {
-    content: string;
-    analyzed_at?: string;
-  } | null;
-  analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null;
-}
+type AnalyzedFile = Tables<"analyzed_files">;
 
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisResult, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
+  const { data: analyzedFile, isLoading: isAnalyzing } = useQuery<AnalyzedFile>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
-        return {
-          analysis_result: null,
-          analysis_status: null
-        };
+        throw new Error('No file ID provided');
       }
       
       const { data, error } = await supabase
         .from('analyzed_files')
-        .select('analysis_result, analysis_status')
+        .select()
         .eq('id', fileMetadata.file_id)
         .maybeSingle();
         
       if (error) throw error;
+      if (!data) throw new Error('File not found');
       
-      return data as AnalysisResult;
+      return data;
     },
     enabled: !!fileMetadata.file_id && !isImage,
-    refetchInterval: (data) => 
-      data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data as AnalyzedFile | undefined;
+      return data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false;
+    },
   });
   
   const handleDownload = async () => {
@@ -107,26 +102,26 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         </Button>
       </div>
       
-      {(isAnalyzing || analysisResult?.analysis_status === 'processing') && (
+      {(isAnalyzing || analyzedFile?.analysis_status === 'processing') && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Analyzing file...
         </div>
       )}
       
-      {analysisResult?.analysis_status === 'failed' && (
+      {analyzedFile?.analysis_status === 'failed' && (
         <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
           Analysis failed. Please try again.
         </div>
       )}
       
-      {analysisResult?.analysis_result && analysisResult.analysis_status === 'completed' && (
+      {analyzedFile?.analysis_result && analyzedFile.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{analysisResult.analysis_result.content}</p>
-          {analysisResult.analysis_result.analyzed_at && (
+          <p>{(analyzedFile.analysis_result as { content: string })?.content}</p>
+          {(analyzedFile.analysis_result as { analyzed_at?: string })?.analyzed_at && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date(analysisResult.analysis_result.analyzed_at).toLocaleString()}
+              Analyzed at: {new Date((analyzedFile.analysis_result as { analyzed_at: string }).analyzed_at).toLocaleString()}
             </p>
           )}
         </div>
