@@ -19,40 +19,28 @@ export async function buildResponseChain(
       }];
     }
 
-    // First attempt: Try with normal threshold (0.3)
-    let selectedRoles = await tryGetRespondingRoles(supabase, threadId, content, 0.3);
-    
-    // Second attempt: If no roles qualify, try with lower threshold (0.1)
-    if (!selectedRoles.length) {
-      console.log('No roles met standard threshold, trying lower threshold');
-      selectedRoles = await tryGetRespondingRoles(supabase, threadId, content, 0.1);
-    }
-    
-    // Final fallback: If still no roles, select a random role
-    if (!selectedRoles.length) {
-      console.log('No roles met lower threshold, selecting random role');
-      const { data: threadRoles } = await supabase
-        .from('thread_roles')
-        .select('role_id')
-        .eq('thread_id', threadId);
-      
-      if (!threadRoles?.length) {
-        throw new Error('No roles found for thread');
+    // Get responding roles with proper parameter types
+    const { data: roles, error } = await supabase.rpc(
+      'get_best_responding_role',
+      {
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3,
+        p_max_roles: 3
       }
-      
-      // Select random role
-      const randomRole = threadRoles[Math.floor(Math.random() * threadRoles.length)];
-      selectedRoles = [{
-        roleId: randomRole.role_id,
-        score: 0.1,
-        chainOrder: 1
-      }];
+    );
+
+    if (error) {
+      console.error('Error getting responding roles:', error);
+      throw error;
     }
 
+    console.log('Selected responding roles:', roles);
+
     // Map to chain format
-    const chain = selectedRoles.map((role, index) => ({
-      roleId: role.roleId,
-      chainOrder: index + 1
+    const chain = roles.map((role: any) => ({
+      roleId: role.role_id,
+      chainOrder: role.chain_order
     }));
 
     console.log('Built response chain:', chain);
@@ -61,30 +49,6 @@ export async function buildResponseChain(
     console.error('Error building response chain:', error);
     throw error;
   }
-}
-
-async function tryGetRespondingRoles(
-  supabase: SupabaseClient,
-  threadId: string,
-  content: string,
-  threshold: number
-) {
-  const { data: roles, error } = await supabase.rpc(
-    'get_best_responding_role',
-    {
-      p_thread_id: threadId,
-      p_context: content,
-      p_threshold: threshold,
-      p_max_roles: 3
-    }
-  );
-
-  if (error) {
-    console.error('Error getting responding roles:', error);
-    throw error;
-  }
-
-  return roles || [];
 }
 
 export async function validateChainOrder(

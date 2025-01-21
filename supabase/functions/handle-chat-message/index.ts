@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
+import { buildResponseChain, updateChainProgress } from "./responseChainManager.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,25 +54,11 @@ serve(async (req) => {
     if (!userMessage) throw new Error('Failed to save user message');
     console.log('User message saved:', userMessage);
 
-    // Get responding roles with proper parameter types
-    const { data: respondingRoles, error: rolesError } = await supabase.rpc(
-      'get_best_responding_role',
-      {
-        p_thread_id: threadId,
-        p_context: content,
-        p_threshold: 0.3,
-        p_max_roles: 3
-      }
-    );
+    // Get response chain using consolidated manager
+    const responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
+    console.log('Response chain built:', responseChain);
 
-    if (rolesError) {
-      console.error('Error getting responding roles:', rolesError);
-      throw rolesError;
-    }
-
-    console.log('Response chain built:', respondingRoles);
-
-    if (!respondingRoles?.length) {
+    if (!responseChain?.length) {
       return new Response(
         JSON.stringify({
           error: 'No roles available',
@@ -86,7 +73,7 @@ serve(async (req) => {
 
     // Generate responses for each role in order
     const responses = [];
-    for (const { role_id: roleId, chain_order: chainOrder } of respondingRoles) {
+    for (const { roleId, chainOrder } of responseChain) {
       try {
         console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
         
@@ -140,6 +127,9 @@ serve(async (req) => {
 
         if (saveError) throw saveError;
         if (!savedMessage) throw new Error('Failed to save message');
+        
+        // Update chain progress
+        await updateChainProgress(supabase, threadId, savedMessage.id, chainOrder);
         
         responses.push(savedMessage);
 
