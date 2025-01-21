@@ -33,7 +33,7 @@ serve(async (req) => {
     }
 
     // Step 1: Save user message
-    const { data: message, error: messageError } = await supabase
+    const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
@@ -43,38 +43,31 @@ serve(async (req) => {
       .select('id, thread_id, content, tagged_role_id')
       .single();
 
-    if (messageError) {
-      console.error('Error saving message:', messageError);
-      throw messageError;
-    }
+    if (messageError) throw messageError;
 
-    // Step 2: Get responding roles
-    const { data: threadRoles, error: rolesError } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
+    // Step 2: Get responding roles in order
+    const { data: respondingRoles, error: rolesError } = await supabase
+      .rpc('get_best_responding_role', {
+        p_thread_id: threadId,
+        p_context: content,
+        p_threshold: 0.3
+      });
 
-    if (rolesError) {
-      console.error('Error getting thread roles:', rolesError);
-      throw rolesError;
-    }
+    if (rolesError) throw rolesError;
+    console.log('Responding roles:', respondingRoles);
 
-    const roleIds = threadRoles.map(tr => tr.role_id);
-    
-    // Step 3: Get role details
-    const { data: roles, error: roleDetailsError } = await supabase
-      .from('roles')
-      .select('id, name, instructions, model, tag, special_capabilities')
-      .in('id', roleIds);
-
-    if (roleDetailsError) {
-      console.error('Error getting role details:', roleDetailsError);
-      throw roleDetailsError;
-    }
-
-    // Step 4: Process responses for each role
-    for (const role of roles) {
+    // Step 3: Process responses sequentially
+    for (const roleData of respondingRoles) {
       try {
+        // Get role details
+        const { data: role } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', roleData.role_id)
+          .single();
+
+        if (!role) continue;
+
         // Get relevant memories
         const { data: memories } = await supabase.rpc(
           'get_similar_memories',
@@ -86,8 +79,23 @@ serve(async (req) => {
           }
         );
 
+        // Get previous responses in this chain
+        const { data: previousResponses } = await supabase
+          .from('messages')
+          .select('content, role:roles(name)')
+          .eq('thread_id', threadId)
+          .eq('chain_id', userMessage.id)
+          .order('chain_order', { ascending: true });
+
+        // Prepare context for the role
         const memoryContext = memories?.length 
           ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+          : '';
+
+        const previousResponsesContext = previousResponses?.length
+          ? `Previous responses in this conversation:\n${previousResponses.map(r => 
+              `${r.role.name}: ${r.content}`
+            ).join('\n')}`
           : '';
 
         // Generate response
@@ -96,7 +104,7 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `${role.instructions}\n\n${memoryContext}`
+              content: `${role.instructions}\n\n${memoryContext}\n\n${previousResponsesContext}`
             },
             { role: 'user', content }
           ],
@@ -105,21 +113,19 @@ serve(async (req) => {
         const responseContent = completion.choices[0].message.content;
 
         // Save role's response
-        const { data: roleResponse, error: responseError } = await supabase
+        const { data: savedResponse, error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: role.id,
             content: responseContent,
-            chain_id: message.id,
+            chain_id: userMessage.id,
+            chain_order: roleData.chain_order
           })
           .select('id')
           .single();
 
-        if (responseError) {
-          console.error(`Error saving response for role ${role.id}:`, responseError);
-          continue;
-        }
+        if (responseError) throw responseError;
 
         // Store memory
         await supabase
@@ -129,13 +135,27 @@ serve(async (req) => {
             content: responseContent,
             context_type: 'conversation',
             metadata: {
-              message_id: roleResponse.id,
-              thread_id: threadId
+              message_id: savedResponse.id,
+              thread_id: threadId,
+              chain_order: roleData.chain_order,
+              user_message: content
             }
           });
 
+        // Record interaction
+        await supabase
+          .from('role_interactions')
+          .insert({
+            thread_id: threadId,
+            initiator_role_id: role.id,
+            responder_role_id: null,
+            interaction_type: 'chain_response',
+            chain_position: roleData.chain_order,
+            effectiveness_score: roleData.score
+          });
+
       } catch (error) {
-        console.error(`Error processing response for role ${role.id}:`, error);
+        console.error(`Error processing response for role ${roleData.role_id}:`, error);
         continue;
       }
     }
