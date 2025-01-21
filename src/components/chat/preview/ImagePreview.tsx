@@ -1,7 +1,7 @@
+import { FileText, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { FileMetadata } from "@/types/fileAnalysis";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ImagePreviewProps {
   fileMetadata: FileMetadata;
@@ -30,19 +30,20 @@ export function ImagePreview({ fileMetadata }: ImagePreviewProps) {
   };
 
   return (
-    <div className="relative group max-w-md">
-      <img
-        src={`${supabase.storage.from('analysis_files').getPublicUrl(fileMetadata.file_path).data.publicUrl}`}
-        alt={fileMetadata.file_name}
-        className="rounded-lg max-w-full h-auto"
-      />
-      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleDownload}
-          className="bg-background/80 backdrop-blur-sm"
-        >
+    <div className="space-y-2">
+      <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+        <img
+          src={`${supabase.storageUrl}/object/public/analysis_files/${fileMetadata.file_path}`}
+          alt={fileMetadata.file_name}
+          className="object-contain w-full h-full"
+        />
+      </div>
+      <div className="flex items-center justify-between p-2 rounded-lg border bg-muted/50">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">{fileMetadata.file_name}</span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={handleDownload}>
           <Download className="h-4 w-4" />
         </Button>
       </div>

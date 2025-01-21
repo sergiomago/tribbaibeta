@@ -27,11 +27,27 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         
       if (error) throw error;
       
-      return data as FileAnalysis | null;
+      if (!data) return null;
+
+      // Transform the data to match our FileAnalysis type
+      const analysis: FileAnalysis = {
+        id: data.id,
+        analysis_status: data.analysis_status || 'pending',
+        analysis_result: data.analysis_result,
+        file_metadata: {
+          file_path: data.file_path,
+          file_name: data.file_name,
+          content_type: data.content_type,
+          size: data.size,
+          file_id: data.id
+        }
+      };
+      
+      return analysis;
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
-      data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
+      !data || data.analysis_status === 'processing' || data.analysis_status === 'pending' ? 2000 : false,
   });
 
   return (
