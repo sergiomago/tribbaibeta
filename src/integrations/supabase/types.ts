@@ -798,32 +798,26 @@ export type Database = {
         }
         Returns: number
       }
-      get_best_responding_role:
-        | {
-            Args: {
-              p_thread_id: string
-              p_context: string
-              p_threshold?: number
-            }
-            Returns: {
-              role_id: string
-              score: number
-              chain_order: number
-            }[]
-          }
-        | {
-            Args: {
-              p_thread_id: string
-              p_context: string
-              p_threshold?: number
-              p_max_roles?: number
-            }
-            Returns: {
-              role_id: string
-              score: number
-              chain_order: number
-            }[]
-          }
+      get_best_responding_role: {
+        Args: {
+          p_thread_id: string
+          p_context: string
+          p_threshold?: number
+          p_max_roles?: number
+        }
+        Returns: {
+          role_id: string
+          score: number
+          chain_order: number
+        }[]
+      }
+      get_chain_depth: {
+        Args: {
+          p_thread_id: string
+          p_chain_id: string
+        }
+        Returns: number
+      }
       get_conversation_chain: {
         Args: {
           p_thread_id: string
@@ -840,6 +834,20 @@ export type Database = {
           p_role_id: string
         }
         Returns: number
+      }
+      get_conversation_history: {
+        Args: {
+          p_thread_id: string
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          content: string
+          role_id: string
+          created_at: string
+          chain_id: string
+          chain_order: number
+        }[]
       }
       get_next_responding_role: {
         Args: {
@@ -868,6 +876,15 @@ export type Database = {
           id: string
           content: string
           similarity: number
+        }[]
+      }
+      get_tagged_roles: {
+        Args: {
+          p_content: string
+          p_thread_id: string
+        }
+        Returns: {
+          role_id: string
         }[]
       }
       halfvec_avg: {
