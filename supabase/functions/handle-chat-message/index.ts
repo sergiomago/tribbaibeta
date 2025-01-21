@@ -20,23 +20,32 @@ interface MessageIntent {
 }
 
 function detectIntent(content: string, taggedRoleId?: string): MessageIntent {
-  // Check for explicit role tagging first
   if (taggedRoleId) {
     return { type: 'conversation', taggedRoleId };
   }
-
-  // Check for file analysis intent
   if (ANALYSIS_INTENT.test(content) && FILE_REFERENCE.test(content)) {
     return { type: 'analysis', fileReference: true };
   }
-
-  // Check for search intent
   if (SEARCH_INTENT.test(content)) {
     return { type: 'search' };
   }
-
-  // Default to conversation
   return { type: 'conversation' };
+}
+
+async function getConversationContext(supabase: any, threadId: string, chainId: string | null) {
+  if (!chainId) return [];
+
+  const { data: chainMessages } = await supabase
+    .from('messages')
+    .select(`
+      content,
+      role:roles(name, tag, instructions),
+      created_at
+    `)
+    .eq('chain_id', chainId)
+    .order('created_at', { ascending: true });
+
+  return chainMessages || [];
 }
 
 serve(async (req) => {
@@ -52,7 +61,6 @@ serve(async (req) => {
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Received request:', { threadId, content, taggedRoleId });
 
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
@@ -127,6 +135,14 @@ serve(async (req) => {
         continue;
       }
 
+      // Get conversation context from the current chain
+      const chainContext = await getConversationContext(supabase, threadId, userMessage.id);
+      const contextMessages = chainContext.map(msg => ({
+        role: msg.role ? 'assistant' : 'user',
+        name: msg.role?.tag || undefined,
+        content: msg.content
+      }));
+
       // Get relevant memories for context
       const { data: memories } = await supabase
         .rpc('get_similar_memories', {
@@ -135,19 +151,6 @@ serve(async (req) => {
           p_match_count: 5,
           p_role_id: role_id
         });
-
-      // Get recent conversation history
-      const { data: history } = await supabase
-        .from('messages')
-        .select(`
-          content,
-          role:roles(name, tag, instructions),
-          created_at,
-          metadata
-        `)
-        .eq('thread_id', threadId)
-        .order('created_at', { ascending: false })
-        .limit(10);
 
       // Prepare conversation context
       const memoryContext = memories?.length 
@@ -161,21 +164,14 @@ serve(async (req) => {
         ? "\nThe user wants you to search for information. Consider using web search capabilities if available."
         : "";
 
-      const conversationHistory = history?.reverse().map(msg => ({
-        role: msg.role ? 'assistant' : 'user',
-        name: msg.role?.tag || undefined,
-        content: msg.content
-      })) || [];
-
       // Generate response using chat completion
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: `${role.instructions}\n\n${memoryContext}${intentInstructions}`
+            content: `${role.instructions}\n\n${memoryContext}${intentInstructions}\n\nPrevious messages in this conversation:\n${contextMessages.map(m => `${m.role}: ${m.content}`).join('\n')}`
           },
-          ...conversationHistory,
           {
             role: 'user',
             content
