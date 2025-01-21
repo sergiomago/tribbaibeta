@@ -46,7 +46,7 @@ serve(async (req) => {
         tagged_role_id: taggedRoleId,
         message_type: 'text'
       })
-      .select('id, thread_id, role_id, content, created_at, tagged_role_id, message_type')
+      .select('*')
       .single();
 
     if (messageError) throw messageError;
@@ -126,14 +126,7 @@ serve(async (req) => {
             message_type: 'text'
           })
           .select(`
-            id,
-            thread_id,
-            role_id,
-            content,
-            created_at,
-            chain_id,
-            chain_order,
-            message_type,
+            *,
             role:roles (
               name,
               tag
