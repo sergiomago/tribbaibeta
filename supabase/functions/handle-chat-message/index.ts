@@ -43,8 +43,8 @@ serve(async (req) => {
       throw new Error('OpenAI API key is not configured');
     }
 
-    const { threadId, content, taggedRoleId } = await req.json();
-    console.log('Received request:', { threadId, content, taggedRoleId });
+    const { threadId, content, taggedRoleId, messageType = 'text', metadata = null } = await req.json();
+    console.log('Received request:', { threadId, content, taggedRoleId, messageType, metadata });
 
     if (!threadId || !content) {
       throw new Error('Missing required parameters: threadId or content');
@@ -54,17 +54,22 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Save user message
+    // Validate metadata based on message type
+    if (messageType !== 'text' && (!metadata || !metadata.file_id)) {
+      throw new Error(`Invalid metadata for message type: ${messageType}`);
+    }
+
+    // Save user message with appropriate metadata
     const { data: userMessage, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
-        metadata: {
-          intent: 'conversation',
-          fileReference: false
-        }
+        message_type: messageType,
+        metadata: messageType === 'text' ? 
+          { intent: 'conversation' } : 
+          { ...metadata, intent: 'conversation' }
       })
       .select()
       .single();
@@ -135,6 +140,7 @@ serve(async (req) => {
             content: responseContent,
             response_order: chain_order,
             chain_id: userMessage.id,
+            message_type: 'text',
             metadata: {
               intent: 'conversation',
               previousResponses: previousResponses.length

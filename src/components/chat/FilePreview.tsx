@@ -3,17 +3,16 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
-interface FilePreviewProps {
-  fileMetadata: {
-    file_path: string;
-    file_name: string;
-    content_type: string;
-    size: number;
-    file_id?: string;
-  };
+interface FileMetadata {
+  file_path: string;
+  file_name: string;
+  content_type: string;
+  size: number;
+  file_id?: string;
 }
 
-interface AnalysisResult {
+interface AnalyzedFile {
+  id: string;
   analysis_result: {
     content: string;
     analyzed_at?: string;
@@ -21,28 +20,29 @@ interface AnalysisResult {
   analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
+interface FilePreviewProps {
+  fileMetadata: FileMetadata;
+}
+
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
+  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalyzedFile | null>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
-        return {
-          analysis_result: null,
-          analysis_status: null
-        };
+        return null;
       }
       
       const { data, error } = await supabase
         .from('analyzed_files')
-        .select('analysis_result, analysis_status')
+        .select('id, analysis_result, analysis_status')
         .eq('id', fileMetadata.file_id)
         .maybeSingle();
         
       if (error) throw error;
       
-      return data as AnalysisResult;
+      return data;
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
