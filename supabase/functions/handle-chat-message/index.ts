@@ -38,7 +38,7 @@ function detectIntent(content: string, taggedRoleId?: string): MessageIntent {
 async function getPreviousResponses(supabase: any, threadId: string, chainId: string | null) {
   if (!chainId) return [];
   
-  const { data: responses } = await supabase
+  const { data: responses, error } = await supabase
     .from('messages')
     .select(`
       content,
@@ -47,6 +47,11 @@ async function getPreviousResponses(supabase: any, threadId: string, chainId: st
     .eq('thread_id', threadId)
     .eq('chain_id', chainId)
     .order('response_order', { ascending: true });
+    
+  if (error) {
+    console.error('Error fetching previous responses:', error);
+    return [];
+  }
     
   return responses || [];
 }
@@ -61,8 +66,16 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
+    if (!openai.apiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
+
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Received request:', { threadId, content, taggedRoleId });
+
+    if (!threadId || !content) {
+      throw new Error('Missing required parameters: threadId or content');
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -108,14 +121,14 @@ serve(async (req) => {
 
     // Process each role in the chain
     for (const { role_id, chain_order } of chain) {
-      const { data: role } = await supabase
+      const { data: role, error: roleError } = await supabase
         .from('roles')
         .select('*')
         .eq('id', role_id)
         .single();
 
-      if (!role) {
-        console.error('Role not found:', role_id);
+      if (roleError || !role) {
+        console.error('Error fetching role:', roleError);
         continue;
       }
 
@@ -128,13 +141,17 @@ serve(async (req) => {
         : '';
 
       // Get relevant memories for context
-      const { data: memories } = await supabase
+      const { data: memories, error: memoriesError } = await supabase
         .rpc('get_similar_memories', {
           p_embedding: content,
           p_match_threshold: 0.7,
           p_match_count: 5,
           p_role_id: role_id
         });
+
+      if (memoriesError) {
+        console.error('Error fetching memories:', memoriesError);
+      }
 
       // Prepare conversation context
       const memoryContext = memories?.length 
@@ -148,39 +165,45 @@ serve(async (req) => {
         ? "\nThe user wants you to search for information. Consider using web search capabilities if available."
         : "";
 
-      // Generate response using chat completion
-      const completion = await openai.chat.completions.create({
-        model: role.model || 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `${role.instructions}\n\n${memoryContext}${intentInstructions}\n\n${responseContext}`
-          },
-          { role: 'user', content }
-        ],
-      });
-
-      const responseContent = completion.choices[0].message.content;
-
-      // Save the role's response with metadata
-      const { error: responseError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          role_id: role_id,
-          content: responseContent,
-          response_order: chain_order,
-          chain_id: userMessage.id,
-          metadata: {
-            intent: intent.type,
-            fileReference: intent.fileReference || false,
-            previousResponses: previousResponses.length
-          }
+      try {
+        // Generate response using chat completion
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: `${role.instructions}\n\n${memoryContext}${intentInstructions}\n\n${responseContext}`
+            },
+            { role: 'user', content }
+          ],
         });
 
-      if (responseError) {
-        console.error('Error saving response:', responseError);
-        throw responseError;
+        const responseContent = completion.choices[0].message.content;
+
+        // Save the role's response with metadata
+        const { error: responseError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role_id,
+            content: responseContent,
+            response_order: chain_order,
+            chain_id: userMessage.id,
+            metadata: {
+              intent: intent.type,
+              fileReference: intent.fileReference || false,
+              previousResponses: previousResponses.length
+            }
+          });
+
+        if (responseError) {
+          console.error('Error saving response:', responseError);
+          throw responseError;
+        }
+      } catch (error) {
+        console.error(`Error processing role ${role.name}:`, error);
+        // Continue with other roles even if one fails
+        continue;
       }
     }
 

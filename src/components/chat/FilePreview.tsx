@@ -24,7 +24,7 @@ interface AnalysisResult {
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisResult, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
+  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalysisResult>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
@@ -107,26 +107,26 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         </Button>
       </div>
       
-      {(isAnalyzing || analysisResult?.analysis_status === 'processing') && (
+      {(isAnalyzing || analysisData?.analysis_status === 'processing') && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Analyzing file...
         </div>
       )}
       
-      {analysisResult?.analysis_status === 'failed' && (
+      {analysisData?.analysis_status === 'failed' && (
         <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg">
           Analysis failed. Please try again.
         </div>
       )}
       
-      {analysisResult?.analysis_result && analysisResult.analysis_status === 'completed' && (
+      {analysisData?.analysis_result && analysisData.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{analysisResult.analysis_result.content}</p>
-          {analysisResult.analysis_result.analyzed_at && (
+          <p>{analysisData.analysis_result.content}</p>
+          {analysisData.analysis_result.analyzed_at && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date(analysisResult.analysis_result.analyzed_at).toLocaleString()}
+              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at).toLocaleString()}
             </p>
           )}
         </div>
