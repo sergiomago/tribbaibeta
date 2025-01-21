@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { compileMessageContext } from "./contextCompiler.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -75,29 +76,22 @@ serve(async (req) => {
     // Step 4: Process responses for each role
     for (const role of roles) {
       try {
-        // Get relevant memories
-        const { data: memories } = await supabase.rpc(
-          'get_similar_memories',
-          {
-            p_embedding: content,
-            p_match_threshold: 0.7,
-            p_match_count: 5,
-            p_role_id: role.id
-          }
-        );
+        // Get context for this role
+        const context = await compileMessageContext(supabase, threadId, role.id, content);
+        console.log('Context gathered for role:', { roleId: role.id, contextDepth: context.conversationDepth });
 
-        const memoryContext = memories?.length 
-          ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
-          : '';
+        // Format context for the AI
+        const previousResponses = context.previousMessages
+          .map(msg => `${msg.roles?.name || 'Unknown'}: ${msg.content}`)
+          .join('\n');
+
+        const systemPrompt = `${role.instructions}\n\nConversation context:\n${previousResponses}\n\nRespond as ${role.name} while considering the previous responses.`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4o-mini',
           messages: [
-            {
-              role: 'system',
-              content: `${role.instructions}\n\n${memoryContext}`
-            },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content }
           ],
         });
@@ -130,7 +124,8 @@ serve(async (req) => {
             context_type: 'conversation',
             metadata: {
               message_id: roleResponse.id,
-              thread_id: threadId
+              thread_id: threadId,
+              context_depth: context.conversationDepth
             }
           });
 

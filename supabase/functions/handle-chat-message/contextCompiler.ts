@@ -23,6 +23,24 @@ export async function compileMessageContext(
 
     if (memoriesError) throw memoriesError;
 
+    // Get recent messages from the thread
+    const { data: recentMessages, error: messagesError } = await supabase
+      .from('messages')
+      .select(`
+        id,
+        content,
+        role_id,
+        roles:roles!messages_role_id_fkey (
+          name,
+          tag
+        )
+      `)
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (messagesError) throw messagesError;
+
     // Get conversation depth
     const { data: depth, error: depthError } = await supabase.rpc(
       'get_conversation_depth',
@@ -34,23 +52,9 @@ export async function compileMessageContext(
 
     if (depthError) throw depthError;
 
-    // Get recent interactions
-    const { data: interactions, error: interactionsError } = await supabase
-      .from('role_interactions')
-      .select(`
-        *,
-        initiator:roles!role_interactions_initiator_role_id_fkey(name),
-        responder:roles!role_interactions_responder_role_id_fkey(name)
-      `)
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: false })
-      .limit(5);
-
-    if (interactionsError) throw interactionsError;
-
     const context: MessageContext = {
       memories: memories || [],
-      previousInteractions: interactions || [],
+      previousMessages: recentMessages || [],
       conversationDepth: depth || 0,
       chainContext: {
         lastUpdated: new Date().toISOString(),
@@ -62,37 +66,6 @@ export async function compileMessageContext(
     return context;
   } catch (error) {
     console.error('Error compiling message context:', error);
-    throw error;
-  }
-}
-
-export async function updateContextualMemory(
-  supabase: SupabaseClient,
-  roleId: string,
-  content: string,
-  context: MessageContext
-): Promise<void> {
-  console.log('Updating contextual memory:', { roleId, context });
-
-  try {
-    // Store the interaction as a memory
-    const { error } = await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content,
-        context_type: 'conversation',
-        metadata: {
-          conversation_depth: context.conversationDepth,
-          interaction_count: context.previousInteractions.length,
-          memory_context: context.chainContext
-        }
-      });
-
-    if (error) throw error;
-    console.log('Contextual memory updated successfully');
-  } catch (error) {
-    console.error('Error updating contextual memory:', error);
     throw error;
   }
 }
