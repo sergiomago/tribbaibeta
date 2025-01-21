@@ -13,13 +13,6 @@ export interface ResponseChain {
   chainOrder: number;
 }
 
-export interface AnalysisResult {
-  intent: string;
-  context: string;
-  specialRequirements?: string[];
-  suggestedRoles?: string[];
-}
-
 export interface MessageContext {
   memories?: any[];
   previousInteractions?: any[];

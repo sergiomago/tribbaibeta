@@ -4,33 +4,28 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { processUserMessage, generateRoleResponse } from "./messageProcessor.ts";
 
-const MAX_RECURSION_DEPTH = 3;
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const openaiKey = Deno.env.get('OPENAI_API_KEY');
-
-    if (!supabaseUrl || !supabaseKey || !openaiKey) {
-      throw new Error('Missing required environment variables');
-    }
-
-    // Initialize clients
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const openai = new OpenAI({ apiKey: openaiKey });
-
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, taggedRoleId });
+
+    // Initialize clients
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const openaiKey = Deno.env.get('OPENAI_API_KEY')!;
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const openai = new OpenAI({ apiKey: openaiKey });
 
     // Save user message
     const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
@@ -44,7 +39,7 @@ serve(async (req) => {
       }
     );
 
-    if (chainDepth > MAX_RECURSION_DEPTH) {
+    if (chainDepth > 3) {
       console.log('Maximum recursion depth exceeded');
       return new Response(
         JSON.stringify({ success: true, message: 'Maximum depth exceeded' }), 
@@ -69,10 +64,7 @@ serve(async (req) => {
           p_max_roles: 3
         }
       );
-      respondingRoles = roles?.map(r => ({
-        roleId: r.role_id,
-        chainOrder: r.chain_order
-      }));
+      respondingRoles = roles;
     }
 
     if (!respondingRoles?.length) {
@@ -87,7 +79,7 @@ serve(async (req) => {
 
     // Process responses sequentially
     for (const roleData of respondingRoles) {
-      const response = await generateRoleResponse(
+      await generateRoleResponse(
         supabase,
         openai,
         threadId,
@@ -95,35 +87,6 @@ serve(async (req) => {
         userMessage,
         roleData.chainOrder
       );
-
-      if (response) {
-        // Check for tagged roles in response
-        const { data: taggedRoles } = await supabase.rpc(
-          'get_tagged_roles',
-          {
-            p_content: response.content,
-            p_thread_id: threadId
-          }
-        );
-
-        if (taggedRoles?.length) {
-          for (const taggedRole of taggedRoles) {
-            const taggedContent = `@${roleData.roleId} ${response.content}`;
-            await fetch(req.url, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': req.headers.get('Authorization') || '',
-              },
-              body: JSON.stringify({
-                threadId,
-                content: taggedContent,
-                taggedRoleId: taggedRole.role_id
-              })
-            });
-          }
-        }
-      }
     }
 
     return new Response(
