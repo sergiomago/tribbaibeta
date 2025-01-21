@@ -23,10 +23,15 @@ interface AnalysisResult {
   analyzed_at?: string;
 }
 
+function isAnalysisResult(value: unknown): value is AnalysisResult {
+  if (!value || typeof value !== 'object') return false;
+  return 'content' in value && typeof (value as AnalysisResult).content === 'string';
+}
+
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalyzedFile | null>({
+  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalyzedFile>({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
@@ -123,16 +128,14 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
           <p>
-            {typeof analysisData.analysis_result === 'object' && 
-             analysisData.analysis_result !== null ? 
-              (analysisData.analysis_result as AnalysisResult).content : 
+            {isAnalysisResult(analysisData.analysis_result) ? 
+              analysisData.analysis_result.content : 
               String(analysisData.analysis_result)}
           </p>
-          {typeof analysisData.analysis_result === 'object' && 
-           analysisData.analysis_result !== null &&
-           'analyzed_at' in analysisData.analysis_result && (
+          {isAnalysisResult(analysisData.analysis_result) && 
+           analysisData.analysis_result.analyzed_at && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date((analysisData.analysis_result as AnalysisResult).analyzed_at as string).toLocaleString()}
+              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at).toLocaleString()}
             </p>
           )}
         </div>
