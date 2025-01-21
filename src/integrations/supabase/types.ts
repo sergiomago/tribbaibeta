@@ -798,32 +798,19 @@ export type Database = {
         }
         Returns: number
       }
-      get_best_responding_role:
-        | {
-            Args: {
-              p_thread_id: string
-              p_context: string
-              p_threshold?: number
-            }
-            Returns: {
-              role_id: string
-              score: number
-              chain_order: number
-            }[]
-          }
-        | {
-            Args: {
-              p_thread_id: string
-              p_context: string
-              p_threshold?: number
-              p_max_roles?: number
-            }
-            Returns: {
-              role_id: string
-              score: number
-              chain_order: number
-            }[]
-          }
+      get_best_responding_role: {
+        Args: {
+          p_thread_id: string
+          p_context: string
+          p_threshold?: number
+          p_max_roles?: number
+        }
+        Returns: {
+          role_id: string
+          score: number
+          chain_order: number
+        }[]
+      }
       get_conversation_chain: {
         Args: {
           p_thread_id: string
