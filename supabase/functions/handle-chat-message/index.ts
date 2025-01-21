@@ -48,7 +48,7 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Step 2: Get responding roles
+    // Step 2: Get thread roles
     const { data: threadRoles, error: rolesError } = await supabase
       .from('thread_roles')
       .select('role_id')
@@ -72,9 +72,31 @@ serve(async (req) => {
       throw roleDetailsError;
     }
 
-    // Step 4: Process responses for each role
-    for (const role of roles) {
+    // Process responses for each role
+    roles.forEach(async (role) => {
       try {
+        // Get previous responses in this chain
+        const { data: previousResponses } = await supabase
+          .from('messages')
+          .select(`
+            id,
+            content,
+            role:roles!messages_role_id_fkey(
+              name,
+              tag
+            )
+          `)
+          .eq('thread_id', threadId)
+          .eq('chain_id', message.id)
+          .order('created_at', { ascending: true });
+
+        // Build context from previous responses
+        const responseContext = previousResponses?.length 
+          ? `Previous responses in this conversation:\n${previousResponses.map(r => 
+              `${r.role.name}: ${r.content}`
+            ).join('\n')}\n\n`
+          : '';
+
         // Get relevant memories
         const { data: memories } = await supabase.rpc(
           'get_similar_memories',
@@ -90,13 +112,13 @@ serve(async (req) => {
           ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
           : '';
 
-        // Generate response
+        // Generate response with combined context
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4o-mini',
           messages: [
             {
               role: 'system',
-              content: `${role.instructions}\n\n${memoryContext}`
+              content: `${role.instructions}\n\n${responseContext}${memoryContext}`
             },
             { role: 'user', content }
           ],
@@ -118,7 +140,7 @@ serve(async (req) => {
 
         if (responseError) {
           console.error(`Error saving response for role ${role.id}:`, responseError);
-          continue;
+          return;
         }
 
         // Store memory
@@ -136,9 +158,8 @@ serve(async (req) => {
 
       } catch (error) {
         console.error(`Error processing response for role ${role.id}:`, error);
-        continue;
       }
-    }
+    });
 
     return new Response(
       JSON.stringify({ success: true }), 
