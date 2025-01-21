@@ -53,8 +53,8 @@ serve(async (req) => {
     if (!userMessage) throw new Error('Failed to save user message');
     console.log('User message saved:', userMessage);
 
-    // Get responding roles
-    const { data: roles, error: rolesError } = await supabase.rpc(
+    // Get responding roles with proper structure handling
+    const { data: respondingRoles, error: rolesError } = await supabase.rpc(
       'get_best_responding_role',
       {
         p_thread_id: threadId,
@@ -65,9 +65,9 @@ serve(async (req) => {
     );
 
     if (rolesError) throw rolesError;
-    console.log('Response chain built:', roles);
+    console.log('Response chain built:', respondingRoles);
 
-    if (!roles?.length) {
+    if (!respondingRoles?.length) {
       return new Response(
         JSON.stringify({
           error: 'No roles available',
@@ -80,9 +80,9 @@ serve(async (req) => {
       );
     }
 
-    // Generate responses for each role in the chain
+    // Generate responses for each role in order
     const responses = [];
-    for (const { role_id: roleId, chain_order: chainOrder } of roles) {
+    for (const { role_id: roleId, chain_order: chainOrder } of respondingRoles) {
       try {
         console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
         
@@ -114,7 +114,7 @@ serve(async (req) => {
         const responseContent = completion.choices[0].message.content;
         console.log(`Generated response for ${role.name}:`, responseContent);
 
-        // Save response
+        // Save response with chain order
         const { data: savedMessage, error: saveError } = await supabase
           .from('messages')
           .insert({
