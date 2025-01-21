@@ -31,7 +31,7 @@ function isAnalysisResult(value: unknown): value is AnalysisResult {
 export function FilePreview({ fileMetadata }: FilePreviewProps) {
   const isImage = fileMetadata.content_type.startsWith('image/');
   
-  const { data: analysisData, isLoading: isAnalyzing } = useQuery<AnalyzedFile>({
+  const { data: analysisData, isLoading: isAnalyzing } = useQuery({
     queryKey: ['file-analysis', fileMetadata.file_id],
     queryFn: async () => {
       if (!fileMetadata.file_id) {
