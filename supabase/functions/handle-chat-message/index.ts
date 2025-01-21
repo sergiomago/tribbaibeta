@@ -46,7 +46,7 @@ serve(async (req) => {
         tagged_role_id: taggedRoleId,
         message_type: 'text'
       })
-      .select('*')
+      .select()
       .single();
 
     if (messageError) throw messageError;
@@ -89,7 +89,7 @@ serve(async (req) => {
         // Get role details
         const { data: role } = await supabase
           .from('roles')
-          .select('*')
+          .select()
           .eq('id', roleId)
           .single();
 
