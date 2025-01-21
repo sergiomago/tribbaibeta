@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileMetadata, FileAnalysis } from "@/types/fileAnalysis";
+import { FileMetadata, FileAnalysis, AnalysisResult, isAnalysisResult } from "@/types/fileAnalysis";
 import { ImagePreview } from "./preview/ImagePreview";
 import { DocumentPreview } from "./preview/DocumentPreview";
 import { AnalysisDisplay } from "./preview/AnalysisDisplay";
@@ -32,8 +32,12 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       // Transform the data to match our FileAnalysis type
       const analysis: FileAnalysis = {
         id: data.id,
-        analysis_status: data.analysis_status || 'pending',
-        analysis_result: data.analysis_result,
+        analysis_status: data.analysis_status as AnalysisStatus,
+        analysis_result: data.analysis_result && isAnalysisResult(data.analysis_result) 
+          ? data.analysis_result 
+          : typeof data.analysis_result === 'string'
+            ? { content: data.analysis_result }
+            : null,
         file_metadata: {
           file_path: data.file_path,
           file_name: data.file_name,
