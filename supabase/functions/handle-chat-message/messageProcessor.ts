@@ -1,133 +1,83 @@
-import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
-import OpenAI from "https://esm.sh/openai@4.26.0";
 import { Message } from "./types.ts";
+import { classifyMessage, buildResponseChain } from "./messageClassifier.ts";
 
 export async function processUserMessage(
-  supabase: SupabaseClient,
+  supabase: any,
   threadId: string,
   content: string,
-  taggedRoleId: string | null
+  taggedRoleId?: string | null
 ): Promise<Message> {
-  console.log('Processing user message:', { threadId, content, taggedRoleId });
-
-  const { data: userMessage, error: messageError } = await supabase
+  // Save user message
+  const { data: message, error } = await supabase
     .from('messages')
     .insert({
       thread_id: threadId,
       content,
-      tagged_role_id: taggedRoleId || null,
+      tagged_role_id: taggedRoleId,
+      message_type: 'text'
     })
-    .select('id, thread_id, content, tagged_role_id')
+    .select()
     .single();
 
-  if (messageError) throw messageError;
-  console.log('User message saved:', userMessage);
-
-  return userMessage;
+  if (error) throw error;
+  return message;
 }
 
 export async function generateRoleResponse(
-  supabase: SupabaseClient,
-  openai: OpenAI,
+  supabase: any,
+  openai: any,
   threadId: string,
   roleId: string,
   userMessage: Message,
-  chainOrder: number
-) {
-  console.log('Generating role response:', { threadId, roleId, chainOrder });
+  order: number,
+  previousResponses: Message[] = []
+): Promise<Message> {
+  // Get role details
+  const { data: role } = await supabase
+    .from('roles')
+    .select('*')
+    .eq('id', roleId)
+    .single();
 
-  try {
-    // Get role details
-    const { data: role } = await supabase
-      .from('roles')
-      .select('*')
-      .eq('id', roleId)
-      .single();
+  if (!role) throw new Error(`Role ${roleId} not found`);
 
-    if (!role) {
-      console.log(`Role ${roleId} not found, skipping`);
-      return null;
-    }
+  // Build context from previous responses
+  const responseContext = previousResponses.length > 0
+    ? "\n\nPrevious responses from other roles:\n" + 
+      previousResponses.map(r => `${r.role?.name}: ${r.content}`).join("\n")
+    : "";
 
-    // Get conversation history
-    const { data: history } = await supabase.rpc(
-      'get_conversation_history',
+  // Generate response using OpenAI
+  const completion = await openai.chat.completions.create({
+    model: role.model || 'gpt-4o-mini',
+    messages: [
       {
-        p_thread_id: threadId,
-        p_limit: 10
-      }
-    );
+        role: 'system',
+        content: `${role.instructions}${responseContext}`
+      },
+      { role: 'user', content: userMessage.content }
+    ],
+  });
 
-    // Get relevant memories
-    const { data: memories } = await supabase.rpc(
-      'get_similar_memories',
-      {
-        p_embedding: userMessage.content,
-        p_match_threshold: 0.7,
-        p_match_count: 5,
-        p_role_id: role.id
-      }
-    );
+  const responseContent = completion.choices[0].message.content;
 
-    // Prepare context
-    const memoryContext = memories?.length 
-      ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
-      : '';
+  // Save response
+  const { data: savedMessage, error } = await supabase
+    .from('messages')
+    .insert({
+      thread_id: threadId,
+      role_id: roleId,
+      content: responseContent,
+      chain_id: userMessage.id,
+      chain_order: order,
+      message_type: 'text'
+    })
+    .select(`
+      *,
+      role:roles(name, tag)
+    `)
+    .single();
 
-    const historyContext = history?.length
-      ? `Recent conversation history:\n${history.map(m => 
-          `${m.role ? m.role.name : 'User'}: ${m.content}`
-        ).join('\n')}`
-      : '';
-
-    // Generate response
-    const completion = await openai.chat.completions.create({
-      model: role.model || 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: `${role.instructions}\n\n${memoryContext}\n\n${historyContext}`
-        },
-        { role: 'user', content: userMessage.content }
-      ],
-    });
-
-    const responseContent = completion.choices[0].message.content;
-    console.log('Generated response:', responseContent);
-
-    // Save role's response
-    const { data: savedResponse, error: responseError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        role_id: roleId,
-        content: responseContent,
-        chain_id: userMessage.id,
-        chain_order: chainOrder
-      })
-      .select('id')
-      .single();
-
-    if (responseError) throw responseError;
-
-    // Store memory
-    await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: responseContent,
-        context_type: 'conversation',
-        metadata: {
-          message_id: savedResponse.id,
-          thread_id: threadId,
-          chain_order: chainOrder,
-          user_message: userMessage.content
-        }
-      });
-
-    return savedResponse;
-  } catch (error) {
-    console.error(`Error processing response for role ${roleId}:`, error);
-    throw error;
-  }
+  if (error) throw error;
+  return savedMessage;
 }

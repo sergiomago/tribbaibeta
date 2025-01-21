@@ -1,9 +1,8 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { processUserMessage, generateRoleResponse } from "./messageProcessor.ts";
-import { buildResponseChain } from "./responseChain.ts";
+import { classifyMessage, buildResponseChain } from "./messageClassifier.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,7 +10,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -20,7 +18,6 @@ serve(async (req) => {
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, taggedRoleId });
 
-    // Validate required parameters
     if (!threadId || !content) {
       return new Response(
         JSON.stringify({
@@ -42,52 +39,22 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
 
-    // Verify thread exists and has roles
-    const { data: thread, error: threadError } = await supabase
-      .from('threads')
-      .select('id')
-      .eq('id', threadId)
-      .single();
+    // Save user message
+    const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
+    console.log('User message saved:', userMessage);
 
-    if (threadError || !thread) {
-      console.error('Thread verification failed:', threadError);
+    // Determine message type and build response chain
+    const messageType = classifyMessage(content);
+    console.log('Message classified as:', messageType);
+
+    const responseChain = await buildResponseChain(supabase, threadId, content, messageType);
+    console.log('Response chain built:', responseChain);
+
+    if (!responseChain?.length) {
       return new Response(
         JSON.stringify({
-          error: 'Invalid thread',
-          message: 'Thread not found'
-        }),
-        { 
-          status: 404,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Verify thread has roles assigned
-    const { data: threadRoles, error: threadRolesError } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
-
-    if (threadRolesError) {
-      console.error('Error fetching thread roles:', threadRolesError);
-      return new Response(
-        JSON.stringify({
-          error: 'Database error',
-          message: 'Failed to fetch thread roles'
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    if (!threadRoles?.length) {
-      return new Response(
-        JSON.stringify({
-          error: 'No roles assigned',
-          message: 'Please add at least one role to the chat before sending messages'
+          error: 'No roles available',
+          message: 'No roles available to respond'
         }),
         { 
           status: 400,
@@ -96,99 +63,25 @@ serve(async (req) => {
       );
     }
 
-    // Save user message
-    let userMessage;
-    try {
-      userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
-      console.log('User message saved:', userMessage);
-    } catch (error) {
-      console.error('Error processing user message:', error);
-      return new Response(
-        JSON.stringify({
-          error: 'Message processing failed',
-          message: error.message
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Get chain depth to prevent infinite recursion
-    const { data: chainDepth } = await supabase.rpc(
-      'get_chain_depth',
-      { 
-        p_thread_id: threadId,
-        p_chain_id: userMessage.id
-      }
-    );
-
-    if (chainDepth > 3) {
-      console.log('Maximum recursion depth exceeded');
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'Maximum conversation depth reached' 
-        }), 
-        { 
-          status: 200,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Build response chain with improved error handling
-    let responseChain;
-    try {
-      responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
-      console.log('Response chain built:', responseChain);
-
-      if (!responseChain?.length) {
-        return new Response(
-          JSON.stringify({
-            error: 'No suitable roles',
-            message: 'No roles available to respond to this message'
-          }),
-          { 
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          }
-        );
-      }
-    } catch (error) {
-      console.error('Error building response chain:', error);
-      return new Response(
-        JSON.stringify({
-          error: 'Chain building failed',
-          message: 'Failed to determine responding roles'
-        }),
-        { 
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      );
-    }
-
-    // Process responses sequentially with improved error handling
+    // Generate responses sequentially
     const responses = [];
-    for (const roleData of responseChain) {
+    for (const { roleId, order } of responseChain) {
       try {
-        console.log('Generating response for role:', roleData);
+        console.log(`Generating response for role ${roleId} (order: ${order})`);
         const response = await generateRoleResponse(
           supabase,
           openai,
           threadId,
-          roleData.roleId,
+          roleId,
           userMessage,
-          roleData.chainOrder
+          order,
+          responses
         );
         responses.push(response);
       } catch (error) {
-        console.error('Error generating role response:', error);
-        // Log error but continue with other roles
+        console.error(`Error generating response for role ${roleId}:`, error);
         responses.push({
-          roleId: roleData.roleId,
+          roleId,
           error: error.message
         });
       }
