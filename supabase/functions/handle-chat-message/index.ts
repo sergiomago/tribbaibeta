@@ -46,8 +46,8 @@ serve(async (req) => {
         tagged_role_id: taggedRoleId,
         message_type: 'text'
       })
-      .select()
-      .maybeSingle();
+      .select('id, thread_id, role_id, content, created_at, tagged_role_id, message_type')
+      .single();
 
     if (messageError) throw messageError;
     if (!userMessage) throw new Error('Failed to save user message');
@@ -87,13 +87,12 @@ serve(async (req) => {
         console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
         
         // Get role details
-        const { data: role, error: roleError } = await supabase
+        const { data: role } = await supabase
           .from('roles')
           .select('*')
           .eq('id', roleId)
-          .maybeSingle();
+          .single();
 
-        if (roleError) throw roleError;
         if (!role) {
           console.error(`Role ${roleId} not found`);
           continue;
@@ -126,8 +125,21 @@ serve(async (req) => {
             chain_order: chainOrder,
             message_type: 'text'
           })
-          .select('id, content, role_id, created_at, chain_id, chain_order, message_type, role:roles(name, tag)')
-          .maybeSingle();
+          .select(`
+            id,
+            thread_id,
+            role_id,
+            content,
+            created_at,
+            chain_id,
+            chain_order,
+            message_type,
+            role:roles (
+              name,
+              tag
+            )
+          `)
+          .single();
 
         if (saveError) throw saveError;
         if (!savedMessage) throw new Error('Failed to save message');
