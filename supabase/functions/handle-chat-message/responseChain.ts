@@ -10,18 +10,6 @@ export async function buildResponseChain(
   console.log('Building response chain:', { threadId, taggedRoleId });
 
   try {
-    // Verify thread exists
-    const { data: thread, error: threadError } = await supabase
-      .from('threads')
-      .select('id')
-      .eq('id', threadId)
-      .single();
-
-    if (threadError || !thread) {
-      console.error('Thread verification failed:', threadError);
-      throw new Error('Invalid thread ID');
-    }
-
     // If a role is tagged, verify it exists and is assigned to the thread
     if (taggedRoleId) {
       const { data: taggedRole, error: taggedRoleError } = await supabase

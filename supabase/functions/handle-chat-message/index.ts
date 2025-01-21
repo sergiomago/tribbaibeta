@@ -22,7 +22,16 @@ serve(async (req) => {
 
     // Validate required parameters
     if (!threadId || !content) {
-      throw new Error('Missing required parameters: threadId and content are required');
+      return new Response(
+        JSON.stringify({
+          error: 'Missing parameters',
+          message: 'threadId and content are required'
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Initialize clients
@@ -34,6 +43,26 @@ serve(async (req) => {
     const openai = new OpenAI({ apiKey: openaiKey });
 
     // Verify thread exists and has roles
+    const { data: thread, error: threadError } = await supabase
+      .from('threads')
+      .select('id')
+      .eq('id', threadId)
+      .single();
+
+    if (threadError || !thread) {
+      console.error('Thread verification failed:', threadError);
+      return new Response(
+        JSON.stringify({
+          error: 'Invalid thread',
+          message: 'Thread not found'
+        }),
+        { 
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
       .select('role_id')
@@ -41,14 +70,23 @@ serve(async (req) => {
 
     if (threadRolesError) {
       console.error('Error fetching thread roles:', threadRolesError);
-      throw new Error('Failed to verify thread roles');
+      return new Response(
+        JSON.stringify({
+          error: 'Database error',
+          message: 'Failed to fetch thread roles'
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     if (!threadRoles?.length) {
       return new Response(
         JSON.stringify({
           error: 'No roles assigned',
-          message: 'Please add at least one role to the chat before sending messages.'
+          message: 'Please add at least one role to the chat before sending messages'
         }),
         { 
           status: 400,
@@ -58,8 +96,23 @@ serve(async (req) => {
     }
 
     // Save user message
-    const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
-    console.log('User message saved:', userMessage);
+    let userMessage;
+    try {
+      userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
+      console.log('User message saved:', userMessage);
+    } catch (error) {
+      console.error('Error processing user message:', error);
+      return new Response(
+        JSON.stringify({
+          error: 'Message processing failed',
+          message: error.message
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
     // Get chain depth to prevent infinite recursion
     const { data: chainDepth } = await supabase.rpc(
@@ -104,14 +157,24 @@ serve(async (req) => {
       }
     } catch (error) {
       console.error('Error building response chain:', error);
-      throw new Error('Failed to build response chain');
+      return new Response(
+        JSON.stringify({
+          error: 'Chain building failed',
+          message: error.message
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
     }
 
     // Process responses sequentially with improved error handling
+    const responses = [];
     for (const roleData of responseChain) {
       try {
         console.log('Generating response for role:', roleData);
-        await generateRoleResponse(
+        const response = await generateRoleResponse(
           supabase,
           openai,
           threadId,
@@ -119,15 +182,22 @@ serve(async (req) => {
           userMessage,
           roleData.chainOrder
         );
+        responses.push(response);
       } catch (error) {
         console.error('Error generating role response:', error);
-        // Continue with other roles even if one fails
-        continue;
+        // Log error but continue with other roles
+        responses.push({
+          roleId: roleData.roleId,
+          error: error.message
+        });
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true }), 
+      JSON.stringify({ 
+        success: true,
+        responses 
+      }), 
       { 
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
