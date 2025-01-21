@@ -33,7 +33,7 @@ export function ImagePreview({ fileMetadata }: ImagePreviewProps) {
     <div className="space-y-2">
       <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
         <img
-          src={`${supabase.storageUrl}/object/public/analysis_files/${fileMetadata.file_path}`}
+          src={`${supabase.storage.from('analysis_files').getPublicUrl(fileMetadata.file_path).data.publicUrl}`}
           alt={fileMetadata.file_name}
           className="object-contain w-full h-full"
         />
