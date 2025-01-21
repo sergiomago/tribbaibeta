@@ -1,8 +1,9 @@
 import { Message } from "./types.ts";
-import { classifyMessage, buildResponseChain } from "./messageClassifier.ts";
+import OpenAI from "https://esm.sh/openai@4.26.0";
+import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 export async function processUserMessage(
-  supabase: any,
+  supabase: SupabaseClient,
   threadId: string,
   content: string,
   taggedRoleId?: string | null
@@ -24,14 +25,16 @@ export async function processUserMessage(
 }
 
 export async function generateRoleResponse(
-  supabase: any,
-  openai: any,
+  supabase: SupabaseClient,
+  openai: OpenAI,
   threadId: string,
   roleId: string,
   userMessage: Message,
   order: number,
   previousResponses: Message[] = []
 ): Promise<Message> {
+  console.log('Generating response for role:', roleId);
+
   // Get role details
   const { data: role } = await supabase
     .from('roles')
@@ -43,9 +46,11 @@ export async function generateRoleResponse(
 
   // Build context from previous responses
   const responseContext = previousResponses.length > 0
-    ? "\n\nPrevious responses from other roles:\n" + 
+    ? "\n\nPrevious responses in this conversation:\n" + 
       previousResponses.map(r => `${r.role?.name}: ${r.content}`).join("\n")
     : "";
+
+  console.log('Generating completion with context:', responseContext);
 
   // Generate response using OpenAI
   const completion = await openai.chat.completions.create({
@@ -60,6 +65,7 @@ export async function generateRoleResponse(
   });
 
   const responseContent = completion.choices[0].message.content;
+  console.log('Generated response:', responseContent);
 
   // Save response
   const { data: savedMessage, error } = await supabase
