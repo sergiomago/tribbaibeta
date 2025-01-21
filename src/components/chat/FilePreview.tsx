@@ -2,6 +2,9 @@ import { FileText, Image as ImageIcon, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { Database } from "@/integrations/supabase/types";
+
+type AnalyzedFile = Database['public']['Tables']['analyzed_files']['Row'];
 
 interface FileMetadata {
   file_path: string;
@@ -9,15 +12,6 @@ interface FileMetadata {
   content_type: string;
   size: number;
   file_id?: string;
-}
-
-interface AnalyzedFile {
-  id: string;
-  analysis_result: {
-    content: string;
-    analyzed_at?: string;
-  } | null;
-  analysis_status: 'pending' | 'processing' | 'completed' | 'failed' | null;
 }
 
 interface FilePreviewProps {
@@ -36,7 +30,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       
       const { data, error } = await supabase
         .from('analyzed_files')
-        .select('id, analysis_result, analysis_status')
+        .select('*')
         .eq('id', fileMetadata.file_id)
         .maybeSingle();
         
@@ -123,10 +117,14 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
       {analysisData?.analysis_result && analysisData.analysis_status === 'completed' && (
         <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
           <p className="font-medium mb-1">Analysis:</p>
-          <p>{analysisData.analysis_result.content}</p>
-          {analysisData.analysis_result.analyzed_at && (
+          <p>{typeof analysisData.analysis_result === 'object' && analysisData.analysis_result !== null ? 
+              analysisData.analysis_result.content : 
+              String(analysisData.analysis_result)}</p>
+          {typeof analysisData.analysis_result === 'object' && 
+           analysisData.analysis_result !== null && 
+           'analyzed_at' in analysisData.analysis_result && (
             <p className="text-xs mt-2 text-muted-foreground">
-              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at).toLocaleString()}
+              Analyzed at: {new Date(analysisData.analysis_result.analyzed_at as string).toLocaleString()}
             </p>
           )}
         </div>
