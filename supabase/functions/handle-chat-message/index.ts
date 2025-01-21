@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { processUserMessage, generateRoleResponse } from "./messageProcessor.ts";
-import { classifyMessage, buildResponseChain } from "./messageClassifier.ts";
+import { processUserMessage } from "./messageProcessor.ts";
+import { buildResponseChain } from "./responseChainManager.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,11 +43,8 @@ serve(async (req) => {
     const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
     console.log('User message saved:', userMessage);
 
-    // Determine message type and build response chain
-    const messageType = classifyMessage(content);
-    console.log('Message classified as:', messageType);
-
-    const responseChain = await buildResponseChain(supabase, threadId, content, messageType);
+    // Build response chain
+    const responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
     console.log('Response chain built:', responseChain);
 
     if (!responseChain?.length) {
@@ -63,21 +60,60 @@ serve(async (req) => {
       );
     }
 
-    // Generate responses sequentially
+    // Generate responses for each role in the chain
     const responses = [];
-    for (const { roleId, order } of responseChain) {
+    for (const { roleId, chainOrder } of responseChain) {
       try {
-        console.log(`Generating response for role ${roleId} (order: ${order})`);
-        const response = await generateRoleResponse(
-          supabase,
-          openai,
-          threadId,
-          roleId,
-          userMessage,
-          order,
-          responses
-        );
-        responses.push(response);
+        console.log(`Generating response for role ${roleId} (order: ${chainOrder})`);
+        
+        // Get role details
+        const { data: role } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', roleId)
+          .single();
+
+        if (!role) {
+          console.error(`Role ${roleId} not found`);
+          continue;
+        }
+
+        // Build context from previous responses
+        const contextMessages = responses.map(r => `${r.role?.name}: ${r.content}`).join('\n');
+        const systemPrompt = role.instructions + (contextMessages ? `\n\nPrevious responses:\n${contextMessages}` : '');
+
+        // Generate response using OpenAI
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content }
+          ],
+        });
+
+        const responseContent = completion.choices[0].message.content;
+        console.log(`Generated response for ${role.name}:`, responseContent);
+
+        // Save response
+        const { data: savedMessage, error: saveError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: roleId,
+            content: responseContent,
+            chain_id: userMessage.id,
+            chain_order: chainOrder,
+            message_type: 'text'
+          })
+          .select(`
+            *,
+            role:roles(name, tag)
+          `)
+          .single();
+
+        if (saveError) throw saveError;
+        responses.push(savedMessage);
+
       } catch (error) {
         console.error(`Error generating response for role ${roleId}:`, error);
         responses.push({
