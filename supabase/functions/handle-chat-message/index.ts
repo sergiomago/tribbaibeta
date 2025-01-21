@@ -46,14 +46,24 @@ serve(async (req) => {
     if (messageError) throw messageError;
 
     // Step 2: Get responding roles in order
-    const { data: respondingRoles, error: rolesError } = await supabase
-      .rpc('get_best_responding_role', {
+    const { data: respondingRoles } = await supabase.rpc(
+      'get_best_responding_role',
+      { 
         p_thread_id: threadId,
         p_context: content,
-        p_threshold: 0.3
-      });
+        p_threshold: 0.3,
+        p_max_roles: 3
+      }
+    );
 
-    if (rolesError) throw rolesError;
+    if (!respondingRoles?.length) {
+      console.log('No suitable roles found to respond');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No roles available to respond' }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Responding roles:', respondingRoles);
 
     // Step 3: Process responses sequentially
@@ -66,7 +76,10 @@ serve(async (req) => {
           .eq('id', roleData.role_id)
           .single();
 
-        if (!role) continue;
+        if (!role) {
+          console.log(`Role ${roleData.role_id} not found, skipping`);
+          continue;
+        }
 
         // Get relevant memories
         const { data: memories } = await supabase.rpc(
