@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { FileMetadata, FileAnalysis, AnalysisResult, isAnalysisResult } from "@/types/fileAnalysis";
+import { FileMetadata, FileAnalysis, AnalysisResult, isAnalysisResult, AnalysisStatus } from "@/types/fileAnalysis";
 import { ImagePreview } from "./preview/ImagePreview";
 import { DocumentPreview } from "./preview/DocumentPreview";
 import { AnalysisDisplay } from "./preview/AnalysisDisplay";
@@ -51,7 +51,7 @@ export function FilePreview({ fileMetadata }: FilePreviewProps) {
     },
     enabled: !!fileMetadata.file_id && !isImage,
     refetchInterval: (data) => 
-      !data || data.analysis_status === 'processing' || data.analysis_status === 'pending' ? 2000 : false,
+      !data || data?.analysis_status === 'processing' || data?.analysis_status === 'pending' ? 2000 : false,
   });
 
   return (
