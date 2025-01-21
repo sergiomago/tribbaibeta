@@ -20,6 +20,11 @@ serve(async (req) => {
     const { threadId, content, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, taggedRoleId });
 
+    // Validate required parameters
+    if (!threadId || !content) {
+      throw new Error('Missing required parameters: threadId and content are required');
+    }
+
     // Initialize clients
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -27,6 +32,30 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
     const openai = new OpenAI({ apiKey: openaiKey });
+
+    // Verify thread exists and has roles
+    const { data: threadRoles, error: threadRolesError } = await supabase
+      .from('thread_roles')
+      .select('role_id')
+      .eq('thread_id', threadId);
+
+    if (threadRolesError) {
+      console.error('Error fetching thread roles:', threadRolesError);
+      throw new Error('Failed to verify thread roles');
+    }
+
+    if (!threadRoles?.length) {
+      return new Response(
+        JSON.stringify({
+          error: 'No roles assigned',
+          message: 'Please add at least one role to the chat before sending messages.'
+        }),
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      );
+    }
 
     // Save user message
     const userMessage = await processUserMessage(supabase, threadId, content, taggedRoleId);
@@ -44,39 +73,65 @@ serve(async (req) => {
     if (chainDepth > 3) {
       console.log('Maximum recursion depth exceeded');
       return new Response(
-        JSON.stringify({ success: true, message: 'Maximum depth exceeded' }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ 
+          success: true, 
+          message: 'Maximum conversation depth reached' 
+        }), 
+        { 
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
       );
     }
 
-    // Build response chain
-    const responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
-    console.log('Response chain built:', responseChain);
+    // Build response chain with improved error handling
+    let responseChain;
+    try {
+      responseChain = await buildResponseChain(supabase, threadId, content, taggedRoleId);
+      console.log('Response chain built:', responseChain);
 
-    if (!responseChain?.length) {
-      console.log('No suitable roles found to respond');
-      return new Response(
-        JSON.stringify({ success: true, message: 'No roles available to respond' }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (!responseChain?.length) {
+        return new Response(
+          JSON.stringify({
+            error: 'No suitable roles',
+            message: 'No roles available to respond to this message'
+          }),
+          { 
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+    } catch (error) {
+      console.error('Error building response chain:', error);
+      throw new Error('Failed to build response chain');
     }
 
-    // Process responses sequentially
+    // Process responses sequentially with improved error handling
     for (const roleData of responseChain) {
-      console.log('Generating response for role:', roleData);
-      await generateRoleResponse(
-        supabase,
-        openai,
-        threadId,
-        roleData.roleId,
-        userMessage,
-        roleData.chainOrder
-      );
+      try {
+        console.log('Generating response for role:', roleData);
+        await generateRoleResponse(
+          supabase,
+          openai,
+          threadId,
+          roleData.roleId,
+          userMessage,
+          roleData.chainOrder
+        );
+      } catch (error) {
+        console.error('Error generating role response:', error);
+        // Continue with other roles even if one fails
+        continue;
+      }
     }
 
     return new Response(
       JSON.stringify({ success: true }), 
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
     );
 
   } catch (error) {
@@ -88,7 +143,7 @@ serve(async (req) => {
       }), 
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
