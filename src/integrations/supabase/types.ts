@@ -630,6 +630,7 @@ export type Database = {
           current_period_end: string | null
           id: string
           is_active: boolean
+          is_development: boolean | null
           plan_type: string
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
@@ -643,6 +644,7 @@ export type Database = {
           current_period_end?: string | null
           id?: string
           is_active?: boolean
+          is_development?: boolean | null
           plan_type: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
@@ -656,6 +658,7 @@ export type Database = {
           current_period_end?: string | null
           id?: string
           is_active?: boolean
+          is_development?: boolean | null
           plan_type?: string
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null

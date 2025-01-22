@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -19,7 +18,6 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
     );
 
-    // Get the user from the authorization header
     const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
@@ -35,7 +33,7 @@ serve(async (req) => {
       );
     }
 
-    // First check for active subscription in database
+    // Check for active subscription in database
     const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
       .select('*')
@@ -47,107 +45,69 @@ serve(async (req) => {
       console.error('Database error:', subscriptionError);
     }
 
-    // If we find an active subscription in the database, return it
+    // If we find an active subscription in the database
     if (subscriptionData) {
       console.log('Found active subscription in database:', subscriptionData);
-      return new Response(
-        JSON.stringify({
-          hasSubscription: true,
-          planType: subscriptionData.plan_type,
-          interval: 'month', // Default to month for now
-          trialEnd: subscriptionData.trial_end,
-          currentPeriodEnd: subscriptionData.current_period_end,
-          trialStarted: subscriptionData.trial_started
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-    }
+      
+      // If it's a development subscription or we're not in production, trust the database state
+      if (subscriptionData.is_development || process.env.NODE_ENV !== 'production') {
+        console.log('Using development subscription or non-production environment');
+        return new Response(
+          JSON.stringify({
+            hasSubscription: true,
+            planType: subscriptionData.plan_type,
+            interval: 'month',
+            trialEnd: subscriptionData.trial_end,
+            currentPeriodEnd: subscriptionData.current_period_end,
+            trialStarted: subscriptionData.trial_started
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200 
+          }
+        );
+      }
 
-    // If no active subscription in database, check Stripe
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2023-10-16',
-    });
-
-    // Check if customer exists in Stripe
-    const customers = await stripe.customers.list({
-      email: user.email,
-      limit: 1,
-    });
-
-    if (customers.data.length === 0) {
-      console.log('No Stripe customer found for:', user.email);
-      return new Response(
-        JSON.stringify({ 
-          hasSubscription: false,
-          planType: null,
-          trialEnd: null,
-          currentPeriodEnd: null,
-          trialStarted: false
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-    }
-
-    // Get active subscriptions
-    const subscriptions = await stripe.subscriptions.list({
-      customer: customers.data[0].id,
-      status: 'active',
-      limit: 1,
-    });
-
-    if (subscriptions.data.length === 0) {
-      console.log('No active Stripe subscription found for customer:', customers.data[0].id);
-      return new Response(
-        JSON.stringify({ 
-          hasSubscription: false,
-          planType: null,
-          trialEnd: null,
-          currentPeriodEnd: null,
-          trialStarted: false
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-    }
-
-    const subscription = subscriptions.data[0];
-    const planType = subscription.metadata.plan_type || 'unknown';
-
-    // Update subscription in database
-    const { error: updateError } = await supabaseClient
-      .from('subscriptions')
-      .upsert({
-        user_id: user.id,
-        stripe_customer_id: customers.data[0].id,
-        stripe_subscription_id: subscription.id,
-        plan_type: planType,
-        is_active: true,
-        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-      }, {
-        onConflict: 'user_id'
+      // For production with real subscriptions, verify with Stripe
+      const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+        apiVersion: '2023-10-16',
       });
 
-    if (updateError) {
-      console.error('Error updating subscription in database:', updateError);
+      if (subscriptionData.stripe_subscription_id) {
+        try {
+          const stripeSubscription = await stripe.subscriptions.retrieve(
+            subscriptionData.stripe_subscription_id
+          );
+
+          if (stripeSubscription.status === 'active') {
+            return new Response(
+              JSON.stringify({
+                hasSubscription: true,
+                planType: subscriptionData.plan_type,
+                interval: stripeSubscription.items.data[0]?.price?.recurring?.interval || 'month',
+                trialEnd: subscriptionData.trial_end,
+                currentPeriodEnd: subscriptionData.current_period_end,
+                trialStarted: subscriptionData.trial_started
+              }),
+              { 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200 
+              }
+            );
+          }
+        } catch (stripeError) {
+          console.error('Stripe verification error:', stripeError);
+        }
+      }
     }
 
-    console.log('Successfully checked and updated subscription for user:', user.id);
+    // No active subscription found
     return new Response(
-      JSON.stringify({
-        hasSubscription: true,
-        planType,
-        interval: subscription.items.data[0]?.price?.recurring?.interval || 'month',
-        trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
+      JSON.stringify({ 
+        hasSubscription: false,
+        planType: null,
+        trialEnd: null,
+        currentPeriodEnd: null,
         trialStarted: false
       }),
       { 
