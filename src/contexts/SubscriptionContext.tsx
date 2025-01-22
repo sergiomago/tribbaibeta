@@ -3,6 +3,8 @@ import { useAuth } from "./AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
+const STORAGE_KEY = 'subscription_status';
+
 interface SubscriptionState {
   hasSubscription: boolean;
   planType: string | null;
@@ -34,6 +36,42 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     trialStarted: false,
   });
 
+  // Load cached subscription data on mount
+  useEffect(() => {
+    const loadCachedSubscription = () => {
+      try {
+        const cached = localStorage.getItem(STORAGE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          // Only use cache if it's less than 1 hour old
+          if (Date.now() - timestamp < 3600000) {
+            setState(prevState => ({ ...prevState, ...data }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cached subscription:', error);
+      }
+    };
+
+    loadCachedSubscription();
+  }, []);
+
+  // Clear subscription data on logout
+  useEffect(() => {
+    if (!session) {
+      localStorage.removeItem(STORAGE_KEY);
+      setState({
+        hasSubscription: false,
+        planType: null,
+        interval: null,
+        trialEnd: null,
+        currentPeriodEnd: null,
+        isLoading: false,
+        trialStarted: false,
+      });
+    }
+  }, [session]);
+
   const checkSubscription = async () => {
     if (!session) {
       setState(s => ({ ...s, isLoading: false }));
@@ -41,30 +79,11 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      // Check for test subscription first (development only)
-      if (process.env.NODE_ENV !== 'production') {
-        const testSub = localStorage.getItem('test_subscription');
-        if (testSub) {
-          const { planType, currentPeriodEnd } = JSON.parse(testSub);
-          setState({
-            hasSubscription: true,
-            planType,
-            interval: 'month',
-            trialEnd: null,
-            currentPeriodEnd,
-            isLoading: false,
-            trialStarted: false,
-          });
-          return;
-        }
-      }
-
-      // Regular subscription check
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) throw error;
 
-      setState({
+      const subscriptionState = {
         hasSubscription: data.hasSubscription,
         planType: data.planType,
         interval: data.interval || 'month',
@@ -72,7 +91,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
         trialStarted: data.trialStarted || false,
-      });
+      };
+
+      // Update state
+      setState(subscriptionState);
+
+      // Cache subscription data with timestamp
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        data: subscriptionState,
+        timestamp: Date.now()
+      }));
+
     } catch (error: any) {
       console.error('Error checking subscription:', error);
       toast({
