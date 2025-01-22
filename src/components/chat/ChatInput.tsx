@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
 import { Input } from "@/components/ui/input";
@@ -9,6 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
+import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
 
 interface ChatInputProps {
   threadId: string;
@@ -34,14 +34,13 @@ export function ChatInput({
   const handleSend = async () => {
     setIsSending(true);
     try {
-      const { error } = await supabase.functions.invoke("handle-chat-message", {
-        body: {
-          threadId,
-          content: message,
-        },
-      });
-
-      if (error) throw error;
+      const orchestrator = createRoleOrchestrator(threadId);
+      
+      // Extract tagged role if present (basic implementation)
+      const tagMatch = message.match(/@(\w+)/);
+      const taggedRole = tagMatch ? tagMatch[1] : null;
+      
+      await orchestrator.handleMessage(message, taggedRole);
 
       setMessage("");
       onMessageSent?.();

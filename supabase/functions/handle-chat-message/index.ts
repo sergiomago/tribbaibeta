@@ -22,11 +22,13 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId } = await req.json();
+    const { threadId, content, taggedRoleId, chain } = await req.json();
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
+
+    console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
     // Save user message
     const { data: message, error: messageError } = await supabase
@@ -41,21 +43,30 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get thread roles based on tagging
-    const rolesQuery = supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
-
-    // If a role is tagged, only get that specific role
+    // Get roles to respond
+    let rolesToRespond;
     if (taggedRoleId) {
-      rolesQuery.eq('role_id', taggedRoleId);
+      // If tagged, only that role responds
+      rolesToRespond = [{ role_id: taggedRoleId }];
+    } else if (chain) {
+      // Use provided chain
+      rolesToRespond = chain;
+    } else {
+      // Get thread roles
+      const { data: threadRoles, error: threadRolesError } = await supabase
+        .from('thread_roles')
+        .select('role_id')
+        .eq('thread_id', threadId);
+
+      if (threadRolesError) throw threadRolesError;
+      rolesToRespond = threadRoles;
     }
 
-    const { data: threadRoles, error: threadRolesError } = await rolesQuery;
+    if (!rolesToRespond?.length) {
+      throw new Error('No roles found to respond');
+    }
 
-    if (threadRolesError) throw threadRolesError;
-    if (!threadRoles?.length) throw new Error('No roles found for thread');
+    console.log('Roles responding:', rolesToRespond);
 
     // Get previous messages for context
     const { data: previousMessages } = await supabase
@@ -71,10 +82,8 @@ serve(async (req) => {
       .eq('chain_id', message.id)
       .order('created_at', { ascending: true });
 
-    console.log(`Processing responses for ${threadRoles.length} roles. Tagged role: ${taggedRoleId || 'none'}`);
-
     // Process responses for each role
-    for (const { role_id } of threadRoles) {
+    for (const { role_id } of rolesToRespond) {
       try {
         const responseContent = await processMessage(
           openai,
