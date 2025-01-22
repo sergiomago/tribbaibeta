@@ -9,6 +9,7 @@ import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChatInputProps {
   threadId: string;
