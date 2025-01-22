@@ -1,25 +1,76 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 second
+const CACHE_KEY = 'subscription_status';
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const MIN_CHECK_INTERVAL = 30 * 1000; // 30 seconds
+let lastCheckTime = 0;
 
 export const useSubscriptionAPI = () => {
   const { toast } = useToast();
 
-  const checkSubscription = async (retryCount = 0) => {
+  const loadCache = () => {
     try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const data = JSON.parse(cached);
+        if (Date.now() - data.timestamp < CACHE_DURATION) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.error('Error loading subscription cache:', error);
+    }
+    return null;
+  };
+
+  const saveCache = (data: any) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify({
+        ...data,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Error saving subscription cache:', error);
+    }
+  };
+
+  const checkSubscription = async (retryCount = 0) => {
+    const now = Date.now();
+    
+    // Use cached data if available and fresh
+    const cached = loadCache();
+    if (cached && now - lastCheckTime < MIN_CHECK_INTERVAL) {
+      console.log('Using cached subscription data');
+      return cached;
+    }
+
+    try {
+      lastCheckTime = now;
       const { data, error } = await supabase.functions.invoke('check-subscription');
-      if (error) throw error;
+      
+      if (error) {
+        // Don't show toast for rate limit errors
+        if (!error.message?.includes('rate limit')) {
+          toast({
+            title: "Error checking subscription",
+            description: "Please try again later",
+            variant: "destructive",
+          });
+        }
+        throw error;
+      }
+
+      // Cache successful response
+      saveCache(data);
       return data;
     } catch (error: any) {
       console.error('Error checking subscription:', error);
       
-      // Only retry on rate limit errors
-      if (error.message?.includes('rate limit') && retryCount < MAX_RETRIES) {
-        console.log(`Retrying subscription check (${retryCount + 1}/${MAX_RETRIES})`);
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
-        return checkSubscription(retryCount + 1);
+      // Return cached data if available during error
+      if (cached) {
+        console.log('Using cached data during error');
+        return cached;
       }
       
       throw error;
