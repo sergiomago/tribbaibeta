@@ -1,9 +1,12 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 const STORAGE_KEY = 'subscription_status';
+const CACHE_DURATION = 3600000; // 1 hour in milliseconds
+const MAX_RETRIES = 3;
+const RETRY_DELAY = 1000; // 1 second
 
 interface SubscriptionState {
   hasSubscription: boolean;
@@ -36,25 +39,86 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     trialStarted: false,
   });
 
-  // Load cached subscription data on mount
-  useEffect(() => {
-    const loadCachedSubscription = () => {
-      try {
-        const cached = localStorage.getItem(STORAGE_KEY);
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          // Only use cache if it's less than 1 hour old
-          if (Date.now() - timestamp < 3600000) {
-            setState(prevState => ({ ...prevState, ...data }));
-          }
+  const loadCachedSubscription = useCallback(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_DURATION) {
+          setState(prevState => ({ ...prevState, ...data }));
+          return true;
         }
-      } catch (error) {
-        console.error('Error loading cached subscription:', error);
       }
-    };
-
-    loadCachedSubscription();
+    } catch (error) {
+      console.error('Error loading cached subscription:', error);
+    }
+    return false;
   }, []);
+
+  const checkSubscriptionWithRetry = useCallback(async (retryCount = 0): Promise<void> => {
+    if (!session?.user?.id) {
+      console.log('No valid session for subscription check');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.functions.invoke('check-subscription');
+      
+      if (error) throw error;
+
+      const subscriptionState = {
+        hasSubscription: data.hasSubscription,
+        planType: data.planType,
+        interval: data.interval || null,
+        trialEnd: data.trialEnd,
+        currentPeriodEnd: data.currentPeriodEnd,
+        isLoading: false,
+        trialStarted: data.trialStarted || false,
+      };
+
+      setState(subscriptionState);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        data: subscriptionState,
+        timestamp: Date.now()
+      }));
+
+    } catch (error: any) {
+      console.error('Error checking subscription:', error);
+      
+      if (retryCount < MAX_RETRIES) {
+        console.log(`Retrying subscription check (${retryCount + 1}/${MAX_RETRIES})`);
+        setTimeout(() => {
+          checkSubscriptionWithRetry(retryCount + 1);
+        }, RETRY_DELAY * (retryCount + 1));
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error checking subscription",
+          description: "Please try refreshing the page",
+        });
+        // Keep existing subscription state on error instead of defaulting to free
+        setState(s => ({ ...s, isLoading: false }));
+      }
+    }
+  }, [session, toast]);
+
+  const checkSubscription = useCallback(async () => {
+    if (!session?.user?.id) {
+      setState(s => ({ ...s, isLoading: false }));
+      return;
+    }
+
+    // Use cached data while fetching fresh data
+    const hasCachedData = loadCachedSubscription();
+    if (!hasCachedData) {
+      setState(s => ({ ...s, isLoading: true }));
+    }
+
+    // Add a small delay to ensure session is fully established
+    setTimeout(() => {
+      checkSubscriptionWithRetry();
+    }, 500);
+  }, [session, loadCachedSubscription, checkSubscriptionWithRetry]);
 
   // Clear subscription data on logout
   useEffect(() => {
@@ -72,46 +136,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   }, [session]);
 
-  const checkSubscription = async () => {
-    if (!session) {
-      setState(s => ({ ...s, isLoading: false }));
-      return;
+  // Check subscription when session changes
+  useEffect(() => {
+    if (session?.user?.id) {
+      checkSubscription();
     }
-
-    try {
-      const { data, error } = await supabase.functions.invoke('check-subscription');
-      
-      if (error) throw error;
-
-      const subscriptionState = {
-        hasSubscription: data.hasSubscription,
-        planType: data.planType,
-        interval: data.interval || 'month',
-        trialEnd: data.trialEnd,
-        currentPeriodEnd: data.currentPeriodEnd,
-        isLoading: false,
-        trialStarted: data.trialStarted || false,
-      };
-
-      // Update state
-      setState(subscriptionState);
-
-      // Cache subscription data with timestamp
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        data: subscriptionState,
-        timestamp: Date.now()
-      }));
-
-    } catch (error: any) {
-      console.error('Error checking subscription:', error);
-      toast({
-        variant: "destructive",
-        title: "Error checking subscription",
-        description: error.message,
-      });
-      setState(s => ({ ...s, isLoading: false }));
-    }
-  };
+  }, [session, checkSubscription]);
 
   const startTrial = async () => {
     if (!session) {
@@ -173,10 +203,6 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       });
     }
   };
-
-  useEffect(() => {
-    checkSubscription();
-  }, [session]);
 
   return (
     <SubscriptionContext.Provider 
