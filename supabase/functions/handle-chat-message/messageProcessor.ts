@@ -27,58 +27,43 @@ export async function processMessage(
     .neq('role_id', roleId);
 
   // Get the sequence of roles
+  const roleSequence = threadRoles?.map(tr => tr.roles.name).join('\n') || '';
+
+  // Find current role's position and adjacent roles
   const allRoles = threadRoles?.map(tr => tr.roles) || [];
   const currentPosition = allRoles.findIndex(r => r.id === roleId) + 1;
   const previousRole = currentPosition > 1 ? allRoles[currentPosition - 2]?.name : 'none';
   const nextRole = currentPosition < allRoles.length ? allRoles[currentPosition]?.name : 'none';
-  
-  // Format role sequence
-  const roleSequence = allRoles.map((r, i) => `${i + 1}. ${r.name}`).join('\n');
 
-  // Get the last message content for context
-  const lastMessage = previousResponses.length > 0 
-    ? previousResponses[previousResponses.length - 1].content 
-    : "No previous messages";
+  // Format previous responses for context
+  const formattedResponses = previousResponses
+    .map(msg => {
+      const roleName = msg.role?.name || 'Unknown';
+      return `${roleName}: ${msg.content}`;
+    })
+    .join('\n\n');
 
-  const systemPrompt = `You are ${role.name}, position #${currentPosition} in this conversation sequence.
+  // Create the enhanced system prompt
+  const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles in this sequence:
 
-CONVERSATION SEQUENCE:
 ${roleSequence}
 
-POSITION CONTEXT:
-• Previous Speaker: ${previousRole}
-  - Their key points: ${lastMessage}
-• Your Position: #${currentPosition}
-• Next Speaker: ${nextRole}
+Your position in this conversation is #${currentPosition}. You are speaking after ${previousRole} and will be followed by ${nextRole}.
 
-REQUIRED RESPONSE STRUCTURE:
-1. Position Acknowledgment:
-   "As ${role.name}, in position #${currentPosition}, I'll build upon what we've heard..."
+Previous responses in this conversation:
+${formattedResponses}
 
-2. Specific Reference (REQUIRED):
-   • If not first: Quote or reference a specific point from ${previousRole}
-   • If first: Acknowledge you're starting the discussion
+When responding, please follow these guidelines:
+1. Acknowledge previous speakers by name and briefly reference the points they made.
+2. Contribute your unique perspective based on your expertise as ${role.name}.
+3. Add to the conversation only if you have relevant knowledge about the topic. If not, politely mention that you don't have additional insights, or that another role might be more knowledgeable.
+4. If you are not the last speaker, you can hint that ${nextRole} may have further insights to offer.
+5. If you are the last speaker, synthesize the conversation in a concise way, ensuring all major points are covered.
 
-3. Your Contribution:
-   • IF you have relevant expertise:
-     - Add your unique perspective as ${role.name}
-     - Explain how it connects to previous points
-   • IF topic is outside your expertise:
-     - Acknowledge this explicitly
-     - Defer to other roles with relevant expertise
+Maintain a collaborative, constructive tone, staying true to your role's expertise and personality. As ${role.name}, build on what's already been said while avoiding unnecessary repetition.
 
-4. Handoff:
-   • If NOT last speaker:
-     - Explicitly connect your points to ${nextRole}'s expertise
-     - "I'll pass this to ${nextRole} (position #${currentPosition + 1}) to explore [specific aspect]"
-   • If LAST speaker:
-     - Synthesize key points from all speakers
-     - Provide concluding insights
-
-Your role instructions:
-${role.instructions}
-
-Remember: You MUST follow this structure exactly, including position numbers and specific references to other roles' contributions.`;
+Role Instructions:
+${role.instructions}`;
 
   // Generate response
   const completion = await openai.chat.completions.create({

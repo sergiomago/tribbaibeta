@@ -1,108 +1,88 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
+import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscriptionCache } from "@/hooks/useSubscriptionCache";
-import { useSubscriptionAPI } from "@/hooks/useSubscriptionAPI";
-import { SubscriptionContextType, SubscriptionState } from "@/types/subscription";
+
+interface SubscriptionState {
+  hasSubscription: boolean;
+  planType: string | null;
+  interval: 'month' | 'year' | null;
+  trialEnd: string | null;
+  currentPeriodEnd: string | null;
+  isLoading: boolean;
+  trialStarted: boolean;
+}
+
+interface SubscriptionContextType extends SubscriptionState {
+  checkSubscription: () => Promise<void>;
+  startSubscription: (planType: "creator" | "maestro", interval?: 'month' | 'year') => Promise<void>;
+  startTrial: () => Promise<void>;
+}
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
-
-const initialState: SubscriptionState = {
-  hasSubscription: false,
-  planType: null,
-  interval: null,
-  trialEnd: null,
-  currentPeriodEnd: null,
-  isLoading: true,
-  trialStarted: false,
-};
-
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const MIN_CHECK_INTERVAL = 60 * 1000; // 60 seconds
-const RATE_LIMIT_RETRY_AFTER = 60 * 1000; // 60 seconds
-let lastCheckTime = 0;
-let lastRateLimitTime = 0;
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const { toast } = useToast();
-  const [state, setState] = useState<SubscriptionState>(initialState);
-  const { loadCache, saveCache, clearCache } = useSubscriptionCache();
-  const { checkSubscription: checkSubscriptionAPI, startTrial: startTrialAPI, startSubscription: startSubscriptionAPI } = useSubscriptionAPI();
+  const [state, setState] = useState<SubscriptionState>({
+    hasSubscription: false,
+    planType: null,
+    interval: null,
+    trialEnd: null,
+    currentPeriodEnd: null,
+    isLoading: true,
+    trialStarted: false,
+  });
 
-  const checkSubscription = useCallback(async (force = false) => {
-    if (!session?.user?.id) {
+  const checkSubscription = async () => {
+    if (!session) {
       setState(s => ({ ...s, isLoading: false }));
       return;
     }
 
-    const now = Date.now();
-    
-    // Return early if we're in a rate limit cooldown period
-    if (lastRateLimitTime && now - lastRateLimitTime < RATE_LIMIT_RETRY_AFTER) {
-      console.log('Skipping subscription check - rate limit cooldown');
-      return;
-    }
-
-    // Check minimum interval between calls
-    if (!force && now - lastCheckTime < MIN_CHECK_INTERVAL) {
-      console.log('Skipping subscription check - too soon');
-      return;
-    }
-
-    // Use cached data while fetching fresh data
-    const cachedData = loadCache();
-    if (cachedData) {
-      setState(cachedData);
-      
-      // If cache is fresh enough, don't fetch
-      if (!force && now - cachedData.timestamp < CACHE_DURATION) {
-        console.log('Using cached subscription data');
-        return;
-      }
-    }
-
-    setState(s => ({ ...s, isLoading: true }));
-    lastCheckTime = now;
-
     try {
-      const data = await checkSubscriptionAPI();
-      const subscriptionState = {
+      // Check for test subscription first (development only)
+      if (process.env.NODE_ENV !== 'production') {
+        const testSub = localStorage.getItem('test_subscription');
+        if (testSub) {
+          const { planType, currentPeriodEnd } = JSON.parse(testSub);
+          setState({
+            hasSubscription: true,
+            planType,
+            interval: 'month',
+            trialEnd: null,
+            currentPeriodEnd,
+            isLoading: false,
+            trialStarted: false,
+          });
+          return;
+        }
+      }
+
+      // Regular subscription check
+      const { data, error } = await supabase.functions.invoke('check-subscription');
+      
+      if (error) throw error;
+
+      setState({
         hasSubscription: data.hasSubscription,
         planType: data.planType,
-        interval: data.interval || null,
+        interval: data.interval || 'month',
         trialEnd: data.trialEnd,
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
         trialStarted: data.trialStarted || false,
-        timestamp: Date.now(),
-      };
-
-      setState(subscriptionState);
-      saveCache(subscriptionState);
-      lastRateLimitTime = 0; // Reset rate limit timestamp on success
+      });
     } catch (error: any) {
-      // Don't clear existing state on error
-      setState(s => ({ ...s, isLoading: false }));
-      
-      if (error.status === 429) {
-        console.log('Rate limit hit, using cached data');
-        lastRateLimitTime = now;
-        // Don't show toast for rate limit errors
-        return;
-      }
-      
-      // Only show toast for non-rate-limit errors
-      if (!error.message?.includes('rate limit')) {
-        toast({
-          variant: "destructive",
-          title: "Error checking subscription",
-          description: "Please try again later",
-        });
-      }
       console.error('Error checking subscription:', error);
+      toast({
+        variant: "destructive",
+        title: "Error checking subscription",
+        description: error.message,
+      });
+      setState(s => ({ ...s, isLoading: false }));
     }
-  }, [session, loadCache, saveCache, checkSubscriptionAPI, toast]);
+  };
 
   const startTrial = async () => {
     if (!session) {
@@ -115,8 +95,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      await startTrialAPI();
-      await checkSubscription(true);
+      const { error } = await supabase.functions.invoke('start-trial');
+      
+      if (error) throw error;
+      
+      await checkSubscription();
+      
       toast({
         title: "Trial started",
         description: "Your 7-day trial has begun!",
@@ -142,7 +126,12 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     try {
-      const data = await startSubscriptionAPI(planType, interval);
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { planType, interval },
+      });
+      
+      if (error) throw error;
+      
       if (data?.url) {
         window.location.href = data.url;
       }
@@ -156,23 +145,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // Clear subscription data on logout
   useEffect(() => {
-    if (!session) {
-      clearCache();
-      setState(initialState);
-    }
-  }, [session, clearCache]);
-
-  // Check subscription when session changes
-  useEffect(() => {
-    if (session?.user?.id) {
-      // Add a small delay to ensure session is fully established
-      setTimeout(() => {
-        checkSubscription(true);
-      }, 500);
-    }
-  }, [session, checkSubscription]);
+    checkSubscription();
+  }, [session]);
 
   return (
     <SubscriptionContext.Provider 

@@ -3,44 +3,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Check } from "lucide-react";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { PlanFeatures } from "./PlanFeatures";
-import { PlanPricing } from "./PlanPricing";
 
 interface UpgradeSubscriptionCardProps {
   variant?: 'default' | 'compact' | 'modal';
   showCreatorPlan?: boolean;
   context?: 'messages' | 'threads' | 'roles';
 }
-
-const CREATOR_FEATURES = [
-  "Limited to 7 Total Roles",
-  "GPT-4-mini Model",
-  "Basic Templates",
-  "Cancel Anytime"
-];
-
-const MAESTRO_FEATURES = [
-  "Unlimited Roles",
-  "Enhanced GPT-4 Model",
-  "Premium Templates",
-  "Web Search Capability",
-  "Document Analysis",
-  "Image Understanding",
-  "Cancel or Downgrade Anytime"
-];
-
-const PRICING = {
-  creator: {
-    monthly: 15,
-    yearly: 150
-  },
-  maestro: {
-    monthly: 30,
-    yearly: 300,
-    firstMonth: 15
-  }
-};
 
 export const UpgradeSubscriptionCard = ({ 
   variant = 'default',
@@ -49,6 +19,12 @@ export const UpgradeSubscriptionCard = ({
 }: UpgradeSubscriptionCardProps) => {
   const [billingInterval, setBillingInterval] = useState<'month' | 'year'>('month');
   const { startSubscription } = useSubscription();
+
+  const creatorMonthlyPrice = 15;
+  const maestroMonthlyPrice = 30;
+  const creatorYearlyPrice = 150;
+  const maestroYearlyPrice = 300;
+  const firstMonthMaestroPrice = creatorMonthlyPrice; // 50% off first month
 
   const getContextMessage = () => {
     switch (context) {
@@ -77,14 +53,14 @@ export const UpgradeSubscriptionCard = ({
                   variant="outline" 
                   onClick={() => startSubscription("creator", billingInterval)}
                 >
-                  Creator: ${PRICING.creator.monthly}/month
+                  Creator: ${creatorMonthlyPrice}/month
                 </Button>
               )}
               <Button 
                 className="bg-gradient-primary"
                 onClick={() => startSubscription("maestro", billingInterval)}
               >
-                Maestro: ${PRICING.maestro.firstMonth} first month
+                Maestro: ${firstMonthMaestroPrice} first month
               </Button>
             </div>
           </div>
@@ -117,12 +93,37 @@ export const UpgradeSubscriptionCard = ({
                 <CardDescription>For getting started</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <PlanPricing
-                  monthlyPrice={PRICING.creator.monthly}
-                  yearlyPrice={PRICING.creator.yearly}
-                  billingInterval={billingInterval}
-                />
-                <PlanFeatures features={CREATOR_FEATURES} />
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold">
+                    ${billingInterval === 'month' ? creatorMonthlyPrice : creatorYearlyPrice}
+                    <span className="text-sm font-normal text-muted-foreground">
+                      /{billingInterval}
+                    </span>
+                  </div>
+                  {billingInterval === 'year' && (
+                    <div className="text-sm text-green-600">
+                      Save ${(creatorMonthlyPrice * 12) - creatorYearlyPrice}/year
+                    </div>
+                  )}
+                </div>
+                <ul className="space-y-2 text-sm">
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Limited to 7 Total Roles
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    GPT-4-mini Model
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Basic Templates
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check className="h-4 w-4" />
+                    Cancel Anytime
+                  </li>
+                </ul>
                 <Button 
                   className="w-full"
                   onClick={() => startSubscription("creator", billingInterval)}
@@ -146,14 +147,58 @@ export const UpgradeSubscriptionCard = ({
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <PlanPricing
-                monthlyPrice={PRICING.maestro.firstMonth}
-                yearlyPrice={PRICING.maestro.yearly}
-                billingInterval={billingInterval}
-                isFirstMonth={billingInterval === 'month'}
-                regularPrice={PRICING.maestro.monthly}
-              />
-              <PlanFeatures features={MAESTRO_FEATURES} />
+              <div className="space-y-2">
+                <div className="text-2xl font-bold">
+                  ${billingInterval === 'month' ? firstMonthMaestroPrice : maestroYearlyPrice}
+                  <span className="text-sm font-normal text-muted-foreground">
+                    /{billingInterval === 'month' ? 'first month' : 'year'}
+                  </span>
+                </div>
+                {billingInterval === 'month' && (
+                  <div className="text-sm text-green-600">
+                    50% off first month, then ${maestroMonthlyPrice}/month
+                  </div>
+                )}
+                {billingInterval === 'year' && (
+                  <div className="text-sm text-green-600">
+                    Save ${(maestroMonthlyPrice * 12) - maestroYearlyPrice}/year
+                  </div>
+                )}
+              </div>
+              <ul className="space-y-2 text-sm">
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Unlimited Roles
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Enhanced GPT-4 Model
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Premium Templates
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Web Search Capability
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Document Analysis
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Image Understanding
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  7-day Free Trial
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  Cancel or Downgrade Anytime
+                </li>
+              </ul>
               <Button 
                 className="w-full bg-gradient-primary"
                 onClick={() => startSubscription("maestro", billingInterval)}

@@ -1,47 +1,11 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from 'https://esm.sh/stripe@14.21.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Rate limiting with cleanup
-const rateLimiter = new Map<string, { count: number; timestamp: number }>();
-const RATE_LIMIT_WINDOW = 60000; // 1 minute
-const MAX_REQUESTS = 30; // 30 requests per minute
-
-// Cleanup old rate limit entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of rateLimiter.entries()) {
-    if (now - value.timestamp > RATE_LIMIT_WINDOW) {
-      rateLimiter.delete(key);
-    }
-  }
-}, 300000);
-
-function isRateLimited(userId: string): boolean {
-  const now = Date.now();
-  const userRateLimit = rateLimiter.get(userId);
-
-  if (!userRateLimit) {
-    rateLimiter.set(userId, { count: 1, timestamp: now });
-    return false;
-  }
-
-  if (now - userRateLimit.timestamp > RATE_LIMIT_WINDOW) {
-    rateLimiter.set(userId, { count: 1, timestamp: now });
-    return false;
-  }
-
-  if (userRateLimit.count >= MAX_REQUESTS) {
-    return true;
-  }
-
-  userRateLimit.count++;
-  return false;
-}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -71,24 +35,6 @@ serve(async (req) => {
       );
     }
 
-    // Check rate limiting
-    if (isRateLimited(user.id)) {
-      console.log('Rate limit exceeded for user:', user.id);
-      return new Response(
-        JSON.stringify({ error: 'Rate limit exceeded. Please try again later.' }),
-        {
-          headers: { 
-            ...corsHeaders, 
-            'Content-Type': 'application/json',
-            'Retry-After': '60'
-          },
-          status: 429
-        }
-      );
-    }
-
-    console.log('Checking subscription for user:', user.id);
-
     // First check for active subscription in database
     const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
@@ -101,14 +47,14 @@ serve(async (req) => {
       console.error('Database error:', subscriptionError);
     }
 
-    // If we find an active subscription in the database, return it immediately
+    // If we find an active subscription in the database, return it
     if (subscriptionData) {
       console.log('Found active subscription in database:', subscriptionData);
       return new Response(
         JSON.stringify({
           hasSubscription: true,
           planType: subscriptionData.plan_type,
-          interval: subscriptionData.stripe_subscription_id ? 'month' : 'manual',
+          interval: 'month', // Default to month for now
           trialEnd: subscriptionData.trial_end,
           currentPeriodEnd: subscriptionData.current_period_end,
           trialStarted: subscriptionData.trial_started
@@ -120,14 +66,88 @@ serve(async (req) => {
       );
     }
 
-    // If no subscription found, return no subscription
-    console.log('No active subscription found for user:', user.id);
+    // If no active subscription in database, check Stripe
+    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+      apiVersion: '2023-10-16',
+    });
+
+    // Check if customer exists in Stripe
+    const customers = await stripe.customers.list({
+      email: user.email,
+      limit: 1,
+    });
+
+    if (customers.data.length === 0) {
+      console.log('No Stripe customer found for:', user.email);
+      return new Response(
+        JSON.stringify({ 
+          hasSubscription: false,
+          planType: null,
+          trialEnd: null,
+          currentPeriodEnd: null,
+          trialStarted: false
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    // Get active subscriptions
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customers.data[0].id,
+      status: 'active',
+      limit: 1,
+    });
+
+    if (subscriptions.data.length === 0) {
+      console.log('No active Stripe subscription found for customer:', customers.data[0].id);
+      return new Response(
+        JSON.stringify({ 
+          hasSubscription: false,
+          planType: null,
+          trialEnd: null,
+          currentPeriodEnd: null,
+          trialStarted: false
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 200 
+        }
+      );
+    }
+
+    const subscription = subscriptions.data[0];
+    const planType = subscription.metadata.plan_type || 'unknown';
+
+    // Update subscription in database
+    const { error: updateError } = await supabaseClient
+      .from('subscriptions')
+      .upsert({
+        user_id: user.id,
+        stripe_customer_id: customers.data[0].id,
+        stripe_subscription_id: subscription.id,
+        plan_type: planType,
+        is_active: true,
+        trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+        current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (updateError) {
+      console.error('Error updating subscription in database:', updateError);
+    }
+
+    console.log('Successfully checked and updated subscription for user:', user.id);
     return new Response(
-      JSON.stringify({ 
-        hasSubscription: false,
-        planType: null,
-        trialEnd: null,
-        currentPeriodEnd: null,
+      JSON.stringify({
+        hasSubscription: true,
+        planType,
+        interval: subscription.items.data[0]?.price?.recurring?.interval || 'month',
+        trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
         trialStarted: false
       }),
       { 
@@ -135,7 +155,6 @@ serve(async (req) => {
         status: 200 
       }
     );
-
   } catch (error) {
     console.error('Error checking subscription:', error);
     return new Response(
