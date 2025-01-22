@@ -53,25 +53,34 @@ Current conversation context:
 - Topic: ${extractedTopic}
 - Previous speakers: ${roleSequence}
 - Your position: #${currentPosition} (after ${previousRole}, before ${nextRole})
+- Total roles in conversation: ${threadRoles?.length || 0}
 
 Recent context:
 ${formattedResponses}
 
 Response Guidelines:
-1. EXPERTISE CHECK:
+
+1. TAGGING BEHAVIOR:
+   - If a specific role is tagged (e.g., @RoleName):
+     * If you are the tagged role: Provide your expertise and response
+     * If you are NOT the tagged role: Do not respond at all, remain silent
+   - If no role is tagged: Follow standard expertise check below
+
+2. EXPERTISE CHECK:
    - If the topic matches your expertise: provide your insights
    - If outside your expertise: respond with "I'll defer to others more qualified in this area"
 
-2. RESPONSE STRUCTURE:
-   - Briefly acknowledge relevant points from previous speakers
+3. RESPONSE STRUCTURE:
+   - Integrate previous speakers' insights with your expertise, building upon their points to create a comprehensive response
    - Add your unique perspective (avoid repeating what others said)
    - Keep responses focused and concise
+   - Guide the conversation forward by mentioning which role(s) could contribute next and what valuable insights they might add
 
-3. CONVERSATION FLOW:
-   - If you're not the last speaker: focus on your contribution
-   - If you're the last speaker: provide a brief summary of key points
+4. CONVERSATION FLOW:
+   - If you're not the last speaker (your position < total ${threadRoles?.length || 0} roles): focus on your contribution
+   - If you're the last speaker (your position = ${threadRoles?.length || 0}): synthesize the discussion and provide concluding insights
 
-4. TONE:
+5. TONE:
    - Maintain a collaborative, constructive tone
    - Stay true to your role's expertise and personality
 
