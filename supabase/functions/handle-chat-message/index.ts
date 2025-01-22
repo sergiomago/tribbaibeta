@@ -41,12 +41,20 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get thread roles
-    const { data: threadRoles } = await supabase
+    // Get thread roles based on tagging
+    const rolesQuery = supabase
       .from('thread_roles')
       .select('role_id')
       .eq('thread_id', threadId);
 
+    // If a role is tagged, only get that specific role
+    if (taggedRoleId) {
+      rolesQuery.eq('role_id', taggedRoleId);
+    }
+
+    const { data: threadRoles, error: threadRolesError } = await rolesQuery;
+
+    if (threadRolesError) throw threadRolesError;
     if (!threadRoles?.length) throw new Error('No roles found for thread');
 
     // Get previous messages for context
@@ -62,6 +70,8 @@ serve(async (req) => {
       .eq('thread_id', threadId)
       .eq('chain_id', message.id)
       .order('created_at', { ascending: true });
+
+    console.log(`Processing responses for ${threadRoles.length} roles. Tagged role: ${taggedRoleId || 'none'}`);
 
     // Process responses for each role
     for (const { role_id } of threadRoles) {
