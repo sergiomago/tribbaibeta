@@ -22,6 +22,27 @@ setInterval(() => {
   }
 }, 300000);
 
+// Stripe retry configuration
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  attempt = 1
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (error: any) {
+    if (error.type === 'rate_limit_error' && attempt <= MAX_RETRIES) {
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt - 1);
+      console.log(`Rate limited by Stripe, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return retryWithBackoff(operation, attempt + 1);
+    }
+    throw error;
+  }
+}
+
 function isRateLimited(userId: string): boolean {
   const now = Date.now();
   const userRateLimit = rateLimiter.get(userId);
@@ -121,18 +142,19 @@ serve(async (req) => {
       );
     }
 
-    // If no active subscription in database, check Stripe with retries
-    console.log('No active database subscription found, checking Stripe...');
+    // If no active subscription in database, check Stripe
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
 
     try {
-      // Check if customer exists in Stripe
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1,
-      });
+      // Check if customer exists in Stripe with retry
+      const customers = await retryWithBackoff(() => 
+        stripe.customers.list({
+          email: user.email,
+          limit: 1,
+        })
+      );
 
       if (customers.data.length === 0) {
         console.log('No Stripe customer found for:', user.email);
@@ -151,12 +173,14 @@ serve(async (req) => {
         );
       }
 
-      // Get active subscriptions
-      const subscriptions = await stripe.subscriptions.list({
-        customer: customers.data[0].id,
-        status: 'active',
-        limit: 1,
-      });
+      // Get active subscriptions with retry
+      const subscriptions = await retryWithBackoff(() =>
+        stripe.subscriptions.list({
+          customer: customers.data[0].id,
+          status: 'active',
+          limit: 1,
+        })
+      );
 
       if (subscriptions.data.length === 0) {
         console.log('No active Stripe subscription found for customer:', customers.data[0].id);
@@ -212,9 +236,11 @@ serve(async (req) => {
           status: 200 
         }
       );
+
     } catch (stripeError: any) {
+      console.error('Stripe API error:', stripeError);
+      
       if (stripeError.type === 'rate_limit_error') {
-        console.error('Stripe rate limit error:', stripeError);
         return new Response(
           JSON.stringify({ error: 'Service temporarily unavailable. Please try again later.' }),
           {
@@ -223,6 +249,7 @@ serve(async (req) => {
           }
         );
       }
+      
       throw stripeError;
     }
   } catch (error) {
