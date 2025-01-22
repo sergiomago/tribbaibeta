@@ -27,13 +27,13 @@ export async function processMessage(
     .neq('role_id', roleId);
 
   // Get the sequence of roles
-  const roleSequence = threadRoles?.map(tr => tr.roles.name).join('\n') || '';
-
-  // Find current role's position and adjacent roles
   const allRoles = threadRoles?.map(tr => tr.roles) || [];
   const currentPosition = allRoles.findIndex(r => r.id === roleId) + 1;
   const previousRole = currentPosition > 1 ? allRoles[currentPosition - 2]?.name : 'none';
   const nextRole = currentPosition < allRoles.length ? allRoles[currentPosition]?.name : 'none';
+  
+  // Format role sequence
+  const roleSequence = allRoles.map(r => r.name).join('\n');
 
   // Format previous responses for context
   const formattedResponses = previousResponses
@@ -43,47 +43,23 @@ export async function processMessage(
     })
     .join('\n\n');
 
-  const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles.
+  const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles in this sequence:
 
-TAGGING BEHAVIOR:
-• When your tag "${role.tag}" is used with @ in the message:
-  - Acknowledge: "I see I was tagged as ${role.tag}"
-  - You are the only role that should respond
-  - You may tag another participating role if needed
+${roleSequence}
 
-• If no tags were used:
-  - Normal conversation flow applies
+Your position in this conversation is #${currentPosition}. You are speaking after ${previousRole} and will be followed by ${nextRole}.
 
-CONVERSATION STATE:
-• Previous speakers: [List of roles that have already spoken with their key points]
-• Current speaker: ${role.name} (Position #${currentPosition})
-• Roles yet to speak: [List of remaining roles and their expertise areas]
-
-CONVERSATION CONTEXT:
 Previous responses in this conversation:
 ${formattedResponses}
 
-YOUR ROLE AND TIMING:
-You are speaking after ${previousRole} who discussed: [brief summary of their key points]
-Your expertise as ${role.name} should build upon these points while considering that ${nextRole} will follow with their expertise in [their domain].
+When responding, please follow these guidelines:
+1. Acknowledge previous speakers by name and briefly reference the points they made.
+2. Contribute your unique perspective based on your expertise as ${role.name}.
+3. Add to the conversation only if you have relevant knowledge about the topic. If not, politely mention that you don't have additional insights, or that another role might be more knowledgeable.
+4. If you are not the last speaker, you can hint that ${nextRole} may have further insights to offer.
+5. If you are the last speaker, synthesize the conversation in a concise way, ensuring all major points are covered.
 
-RESPONSE GUIDELINES:
-1. Acknowledge Previous Contributions:
-   • Reference specific points made by ${previousRole} and other previous speakers
-   • Build upon their insights rather than suggesting they might add more later
-
-2. Add Your Unique Value:
-   • Contribute your specialized knowledge as ${role.name}
-   • If a topic is outside your expertise, acknowledge this and defer to appropriate roles
-
-3. Maintain Conversation Flow:
-   • If you're not the last speaker, naturally transition to ${nextRole}'s expertise
-   • If you're the last speaker, provide a concise synthesis of all perspectives shared
-
-Your Specific Role Instructions:
-${role.instructions}
-
-Remember: Only acknowledge being tagged if your tag appears with @ in the message. Otherwise, focus on contributing to the natural flow of the conversation.`;
+Maintain a collaborative, constructive tone, staying true to your role's expertise and personality. As ${role.name}, build on what's already been said while avoiding unnecessary repetition.`;
 
   // Generate response
   const completion = await openai.chat.completions.create({
