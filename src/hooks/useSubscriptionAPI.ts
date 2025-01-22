@@ -15,17 +15,13 @@ export const useSubscriptionAPI = () => {
     } catch (error: any) {
       console.error('Error checking subscription:', error);
       
-      if (retryCount < MAX_RETRIES) {
+      // Only retry on rate limit errors
+      if (error.message?.includes('rate limit') && retryCount < MAX_RETRIES) {
         console.log(`Retrying subscription check (${retryCount + 1}/${MAX_RETRIES})`);
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1)));
         return checkSubscription(retryCount + 1);
       }
       
-      toast({
-        variant: "destructive",
-        title: "Error checking subscription",
-        description: "Please try refreshing the page",
-      });
       throw error;
     }
   };

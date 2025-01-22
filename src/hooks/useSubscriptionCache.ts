@@ -1,17 +1,13 @@
 import { SubscriptionState } from "@/types";
 
 const STORAGE_KEY = 'subscription_status';
-const CACHE_DURATION = 3600000; // 1 hour in milliseconds
 
 export const useSubscriptionCache = () => {
-  const loadCache = (): SubscriptionState | null => {
+  const loadCache = (): (SubscriptionState & { timestamp: number }) | null => {
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
-          return data;
-        }
+        return JSON.parse(cached);
       }
     } catch (error) {
       console.error('Error loading cached subscription:', error);
@@ -19,12 +15,9 @@ export const useSubscriptionCache = () => {
     return null;
   };
 
-  const saveCache = (data: SubscriptionState) => {
+  const saveCache = (data: SubscriptionState & { timestamp: number }) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        data,
-        timestamp: Date.now()
-      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch (error) {
       console.error('Error saving subscription cache:', error);
     }

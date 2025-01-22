@@ -17,6 +17,10 @@ const initialState: SubscriptionState = {
   trialStarted: false,
 };
 
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const MIN_CHECK_INTERVAL = 30 * 1000; // 30 seconds
+let lastCheckTime = 0;
+
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const { toast } = useToast();
@@ -24,9 +28,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const { loadCache, saveCache, clearCache } = useSubscriptionCache();
   const { checkSubscription: checkSubscriptionAPI, startTrial: startTrialAPI, startSubscription: startSubscriptionAPI } = useSubscriptionAPI();
 
-  const checkSubscription = useCallback(async () => {
+  const checkSubscription = useCallback(async (force = false) => {
     if (!session?.user?.id) {
       setState(s => ({ ...s, isLoading: false }));
+      return;
+    }
+
+    const now = Date.now();
+    if (!force && now - lastCheckTime < MIN_CHECK_INTERVAL) {
+      console.log('Skipping subscription check - too soon');
       return;
     }
 
@@ -34,9 +44,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     const cachedData = loadCache();
     if (cachedData) {
       setState(cachedData);
-    } else {
-      setState(s => ({ ...s, isLoading: true }));
+      
+      // If cache is fresh enough, don't fetch
+      if (!force && now - cachedData.timestamp < CACHE_DURATION) {
+        console.log('Using cached subscription data');
+        return;
+      }
     }
+
+    setState(s => ({ ...s, isLoading: true }));
+    lastCheckTime = now;
 
     try {
       const data = await checkSubscriptionAPI();
@@ -48,14 +65,26 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
         trialStarted: data.trialStarted || false,
+        timestamp: Date.now(),
       };
 
       setState(subscriptionState);
       saveCache(subscriptionState);
-    } catch (error) {
+    } catch (error: any) {
+      // Don't clear existing state on error
       setState(s => ({ ...s, isLoading: false }));
+      
+      // Only show toast for non-rate-limit errors
+      if (!error.message?.includes('rate limit')) {
+        toast({
+          variant: "destructive",
+          title: "Error checking subscription",
+          description: "Please try again later",
+        });
+      }
+      console.error('Error checking subscription:', error);
     }
-  }, [session, loadCache, saveCache, checkSubscriptionAPI]);
+  }, [session, loadCache, saveCache, checkSubscriptionAPI, toast]);
 
   const startTrial = async () => {
     if (!session) {
@@ -122,7 +151,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     if (session?.user?.id) {
       // Add a small delay to ensure session is fully established
       setTimeout(() => {
-        checkSubscription();
+        checkSubscription(true);
       }, 500);
     }
   }, [session, checkSubscription]);
