@@ -47,14 +47,14 @@ serve(async (req) => {
       console.error('Database error:', subscriptionError);
     }
 
-    // If we find an active subscription in the database, return it
+    // If we find an active subscription in the database, return it immediately
     if (subscriptionData) {
       console.log('Found active subscription in database:', subscriptionData);
       return new Response(
         JSON.stringify({
           hasSubscription: true,
           planType: subscriptionData.plan_type,
-          interval: 'month', // Default to month for now
+          interval: subscriptionData.stripe_subscription_id ? 'month' : 'manual', // Indicate manual if no Stripe ID
           trialEnd: subscriptionData.trial_end,
           currentPeriodEnd: subscriptionData.current_period_end,
           trialStarted: subscriptionData.trial_started
@@ -67,6 +67,7 @@ serve(async (req) => {
     }
 
     // If no active subscription in database, check Stripe
+    console.log('No active database subscription found, checking Stripe...');
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
