@@ -43,22 +43,16 @@ export async function processMessage(
     })
     .join('\n\n');
 
-  // Create the enhanced system prompt
   const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles.
 
 TAGGING BEHAVIOR:
-• When you see your tag (@${role.tag}) in a message:
-  - Acknowledge: "I see I was specifically called upon with @${role.tag}"
-  - Address the tagged request directly
-  - You are the only role that should respond unless you explicitly tag another role
+• When your tag "${role.tag}" is used with @ in the message:
+  - Acknowledge: "I see I was tagged as ${role.tag}"
+  - You are the only role that should respond
+  - You may tag another participating role if needed
 
-• If you want input from another role:
-  - Use their tag (e.g., "@analyst what do you think about...")
-  - This will specifically invite them to respond next
-
-• If you weren't tagged:
-  - Do not respond unless subsequently tagged by another role
-  - Wait for a new message where you are specifically tagged
+• If no tags were used:
+  - Normal conversation flow applies
 
 CONVERSATION STATE:
 • Previous speakers: [List of roles that have already spoken with their key points]
@@ -86,21 +80,10 @@ RESPONSE GUIDELINES:
    • If you're not the last speaker, naturally transition to ${nextRole}'s expertise
    • If you're the last speaker, provide a concise synthesis of all perspectives shared
 
-4. Stay Focused:
-   • Only reference future insights from roles who haven't spoken yet
-   • Avoid suggesting previous speakers might add more
-   • Keep responses clear, relevant, and building towards a complete perspective
-
-COLLABORATION PRINCIPLES:
-• Maintain a collaborative, constructive tone
-• Stay true to your role's expertise and personality
-• Build on previous points without unnecessary repetition
-• Ensure smooth transitions between speakers
-
 Your Specific Role Instructions:
 ${role.instructions}
 
-Remember: You are part of a coordinated conversation where each role contributes their unique expertise at the right moment. Focus on making your contribution valuable while maintaining the natural flow of the discussion. Only respond if you were specifically tagged or if no tags were used in the message.`;
+Remember: Only acknowledge being tagged if your tag appears with @ in the message. Otherwise, focus on contributing to the natural flow of the conversation.`;
 
   // Generate response
   const completion = await openai.chat.completions.create({
