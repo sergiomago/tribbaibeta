@@ -7,10 +7,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Simple in-memory rate limiting
+// Simple in-memory rate limiting with cleanup
 const rateLimiter = new Map<string, { count: number; timestamp: number }>();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute
+
+// Cleanup old rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of rateLimiter.entries()) {
+    if (now - value.timestamp > RATE_LIMIT_WINDOW) {
+      rateLimiter.delete(key);
+    }
+  }
+}, 300000);
 
 function isRateLimited(userId: string): boolean {
   const now = Date.now();
@@ -107,18 +117,38 @@ serve(async (req) => {
       );
     }
 
-    // If no active subscription in database, check Stripe
+    // If no active subscription in database, check Stripe with retries
     console.log('No active database subscription found, checking Stripe...');
     const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
     });
 
+    // Implement retry logic for Stripe API calls
+    const MAX_RETRIES = 3;
+    const INITIAL_RETRY_DELAY = 1000;
+
+    const retryWithExponentialBackoff = async (fn: () => Promise<any>, retries = 0): Promise<any> => {
+      try {
+        return await fn();
+      } catch (error: any) {
+        if (error.type === 'rate_limit_error' && retries < MAX_RETRIES) {
+          const delay = INITIAL_RETRY_DELAY * Math.pow(2, retries);
+          console.log(`Rate limited, retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return retryWithExponentialBackoff(fn, retries + 1);
+        }
+        throw error;
+      }
+    };
+
     try {
       // Check if customer exists in Stripe
-      const customers = await stripe.customers.list({
-        email: user.email,
-        limit: 1,
-      });
+      const customers = await retryWithExponentialBackoff(() => 
+        stripe.customers.list({
+          email: user.email,
+          limit: 1,
+        })
+      );
 
       if (customers.data.length === 0) {
         console.log('No Stripe customer found for:', user.email);
@@ -137,12 +167,14 @@ serve(async (req) => {
         );
       }
 
-      // Get active subscriptions
-      const subscriptions = await stripe.subscriptions.list({
-        customer: customers.data[0].id,
-        status: 'active',
-        limit: 1,
-      });
+      // Get active subscriptions with retry
+      const subscriptions = await retryWithExponentialBackoff(() =>
+        stripe.subscriptions.list({
+          customer: customers.data[0].id,
+          status: 'active',
+          limit: 1,
+        })
+      );
 
       if (subscriptions.data.length === 0) {
         console.log('No active Stripe subscription found for customer:', customers.data[0].id);
@@ -199,7 +231,6 @@ serve(async (req) => {
         }
       );
     } catch (stripeError: any) {
-      // Handle Stripe rate limiting specifically
       if (stripeError.type === 'rate_limit_error') {
         console.error('Stripe rate limit error:', stripeError);
         return new Response(
