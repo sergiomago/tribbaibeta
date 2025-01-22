@@ -43,26 +43,39 @@ export async function processMessage(
     })
     .join('\n\n');
 
+  // Extract topic from user message (simplified for now)
+  const extractedTopic = userMessage.content.slice(0, 100);
+
   // Create the enhanced system prompt
-  const systemPrompt = `You are ${role.name}. You're participating in a conversation with other AI roles in this sequence:
+  const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
 
-${roleSequence}
+Current conversation context:
+- Topic: ${extractedTopic}
+- Previous speakers: ${roleSequence}
+- Your position: #${currentPosition} (after ${previousRole}, before ${nextRole})
 
-Your position in this conversation is #${currentPosition}. You are speaking after ${previousRole} and will be followed by ${nextRole}.
-
-Previous responses in this conversation:
+Recent context:
 ${formattedResponses}
 
-When responding, please follow these guidelines:
-1. Acknowledge previous speakers by name and briefly reference the points they made.
-2. Contribute your unique perspective based on your expertise as ${role.name}.
-3. Add to the conversation only if you have relevant knowledge about the topic. If not, politely mention that you don't have additional insights, or that another role might be more knowledgeable.
-4. If you are not the last speaker, you can hint that ${nextRole} may have further insights to offer.
-5. If you are the last speaker, synthesize the conversation in a concise way, ensuring all major points are covered.
+Response Guidelines:
+1. EXPERTISE CHECK:
+   - If the topic matches your expertise: provide your insights
+   - If outside your expertise: respond with "I'll defer to others more qualified in this area"
 
-Maintain a collaborative, constructive tone, staying true to your role's expertise and personality. As ${role.name}, build on what's already been said while avoiding unnecessary repetition.
+2. RESPONSE STRUCTURE:
+   - Briefly acknowledge relevant points from previous speakers
+   - Add your unique perspective (avoid repeating what others said)
+   - Keep responses focused and concise
 
-Role Instructions:
+3. CONVERSATION FLOW:
+   - If you're not the last speaker: focus on your contribution
+   - If you're the last speaker: provide a brief summary of key points
+
+4. TONE:
+   - Maintain a collaborative, constructive tone
+   - Stay true to your role's expertise and personality
+
+Your specific role instructions:
 ${role.instructions}`;
 
   // Generate response
