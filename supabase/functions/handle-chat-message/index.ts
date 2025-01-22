@@ -40,7 +40,7 @@ serve(async (req) => {
         .from('thread_roles')
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId)
+        .eq('roles.tag', taggedRoleId.replace('@', ''))
         .maybeSingle();
 
       if (threadRoleError) {
@@ -53,7 +53,7 @@ serve(async (req) => {
         const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('id, tag')
-          .eq('tag', taggedRoleId)
+          .eq('tag', taggedRoleId.replace('@', ''))
           .maybeSingle();
 
         if (roleError) {
@@ -62,9 +62,9 @@ serve(async (req) => {
         }
 
         if (!role) {
-          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
+          throw new Error(`No role found with tag "${taggedRoleId}". Please make sure you're using a valid role tag.`);
         } else {
-          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+          throw new Error(`The role "${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
         }
       }
 
