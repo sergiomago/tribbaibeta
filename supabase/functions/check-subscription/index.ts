@@ -35,6 +35,8 @@ serve(async (req) => {
       );
     }
 
+    console.log('Checking subscription for user:', user.id);
+
     // First check for active subscription in database
     const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
@@ -54,7 +56,7 @@ serve(async (req) => {
         JSON.stringify({
           hasSubscription: true,
           planType: subscriptionData.plan_type,
-          interval: subscriptionData.stripe_subscription_id ? 'month' : 'manual', // Indicate manual if no Stripe ID
+          interval: subscriptionData.stripe_subscription_id ? 'month' : 'manual',
           trialEnd: subscriptionData.trial_end,
           currentPeriodEnd: subscriptionData.current_period_end,
           trialStarted: subscriptionData.trial_started
