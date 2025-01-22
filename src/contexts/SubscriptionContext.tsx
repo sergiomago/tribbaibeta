@@ -18,8 +18,10 @@ const initialState: SubscriptionState = {
 };
 
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-const MIN_CHECK_INTERVAL = 30 * 1000; // 30 seconds
+const MIN_CHECK_INTERVAL = 60 * 1000; // 60 seconds
+const RATE_LIMIT_RETRY_AFTER = 60 * 1000; // 60 seconds
 let lastCheckTime = 0;
+let lastRateLimitTime = 0;
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
@@ -35,6 +37,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
 
     const now = Date.now();
+    
+    // Return early if we're in a rate limit cooldown period
+    if (lastRateLimitTime && now - lastRateLimitTime < RATE_LIMIT_RETRY_AFTER) {
+      console.log('Skipping subscription check - rate limit cooldown');
+      return;
+    }
+
+    // Check minimum interval between calls
     if (!force && now - lastCheckTime < MIN_CHECK_INTERVAL) {
       console.log('Skipping subscription check - too soon');
       return;
@@ -70,9 +80,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
       setState(subscriptionState);
       saveCache(subscriptionState);
+      lastRateLimitTime = 0; // Reset rate limit timestamp on success
     } catch (error: any) {
       // Don't clear existing state on error
       setState(s => ({ ...s, isLoading: false }));
+      
+      if (error.status === 429) {
+        console.log('Rate limit hit, using cached data');
+        lastRateLimitTime = now;
+        // Don't show toast for rate limit errors
+        return;
+      }
       
       // Only show toast for non-rate-limit errors
       if (!error.message?.includes('rate limit')) {
@@ -98,7 +116,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
     try {
       await startTrialAPI();
-      await checkSubscription();
+      await checkSubscription(true);
       toast({
         title: "Trial started",
         description: "Your 7-day trial has begun!",
