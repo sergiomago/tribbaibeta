@@ -35,7 +35,7 @@ export const useSubscriptionAPI = () => {
     }
   };
 
-  const checkSubscription = async (retryCount = 0) => {
+  const checkSubscription = async () => {
     const now = Date.now();
     
     // Use cached data if available and fresh
@@ -58,6 +58,13 @@ export const useSubscriptionAPI = () => {
             variant: "destructive",
           });
         }
+        
+        // Return cached data if available during error
+        if (cached) {
+          console.log('Using cached data during error');
+          return cached;
+        }
+        
         throw error;
       }
 
@@ -66,13 +73,6 @@ export const useSubscriptionAPI = () => {
       return data;
     } catch (error: any) {
       console.error('Error checking subscription:', error);
-      
-      // Return cached data if available during error
-      if (cached) {
-        console.log('Using cached data during error');
-        return cached;
-      }
-      
       throw error;
     }
   };

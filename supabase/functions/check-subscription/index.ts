@@ -22,27 +22,6 @@ setInterval(() => {
   }
 }, 300000);
 
-// Stripe retry configuration
-const MAX_RETRIES = 3;
-const INITIAL_RETRY_DELAY = 1000; // 1 second
-
-async function retryWithBackoff<T>(
-  operation: () => Promise<T>,
-  attempt = 1
-): Promise<T> {
-  try {
-    return await operation();
-  } catch (error: any) {
-    if (error.type === 'rate_limit_error' && attempt <= MAX_RETRIES) {
-      const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt - 1);
-      console.log(`Rate limited by Stripe, retrying in ${delay}ms (attempt ${attempt}/${MAX_RETRIES})`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return retryWithBackoff(operation, attempt + 1);
-    }
-    throw error;
-  }
-}
-
 function isRateLimited(userId: string): boolean {
   const now = Date.now();
   const userRateLimit = rateLimiter.get(userId);
@@ -142,116 +121,22 @@ serve(async (req) => {
       );
     }
 
-    // If no active subscription in database, check Stripe
-    const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-      apiVersion: '2023-10-16',
-    });
-
-    try {
-      // Check if customer exists in Stripe with retry
-      const customers = await retryWithBackoff(() => 
-        stripe.customers.list({
-          email: user.email,
-          limit: 1,
-        })
-      );
-
-      if (customers.data.length === 0) {
-        console.log('No Stripe customer found for:', user.email);
-        return new Response(
-          JSON.stringify({ 
-            hasSubscription: false,
-            planType: null,
-            trialEnd: null,
-            currentPeriodEnd: null,
-            trialStarted: false
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 
-          }
-        );
+    // If no subscription found, return no subscription
+    console.log('No active subscription found for user:', user.id);
+    return new Response(
+      JSON.stringify({ 
+        hasSubscription: false,
+        planType: null,
+        trialEnd: null,
+        currentPeriodEnd: null,
+        trialStarted: false
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
       }
+    );
 
-      // Get active subscriptions with retry
-      const subscriptions = await retryWithBackoff(() =>
-        stripe.subscriptions.list({
-          customer: customers.data[0].id,
-          status: 'active',
-          limit: 1,
-        })
-      );
-
-      if (subscriptions.data.length === 0) {
-        console.log('No active Stripe subscription found for customer:', customers.data[0].id);
-        return new Response(
-          JSON.stringify({ 
-            hasSubscription: false,
-            planType: null,
-            trialEnd: null,
-            currentPeriodEnd: null,
-            trialStarted: false
-          }),
-          { 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 200 
-          }
-        );
-      }
-
-      const subscription = subscriptions.data[0];
-      const planType = subscription.metadata.plan_type || 'unknown';
-
-      // Update subscription in database
-      const { error: updateError } = await supabaseClient
-        .from('subscriptions')
-        .upsert({
-          user_id: user.id,
-          stripe_customer_id: customers.data[0].id,
-          stripe_subscription_id: subscription.id,
-          plan_type: planType,
-          is_active: true,
-          trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-          current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-        }, {
-          onConflict: 'user_id'
-        });
-
-      if (updateError) {
-        console.error('Error updating subscription in database:', updateError);
-      }
-
-      console.log('Successfully checked and updated subscription for user:', user.id);
-      return new Response(
-        JSON.stringify({
-          hasSubscription: true,
-          planType,
-          interval: subscription.items.data[0]?.price?.recurring?.interval || 'month',
-          trialEnd: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString(),
-          trialStarted: false
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200 
-        }
-      );
-
-    } catch (stripeError: any) {
-      console.error('Stripe API error:', stripeError);
-      
-      if (stripeError.type === 'rate_limit_error') {
-        return new Response(
-          JSON.stringify({ error: 'Service temporarily unavailable. Please try again later.' }),
-          {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 429
-          }
-        );
-      }
-      
-      throw stripeError;
-    }
   } catch (error) {
     console.error('Error checking subscription:', error);
     return new Response(
