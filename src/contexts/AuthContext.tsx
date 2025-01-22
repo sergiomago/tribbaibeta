@@ -54,12 +54,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [navigate]);
 
   const getErrorMessage = (error: AuthError) => {
-    // Handle refresh token errors specifically
-    if (error.message?.includes('refresh_token_not_found') || 
-        error.message?.includes('Invalid Refresh Token')) {
-      return 'Your session has expired. Please sign in again.';
-    }
-
     if (error instanceof AuthApiError) {
       switch (error.status) {
         case 400:
@@ -82,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleAuthError = (error: any) => {
     console.error("Auth error:", error);
     
-    // Handle refresh token errors
+    // Check for refresh token errors
     if (error.message?.includes('refresh_token_not_found') || 
         error.message?.includes('Invalid Refresh Token')) {
       setSession(null);
