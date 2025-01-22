@@ -30,13 +30,30 @@ serve(async (req) => {
 
     console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
+    // If taggedRoleId is a string but not a UUID, assume it's a role tag and look up the ID
+    let resolvedRoleId = taggedRoleId;
+    if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      console.log('Looking up role ID for tag:', taggedRoleId);
+      const { data: role, error: roleError } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('tag', taggedRoleId)
+        .single();
+
+      if (roleError || !role) {
+        throw new Error(`Role with tag "${taggedRoleId}" not found`);
+      }
+      resolvedRoleId = role.id;
+      console.log('Resolved role ID:', resolvedRoleId);
+    }
+
     // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
-        tagged_role_id: taggedRoleId || null,
+        tagged_role_id: resolvedRoleId || null,
       })
       .select('id, thread_id, content, tagged_role_id')
       .single();
@@ -45,9 +62,9 @@ serve(async (req) => {
 
     // Get roles to respond
     let rolesToRespond;
-    if (taggedRoleId) {
+    if (resolvedRoleId) {
       // If tagged, only that role responds
-      rolesToRespond = [{ role_id: taggedRoleId }];
+      rolesToRespond = [{ role_id: resolvedRoleId }];
     } else if (chain) {
       // Use provided chain
       rolesToRespond = chain;
