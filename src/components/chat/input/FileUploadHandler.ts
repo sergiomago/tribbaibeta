@@ -9,7 +9,7 @@ interface FileUploadHandlerProps {
 export function useFileUploadHandler({ threadId, onFileUploaded }: FileUploadHandlerProps) {
   const { toast } = useToast();
 
-  const uploadFile = async (file: File) => {
+  const uploadFile = async (file: File): Promise<void> => {
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -27,7 +27,6 @@ export function useFileUploadHandler({ threadId, onFileUploaded }: FileUploadHan
       });
       
       onFileUploaded?.();
-      return true;
     } catch (error) {
       console.error("Error uploading file:", error);
       toast({
@@ -35,7 +34,6 @@ export function useFileUploadHandler({ threadId, onFileUploaded }: FileUploadHan
         description: error instanceof Error ? error.message : "Failed to upload file. Please try again.",
         variant: "destructive",
       });
-      return false;
     }
   };
 
