@@ -33,13 +33,15 @@ serve(async (req) => {
       );
     }
 
-    // Check for active subscription in database
+    // Get the most recent active subscription
     const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
     if (subscriptionError) {
       console.error('Database error:', subscriptionError);
