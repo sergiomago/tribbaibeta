@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { processMessage } from "./messageProcessor.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -184,7 +185,6 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in handle-chat-message:', error);
     
-    // Ensure we return a properly structured error response
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'An unknown error occurred',
