@@ -8,6 +8,10 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+if (!openAIApiKey || !supabaseUrl || !supabaseServiceKey) {
+  throw new Error('Missing required environment variables');
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -21,11 +25,12 @@ serve(async (req) => {
 
   try {
     console.log('Starting handle-chat-message function');
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
     // Parse request body
-    const { threadId, content, taggedRoleId, chain } = await req.json();
+    const requestBody = await req.json();
+    const { threadId, content, taggedRoleId, chain } = requestBody;
     console.log('Received request:', { threadId, content, taggedRoleId, chain });
 
     if (!threadId || !content) {
