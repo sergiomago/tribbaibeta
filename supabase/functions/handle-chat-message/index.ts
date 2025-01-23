@@ -30,7 +30,7 @@ serve(async (req) => {
 
     console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
-    // Extract all tags using regex
+    // Extract all tags using regex - looking for single @
     const tags = content.match(/@(\w+)/g)?.map(tag => tag.substring(1)) || [];
     console.log('Extracted tags:', tags);
 
@@ -62,7 +62,9 @@ serve(async (req) => {
           if (threadRoles?.length === 0) {
             throw new Error(`No roles found in this conversation. Please add roles before tagging them.`);
           }
-          throw new Error(`The role "@${tag}" is not assigned to this conversation. Available roles are: ${threadRoles?.map(tr => '@' + tr.roles?.tag).join(', ')}`);
+          // Format available roles with single @ in error message
+          const availableRoles = threadRoles?.map(tr => `@${tr.roles?.tag}`).join(', ');
+          throw new Error(`The role "@${tag}" is not assigned to this conversation. Available roles are: ${availableRoles}`);
         }
         resolvedRoleIds.push(matchingRole.roles.id);
       }
