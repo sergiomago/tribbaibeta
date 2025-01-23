@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { processMessage } from "./messageProcessor.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -14,6 +13,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -86,7 +86,10 @@ serve(async (req) => {
       .select('id, thread_id, content, tagged_role_id')
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error inserting message:', messageError);
+      throw messageError;
+    }
 
     // Get roles to respond
     let rolesToRespond;
@@ -103,7 +106,10 @@ serve(async (req) => {
         .select('role_id')
         .eq('thread_id', threadId);
 
-      if (threadRolesError) throw threadRolesError;
+      if (threadRolesError) {
+        console.error('Error getting thread roles:', threadRolesError);
+        throw threadRolesError;
+      }
       rolesToRespond = threadRoles;
     }
 
@@ -114,7 +120,7 @@ serve(async (req) => {
     console.log('Roles responding:', rolesToRespond);
 
     // Get previous messages for context
-    const { data: previousMessages } = await supabase
+    const { data: previousMessages, error: prevMessagesError } = await supabase
       .from('messages')
       .select(`
         *,
@@ -126,6 +132,11 @@ serve(async (req) => {
       .eq('thread_id', threadId)
       .eq('chain_id', message.id)
       .order('created_at', { ascending: true });
+
+    if (prevMessagesError) {
+      console.error('Error getting previous messages:', prevMessagesError);
+      throw prevMessagesError;
+    }
 
     // Process responses for each role
     for (const { role_id } of rolesToRespond) {
@@ -140,7 +151,7 @@ serve(async (req) => {
         );
 
         // Save role's response
-        await supabase
+        const { error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
@@ -149,25 +160,42 @@ serve(async (req) => {
             chain_id: message.id,
           });
 
+        if (responseError) {
+          console.error(`Error saving response for role ${role_id}:`, responseError);
+          throw responseError;
+        }
+
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
+        throw error;
       }
     }
 
     return new Response(
       JSON.stringify({ success: true }), 
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
+      }
     );
-  } catch (error: any) {
+
+  } catch (error) {
     console.error('Error in handle-chat-message:', error);
+    
+    // Ensure we return a properly structured error response
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'An unknown error occurred',
-        details: error.stack
+        error: error instanceof Error ? error.message : 'An unknown error occurred',
+        details: error instanceof Error ? error.stack : undefined
       }), 
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json' 
+        } 
       }
     );
   }
