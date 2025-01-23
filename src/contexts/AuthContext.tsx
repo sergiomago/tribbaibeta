@@ -22,35 +22,70 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+  // Enhanced session initialization
+  const initializeSession = async () => {
+    try {
+      const { data: { session: initialSession }, error } = await supabase.auth.getSession();
       if (error) {
-        console.error("Error getting session:", error);
+        console.error("Error getting initial session:", error);
         handleAuthError(error);
         return;
       }
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
 
-    // Listen for auth changes
+      if (initialSession) {
+        console.log("Initial session restored:", initialSession.user.id);
+        setSession(initialSession);
+        setUser(initialSession.user);
+      }
+    } catch (error) {
+      console.error("Fatal error during session initialization:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Initialize session
+    initializeSession();
+
+    // Enhanced auth state change listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state change:", event);
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        setSession(session);
-        setUser(session?.user ?? null);
-      } else if (event === 'SIGNED_OUT') {
-        setSession(null);
-        setUser(null);
-        navigate("/login");
+    } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+      console.log("Auth state change:", event, currentSession?.user?.id);
+
+      switch (event) {
+        case 'SIGNED_IN':
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          navigate("/chats");
+          break;
+
+        case 'SIGNED_OUT':
+          setSession(null);
+          setUser(null);
+          navigate("/login");
+          break;
+
+        case 'TOKEN_REFRESHED':
+          if (currentSession) {
+            console.log("Token refreshed successfully");
+            setSession(currentSession);
+            setUser(currentSession.user);
+          }
+          break;
+
+        case 'USER_UPDATED':
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          break;
       }
     });
 
-    return () => subscription.unsubscribe();
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   const getErrorMessage = (error: AuthError) => {
@@ -76,21 +111,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleAuthError = (error: any) => {
     console.error("Auth error:", error);
     
-    // Check for refresh token errors
     if (error.message?.includes('refresh_token_not_found') || 
         error.message?.includes('Invalid Refresh Token')) {
+      console.log("Session expired, clearing state and redirecting");
       setSession(null);
       setUser(null);
-      navigate("/login");
-      toast({
-        title: "Session expired",
-        description: "Please sign in again",
-        variant: "destructive",
-      });
+      
+      // Only navigate if we're not already on the login page
+      if (window.location.pathname !== '/login') {
+        navigate("/login");
+        toast({
+          title: "Session expired",
+          description: "Please sign in again",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
-    // Handle other auth errors
     toast({
       title: "Authentication error",
       description: getErrorMessage(error),
@@ -105,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       if (error) throw error;
-      navigate("/chats");
+      
       toast({
         title: "Welcome back!",
         description: "Successfully signed in.",
@@ -122,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
       if (error) throw error;
+      
       toast({
         title: "Account created!",
         description: "Please check your email to verify your account.",
@@ -136,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      navigate("/login");
+      
       toast({
         title: "Signed out",
         description: "Successfully signed out.",
