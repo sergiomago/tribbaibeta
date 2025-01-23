@@ -82,7 +82,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    // Cleanup subscription
     return () => {
       subscription.unsubscribe();
     };
@@ -111,22 +110,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleAuthError = (error: any) => {
     console.error("Auth error:", error);
     
-    if (error.message?.includes('refresh_token_not_found') || 
-        error.message?.includes('Invalid Refresh Token') ||
-        error.message?.includes('session_not_found')) {
-      console.log("Session expired or invalid, clearing state and redirecting");
+    if (error.message?.includes('session_not_found') || 
+        error.message?.includes('Invalid Refresh Token')) {
+      console.log("Session expired or invalid, clearing state");
+      // Clear state but don't redirect - let the auth state change handler handle navigation
       setSession(null);
       setUser(null);
-      
-      // Only navigate if we're not already on the login page
-      if (window.location.pathname !== '/login') {
-        navigate("/login");
-        toast({
-          title: "Session expired",
-          description: "Please sign in again",
-          variant: "destructive",
-        });
-      }
       return;
     }
 
@@ -174,12 +163,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Clear state before signing out to prevent race conditions
+      // Clear state first to prevent race conditions
       setSession(null);
       setUser(null);
       
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      // If we get a session_not_found error, that's actually okay during logout
+      if (error && !error.message?.includes('session_not_found')) {
+        throw error;
+      }
       
       toast({
         title: "Signed out",
@@ -190,6 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       navigate("/login");
     } catch (error: any) {
       handleAuthError(error);
+      // Even if there's an error, we want to ensure the user is logged out locally
+      setSession(null);
+      setUser(null);
+      navigate("/login");
     }
   };
 
