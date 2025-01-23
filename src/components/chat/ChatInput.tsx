@@ -60,9 +60,9 @@ export function ChatInput({
     try {
       const orchestrator = createRoleOrchestrator(threadId);
       
-      // Extract tagged role if present (basic implementation)
-      const tagMatch = message.match(/@(\w+)/);
-      const taggedRole = tagMatch ? tagMatch[1] : null;
+      // Extract tagged role including the @ symbol
+      const tagMatch = message.match(/@\w+/);
+      const taggedRole = tagMatch ? tagMatch[0] : null;
       
       await orchestrator.handleMessage(message, taggedRole);
 
