@@ -154,12 +154,9 @@ export function ChatInput({
         // Calculate position based on input's position and character width
         const rect = input.getBoundingClientRect();
         const charWidth = 8; // Approximate character width in pixels
-        const left = rect.left + (atCharPosition * charWidth);
-        
-        // Adjust position to ensure suggestions are visible
         const position = {
-          top: rect.bottom + window.scrollY,
-          left: Math.min(left, window.innerWidth - 200) // Ensure suggestions don't overflow
+          top: rect.bottom,
+          left: rect.left + (lastAtIndex * charWidth),
         };
         
         setCursorPosition(position);
@@ -180,8 +177,6 @@ export function ChatInput({
       setMessage(newMessage);
     }
     setShowSuggestions(false);
-    // Focus the input after selection
-    inputRef.current?.focus();
   };
 
   const fileHandler = FileHandler({ onFileUpload: handleFileUpload });
