@@ -10,6 +10,7 @@ interface TagSuggestionsProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   cursorPosition?: { top: number; left: number };
   inputRef: React.RefObject<HTMLInputElement>;
+  filterText?: string;
 }
 
 export function TagSuggestions({
@@ -20,9 +21,17 @@ export function TagSuggestions({
   onKeyDown,
   cursorPosition,
   inputRef,
+  filterText = '',
 }: TagSuggestionsProps) {
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const isMobile = window.innerWidth <= 768;
+
+  // Filter roles based on input after @
+  const filteredRoles = roles.filter(role => 
+    !filterText || 
+    role.tag.toLowerCase().includes(filterText.toLowerCase()) ||
+    role.name.toLowerCase().includes(filterText.toLowerCase())
+  );
 
   useEffect(() => {
     if (!visible || !suggestionsRef.current || !inputRef.current) return;
@@ -35,15 +44,18 @@ export function TagSuggestions({
     } else if (cursorPosition) {
       // Position below cursor on desktop
       const inputRect = inputRef.current.getBoundingClientRect();
-      suggestionsRef.current.style.top = `${cursorPosition.top + 24}px`;
-      suggestionsRef.current.style.left = `${Math.min(
+      const top = cursorPosition.top + 24;
+      const left = Math.min(
         cursorPosition.left,
         inputRect.right - 200 // Ensure suggestions don't overflow
-      )}px`;
+      );
+      
+      suggestionsRef.current.style.top = `${top}px`;
+      suggestionsRef.current.style.left = `${left}px`;
     }
-  }, [visible, cursorPosition, isMobile, inputRef]);
+  }, [visible, cursorPosition, isMobile, inputRef, filterText]);
 
-  if (!visible || roles.length === 0) return null;
+  if (!visible || filteredRoles.length === 0) return null;
 
   return (
     <div
@@ -54,13 +66,13 @@ export function TagSuggestions({
       )}
       onKeyDown={onKeyDown}
     >
-      {roles.map((role, index) => (
+      {filteredRoles.map((role, index) => (
         <button
           key={role.id}
           className={cn(
             "w-full text-left px-2 py-3 text-sm rounded-sm hover:bg-accent",
             selectedIndex === index && "bg-accent",
-            "min-h-[44px]" // Touch-friendly height
+            "min-h-[44px]"
           )}
           onClick={() => onSelect(role)}
         >

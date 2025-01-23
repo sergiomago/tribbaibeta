@@ -35,6 +35,7 @@ export function ChatInput({
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [cursorPosition, setCursorPosition] = useState<{ top: number; left: number } | null>(null);
+  const [tagFilter, setTagFilter] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -123,13 +124,19 @@ export function ChatInput({
           return;
         case "Enter":
           e.preventDefault();
-          if (threadRoles?.[selectedIndex]) {
-            handleRoleSelect(threadRoles[selectedIndex]);
+          const filteredRoles = threadRoles?.filter(role => 
+            !tagFilter || 
+            role.tag.toLowerCase().includes(tagFilter.toLowerCase()) ||
+            role.name.toLowerCase().includes(tagFilter.toLowerCase())
+          );
+          if (filteredRoles?.[selectedIndex]) {
+            handleRoleSelect(filteredRoles[selectedIndex]);
           }
           return;
         case "Escape":
           e.preventDefault();
           setShowSuggestions(false);
+          setTagFilter("");
           return;
       }
     } else if (e.key === "Enter" && !e.shiftKey) {
@@ -142,29 +149,50 @@ export function ChatInput({
     const newValue = e.target.value;
     setMessage(newValue);
 
-    // Check for @ symbol
+    // Check for @ symbol and update suggestions
     const lastAtIndex = newValue.lastIndexOf('@');
-    if (lastAtIndex !== -1 && lastAtIndex === newValue.length - 1) {
-      const rect = e.target.getBoundingClientRect();
-      const position = {
-        top: rect.top + window.scrollY,
-        left: rect.left + window.scrollX + (e.target.selectionStart || 0) * 8, // Approximate char width
-      };
-      setCursorPosition(position);
-      setShowSuggestions(true);
-      setSelectedIndex(0);
-    } else if (!newValue.includes('@')) {
+    if (lastAtIndex !== -1) {
+      const afterAt = newValue.slice(lastAtIndex + 1);
+      setTagFilter(afterAt);
+
+      if (!showSuggestions) {
+        const rect = e.target.getBoundingClientRect();
+        const position = {
+          top: rect.top + window.scrollY,
+          left: rect.left + window.scrollX + (lastAtIndex * 8), // Approximate char width
+        };
+        setCursorPosition(position);
+        setShowSuggestions(true);
+        setSelectedIndex(0);
+      }
+    } else {
       setShowSuggestions(false);
+      setTagFilter("");
     }
   };
 
   const handleRoleSelect = (role: Role) => {
+    if (!inputRef.current) return;
+
     const lastAtIndex = message.lastIndexOf('@');
     if (lastAtIndex !== -1) {
-      const newMessage = message.slice(0, lastAtIndex) + `@${role.tag} `;
+      // Preserve text before and after the tag
+      const beforeTag = message.slice(0, lastAtIndex);
+      const afterTag = message.slice(lastAtIndex).match(/\s(.*)$/)?.[1] || '';
+      
+      // Insert the role tag
+      const newMessage = `${beforeTag}@${role.tag} ${afterTag}`;
       setMessage(newMessage);
+      
+      // Reset suggestion state
+      setShowSuggestions(false);
+      setTagFilter("");
+      
+      // Focus input and move cursor to end
+      inputRef.current.focus();
+      const newCursorPosition = beforeTag.length + role.tag.length + 2; // +2 for @ and space
+      inputRef.current.setSelectionRange(newCursorPosition, newCursorPosition);
     }
-    setShowSuggestions(false);
   };
 
   const fileHandler = FileHandler({ onFileUpload: handleFileUpload });
@@ -227,6 +255,7 @@ export function ChatInput({
                 onKeyDown={handleKeyPress}
                 cursorPosition={cursorPosition}
                 inputRef={inputRef}
+                filterText={tagFilter}
               />
             </div>
           </MessageValidation>
