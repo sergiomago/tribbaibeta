@@ -1,6 +1,7 @@
-import { supabase } from "@/integrations/supabase/client";
-import { createLlongtermManager } from "./LlongtermManager";
-import { createMemoryContextManager } from "./memory/contextManager";
+import { createRoleCapabilityManager } from "./roles/core/RoleCapabilityManager";
+import { createRoleMemoryManager } from "./roles/core/RoleMemoryManager";
+import { createRoleInteractionManager } from "./roles/core/RoleInteractionManager";
+import { SpecialCapability } from "./roles/types/roles";
 
 // Special role capabilities
 export const SPECIAL_CAPABILITIES = {
@@ -8,103 +9,50 @@ export const SPECIAL_CAPABILITIES = {
   DOC_ANALYSIS: 'doc_analysis'
 } as const;
 
-export type SpecialCapability = typeof SPECIAL_CAPABILITIES[keyof typeof SPECIAL_CAPABILITIES];
-
 export class RoleManager {
-  private threadId: string;
-  private memoryContextManager: ReturnType<typeof createMemoryContextManager> | null = null;
+  private capabilityManager: ReturnType<typeof createRoleCapabilityManager>;
+  private memoryManager: ReturnType<typeof createRoleMemoryManager>;
+  private interactionManager: ReturnType<typeof createRoleInteractionManager>;
 
   constructor(threadId: string) {
-    this.threadId = threadId;
+    this.capabilityManager = createRoleCapabilityManager(threadId);
+    this.memoryManager = createRoleMemoryManager(threadId);
+    this.interactionManager = createRoleInteractionManager(threadId);
   }
 
+  // Capability methods
   async getAssignedRoles() {
-    const { data: threadRoles, error } = await supabase
-      .from("thread_roles")
-      .select("role_id")
-      .eq("thread_id", this.threadId);
-
-    if (error) throw error;
-    return threadRoles.map(tr => tr.role_id);
+    return await this.capabilityManager.getAssignedRoles();
   }
 
   async hasSpecialCapability(capability: SpecialCapability) {
-    const { data: threadRoles, error } = await supabase
-      .from("thread_roles")
-      .select(`
-        role:roles (
-          special_capabilities
-        )
-      `)
-      .eq("thread_id", this.threadId);
-
-    if (error) throw error;
-
-    return threadRoles.some(tr => 
-      tr.role?.special_capabilities?.includes(capability)
-    );
-  }
-
-  async getNextRespondingRole(currentOrder: number) {
-    const { data, error } = await supabase.rpc(
-      'get_next_responding_role',
-      { 
-        thread_id: this.threadId,
-        current_order: currentOrder 
-      }
-    );
-
-    if (error) throw error;
-    return data;
-  }
-
-  async getConversationChain(taggedRoleId?: string) {
-    const { data, error } = await supabase.rpc(
-      'get_conversation_chain',
-      { 
-        p_thread_id: this.threadId,
-        p_tagged_role_id: taggedRoleId 
-      }
-    );
-
-    if (error) throw error;
-    return data;
+    return await this.capabilityManager.hasSpecialCapability(capability);
   }
 
   async getRoleCapabilities(roleId: string) {
-    const { data, error } = await supabase
-      .from("roles")
-      .select("special_capabilities")
-      .eq("id", roleId)
-      .single();
-
-    if (error) throw error;
-    return data?.special_capabilities || [];
+    return await this.capabilityManager.getRoleCapabilities(roleId);
   }
 
-  private getMemoryContextManager(roleId: string) {
-    if (!this.memoryContextManager) {
-      this.memoryContextManager = createMemoryContextManager(roleId);
-    }
-    return this.memoryContextManager;
-  }
-
+  // Memory methods
   async storeRoleMemory(roleId: string, content: string, contextType: string = 'conversation', metadata: any = {}) {
-    const memoryManager = this.getMemoryContextManager(roleId);
-    await memoryManager.storeMemoryWithContext(content, contextType, {
-      ...metadata,
-      thread_id: this.threadId
-    });
+    return await this.memoryManager.storeRoleMemory(roleId, content, contextType, metadata);
   }
 
   async getRoleMemories(roleId: string, content: string) {
-    const memoryManager = this.getMemoryContextManager(roleId);
-    return await memoryManager.retrieveRelevantMemories(content);
+    return await this.memoryManager.getRoleMemories(roleId, content);
   }
 
   async updateMemoryRelevance(roleId: string, memoryId: string, relevanceScore: number) {
-    const memoryManager = this.getMemoryContextManager(roleId);
-    await memoryManager.updateMemoryRelevance(memoryId, relevanceScore);
+    return await this.memoryManager.updateMemoryRelevance(roleId, memoryId, relevanceScore);
+  }
+
+  // Interaction methods
+  async getNextRespondingRole(currentOrder: number) {
+    return await this.interactionManager.getNextRespondingRole(currentOrder);
+  }
+
+  async getConversationChain(taggedRoleId?: string) {
+    return await this.interactionManager.getConversationChain(taggedRoleId);
   }
 }
 
