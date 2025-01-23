@@ -21,49 +21,50 @@ interface SubscriptionContextType extends SubscriptionState {
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
-const SUBSCRIPTION_STORAGE_KEY = 'app_subscription_state';
-const SUBSCRIPTION_CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
-
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuth();
   const { toast } = useToast();
-  const [state, setState] = useState<SubscriptionState>(() => {
-    // Try to restore state from localStorage
-    const savedState = localStorage.getItem(SUBSCRIPTION_STORAGE_KEY);
-    return savedState ? JSON.parse(savedState) : {
-      hasSubscription: false,
-      planType: null,
-      interval: null,
-      trialEnd: null,
-      currentPeriodEnd: null,
-      isLoading: true,
-      trialStarted: false,
-    };
+  const [state, setState] = useState<SubscriptionState>({
+    hasSubscription: false,
+    planType: null,
+    interval: null,
+    trialEnd: null,
+    currentPeriodEnd: null,
+    isLoading: true,
+    trialStarted: false,
   });
 
   const checkSubscription = async () => {
+    if (!session) {
+      setState(s => ({ ...s, isLoading: false }));
+      return;
+    }
+
     try {
-      // Only check subscription if we have a session
-      if (!session?.access_token) {
-        setState(prev => ({ ...prev, isLoading: false }));
-        return;
-      }
-
-      console.log("Checking subscription status for user:", session.user.id);
-      const { data, error } = await supabase.functions.invoke('check-subscription', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`
+      // Check for test subscription first (development only)
+      if (process.env.NODE_ENV !== 'production') {
+        const testSub = localStorage.getItem('test_subscription');
+        if (testSub) {
+          const { planType, currentPeriodEnd } = JSON.parse(testSub);
+          setState({
+            hasSubscription: true,
+            planType,
+            interval: 'month',
+            trialEnd: null,
+            currentPeriodEnd,
+            isLoading: false,
+            trialStarted: false,
+          });
+          return;
         }
-      });
-      
-      if (error) {
-        console.error('Subscription check error:', error);
-        // Don't clear existing subscription state on error
-        setState(prev => ({ ...prev, isLoading: false }));
-        return;
       }
 
-      const newState = {
+      // Regular subscription check
+      const { data, error } = await supabase.functions.invoke('check-subscription');
+      
+      if (error) throw error;
+
+      setState({
         hasSubscription: data.hasSubscription,
         planType: data.planType,
         interval: data.interval || 'month',
@@ -71,13 +72,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
         trialStarted: data.trialStarted || false,
-      };
-
-      // Save to localStorage for persistence
-      localStorage.setItem(SUBSCRIPTION_STORAGE_KEY, JSON.stringify(newState));
-      setState(newState);
-      
-      console.log("Subscription status updated:", newState);
+      });
     } catch (error: any) {
       console.error('Error checking subscription:', error);
       toast({
@@ -85,7 +80,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         title: "Error checking subscription",
         description: error.message,
       });
-      setState(prev => ({ ...prev, isLoading: false }));
+      setState(s => ({ ...s, isLoading: false }));
     }
   };
 
@@ -150,33 +145,9 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  // Check subscription on mount and when session changes
   useEffect(() => {
-    if (session?.access_token) {
-      checkSubscription();
-    } else {
-      // Clear subscription state when logged out
-      const defaultState = {
-        hasSubscription: false,
-        planType: null,
-        interval: null,
-        trialEnd: null,
-        currentPeriodEnd: null,
-        isLoading: false,
-        trialStarted: false,
-      };
-      localStorage.setItem(SUBSCRIPTION_STORAGE_KEY, JSON.stringify(defaultState));
-      setState(defaultState);
-    }
-  }, [session?.access_token]);
-
-  // Periodic subscription check
-  useEffect(() => {
-    if (!session?.access_token) return;
-
-    const intervalId = setInterval(checkSubscription, SUBSCRIPTION_CHECK_INTERVAL);
-    return () => clearInterval(intervalId);
-  }, [session?.access_token]);
+    checkSubscription();
+  }, [session]);
 
   return (
     <SubscriptionContext.Provider 

@@ -36,29 +36,25 @@ serve(async (req) => {
       console.log('Looking up role ID for tag:', taggedRoleId);
       
       // First check if the role exists in the thread
-      const { data: threadRoles, error: threadRoleError } = await supabase
+      const { data: threadRole, error: threadRoleError } = await supabase
         .from('thread_roles')
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId.replace('@', ''));
+        .eq('roles.tag', taggedRoleId)
+        .maybeSingle();
 
       if (threadRoleError) {
         console.error('Error looking up role in thread:', threadRoleError);
         throw new Error(`Error looking up role: ${threadRoleError.message}`);
       }
 
-      // Find the exact match for the tag
-      const matchingRole = threadRoles?.find(tr => 
-        tr.roles?.tag.toLowerCase() === taggedRoleId.replace('@', '').toLowerCase()
-      );
-
-      if (!matchingRole) {
+      if (!threadRole) {
         // Check if the role exists at all
         const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('id, tag')
-          .eq('tag', taggedRoleId.replace('@', ''))
-          .single();
+          .eq('tag', taggedRoleId)
+          .maybeSingle();
 
         if (roleError) {
           console.error('Error looking up role:', roleError);
@@ -66,13 +62,13 @@ serve(async (req) => {
         }
 
         if (!role) {
-          throw new Error(`No role found with tag "${taggedRoleId}". Please make sure you're using a valid role tag.`);
+          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
         } else {
-          throw new Error(`The role "${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
         }
       }
 
-      resolvedRoleId = matchingRole.roles.id;
+      resolvedRoleId = threadRole.roles.id;
       console.log('Resolved role ID:', resolvedRoleId);
     }
 

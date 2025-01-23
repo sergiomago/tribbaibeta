@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from 'https://esm.sh/stripe@14.21.0';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const corsHeaders = {
@@ -7,95 +8,121 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Get auth header
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('No authorization header');
-      return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          detectSessionInUrl: false
-        }
-      }
     );
 
-    // Get user from token
+    const authHeader = req.headers.get('Authorization')!;
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(token);
 
-    if (userError || !user) {
+    if (userError || !user?.email) {
       console.error('Auth error:', userError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized', details: userError }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 401 
+        }
       );
     }
 
-    console.log('Checking subscription for user:', user.id);
-
-    // Get user's subscription
-    const { data: subscription, error: subError } = await supabaseClient
+    // Check for active subscription in database
+    const { data: subscriptionData, error: subscriptionError } = await supabaseClient
       .from('subscriptions')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
       .single();
 
-    if (subError) {
-      console.error('Subscription query error:', subError);
+    if (subscriptionError) {
+      console.error('Database error:', subscriptionError);
     }
 
-    // Check for development subscription
-    if (subscription?.is_development) {
-      console.log('Development subscription found');
-      return new Response(
-        JSON.stringify({
-          hasSubscription: true,
-          planType: subscription.plan_type,
-          interval: 'month',
-          trialEnd: subscription.trial_end,
-          currentPeriodEnd: subscription.current_period_end,
-          trialStarted: subscription.trial_started
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // If we find an active subscription in the database
+    if (subscriptionData) {
+      console.log('Found active subscription in database:', subscriptionData);
+      
+      // If it's a development subscription or we're not in production, trust the database state
+      if (subscriptionData.is_development || process.env.NODE_ENV !== 'production') {
+        console.log('Using development subscription or non-production environment');
+        return new Response(
+          JSON.stringify({
+            hasSubscription: true,
+            planType: subscriptionData.plan_type,
+            interval: 'month',
+            trialEnd: subscriptionData.trial_end,
+            currentPeriodEnd: subscriptionData.current_period_end,
+            trialStarted: subscriptionData.trial_started
+          }),
+          { 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200 
+          }
+        );
+      }
+
+      // For production with real subscriptions, verify with Stripe
+      const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
+        apiVersion: '2023-10-16',
+      });
+
+      if (subscriptionData.stripe_subscription_id) {
+        try {
+          const stripeSubscription = await stripe.subscriptions.retrieve(
+            subscriptionData.stripe_subscription_id
+          );
+
+          if (stripeSubscription.status === 'active') {
+            return new Response(
+              JSON.stringify({
+                hasSubscription: true,
+                planType: subscriptionData.plan_type,
+                interval: stripeSubscription.items.data[0]?.price?.recurring?.interval || 'month',
+                trialEnd: subscriptionData.trial_end,
+                currentPeriodEnd: subscriptionData.current_period_end,
+                trialStarted: subscriptionData.trial_started
+              }),
+              { 
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 200 
+              }
+            );
+          }
+        } catch (stripeError) {
+          console.error('Stripe verification error:', stripeError);
+        }
+      }
     }
 
-    // Return subscription status
+    // No active subscription found
     return new Response(
-      JSON.stringify({
-        hasSubscription: !!subscription,
-        planType: subscription?.plan_type || null,
-        interval: 'month',
-        trialEnd: subscription?.trial_end || null,
-        currentPeriodEnd: subscription?.current_period_end || null,
-        trialStarted: subscription?.trial_started || false
+      JSON.stringify({ 
+        hasSubscription: false,
+        planType: null,
+        trialEnd: null,
+        currentPeriodEnd: null,
+        trialStarted: false
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
     );
-
   } catch (error) {
-    console.error('Error in check-subscription:', error);
+    console.error('Error checking subscription:', error);
     return new Response(
-      JSON.stringify({ error: 'Internal server error', details: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: error.message }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500 
+      }
     );
   }
 });
