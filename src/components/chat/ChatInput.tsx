@@ -60,7 +60,7 @@ export function ChatInput({
     try {
       const orchestrator = createRoleOrchestrator(threadId);
       
-      // Extract tagged role if present (basic implementation)
+      // Extract tagged role if present
       const tagMatch = message.match(/@(\w+)/);
       const taggedRole = tagMatch ? tagMatch[1] : null;
       
@@ -144,16 +144,22 @@ export function ChatInput({
 
     // Check for @ symbol
     const lastAtIndex = newValue.lastIndexOf('@');
-    if (lastAtIndex !== -1 && lastAtIndex === newValue.length - 1) {
-      const rect = e.target.getBoundingClientRect();
-      const position = {
-        top: rect.top + window.scrollY,
-        left: rect.left + window.scrollX + (e.target.selectionStart || 0) * 8, // Approximate char width
-      };
-      setCursorPosition(position);
-      setShowSuggestions(true);
-      setSelectedIndex(0);
-    } else if (!newValue.includes('@')) {
+    if (lastAtIndex !== -1) {
+      const textAfterAt = newValue.slice(lastAtIndex + 1);
+      // Only show suggestions if @ is at the end or followed by word characters
+      if (textAfterAt.length === 0 || /^\w+$/.test(textAfterAt)) {
+        const rect = e.target.getBoundingClientRect();
+        const position = {
+          top: rect.top,
+          left: rect.left + (lastAtIndex * 8), // Approximate char width
+        };
+        setCursorPosition(position);
+        setShowSuggestions(true);
+        setSelectedIndex(0);
+      } else {
+        setShowSuggestions(false);
+      }
+    } else {
       setShowSuggestions(false);
     }
   };
