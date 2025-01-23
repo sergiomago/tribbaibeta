@@ -31,12 +31,12 @@ serve(async (req) => {
     console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
     // Extract all tags using regex - looking for single @
-    const tags = content.match(/@(\w+)/g)?.map(tag => tag.substring(1)) || [];
+    const tags = content.match(/@(\w+)/g)?.map(tag => tag.slice(1)) || [];
     console.log('Extracted tags:', tags);
 
     // If we have a legacy taggedRoleId, add it to tags if it's not a UUID
     if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      tags.push(taggedRoleId);
+      tags.push(taggedRoleId.replace('@', ''));
     }
 
     // Resolve all tags to role IDs
