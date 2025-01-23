@@ -12,10 +12,11 @@ export async function processMessage(
   userMessage: any,
   previousResponses: Message[]
 ) {
-  console.log('Processing message for role:', roleId);
+  console.log('Starting message processing for role:', roleId);
 
   try {
     // Build conversation context
+    console.log('Building conversation context...');
     const context = await buildConversationContext(
       supabase,
       threadId,
@@ -23,7 +24,17 @@ export async function processMessage(
       previousResponses
     );
 
+    if (!context.role) {
+      throw new Error(`Role not found: ${roleId}`);
+    }
+
+    console.log('Context built successfully:', {
+      roleSequence: context.roleSequence,
+      position: context.currentPosition
+    });
+
     // Generate response
+    console.log('Generating response...');
     const response = await generateResponse(
       openai,
       context.role,
@@ -35,10 +46,11 @@ export async function processMessage(
       userMessage.content
     );
 
-    console.log('Generated response successfully');
+    console.log('Response generated successfully');
     return response;
   } catch (error) {
-    console.error('Error processing message:', error);
-    throw error;
+    console.error('Error in processMessage:', error);
+    // Rethrow with more context
+    throw new Error(`Failed to process message: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
