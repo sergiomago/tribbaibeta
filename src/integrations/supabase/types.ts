@@ -557,10 +557,12 @@ export type Database = {
           primary_topics: string[] | null
           response_priority: number | null
           response_style: Json | null
+          role_combinations: Json | null
           source: string
           special_capabilities: string[] | null
           tag: string
           template_id: string | null
+          topic_match_history: Json | null
           updated_at: string
           user_id: string | null
         }
@@ -582,10 +584,12 @@ export type Database = {
           primary_topics?: string[] | null
           response_priority?: number | null
           response_style?: Json | null
+          role_combinations?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
+          topic_match_history?: Json | null
           updated_at?: string
           user_id?: string | null
         }
@@ -607,10 +611,12 @@ export type Database = {
           primary_topics?: string[] | null
           response_priority?: number | null
           response_style?: Json | null
+          role_combinations?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
+          topic_match_history?: Json | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1051,6 +1057,14 @@ export type Database = {
           "": unknown[]
         }
         Returns: number
+      }
+      update_role_combination_success: {
+        Args: {
+          p_initiator_role_id: string
+          p_responder_role_id: string
+          p_success_score: number
+        }
+        Returns: undefined
       }
       vector_avg: {
         Args: {
