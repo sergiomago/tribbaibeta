@@ -35,18 +35,14 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   });
 
   const checkSubscription = async () => {
-    if (!session) {
-      setState(s => ({ ...s, isLoading: false }));
-      return;
-    }
-
     try {
       // Check for test subscription first (development only)
       if (process.env.NODE_ENV !== 'production') {
         const testSub = localStorage.getItem('test_subscription');
         if (testSub) {
           const { planType, currentPeriodEnd } = JSON.parse(testSub);
-          setState({
+          setState(prev => ({
+            ...prev,
             hasSubscription: true,
             planType,
             interval: 'month',
@@ -54,17 +50,23 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             currentPeriodEnd,
             isLoading: false,
             trialStarted: false,
-          });
+          }));
           return;
         }
       }
 
-      // Regular subscription check
+      // Only check subscription if we have a session
+      if (!session?.user?.id) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) throw error;
 
-      setState({
+      setState(prev => ({
+        ...prev,
         hasSubscription: data.hasSubscription,
         planType: data.planType,
         interval: data.interval || 'month',
@@ -72,7 +74,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         currentPeriodEnd: data.currentPeriodEnd,
         isLoading: false,
         trialStarted: data.trialStarted || false,
-      });
+      }));
     } catch (error: any) {
       console.error('Error checking subscription:', error);
       toast({
@@ -80,7 +82,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         title: "Error checking subscription",
         description: error.message,
       });
-      setState(s => ({ ...s, isLoading: false }));
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -145,9 +147,37 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
+  // Initial session and subscription check
   useEffect(() => {
-    checkSubscription();
-  }, [session]);
+    const initializeSubscription = async () => {
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      if (initialSession?.user?.id) {
+        await checkSubscription();
+      } else {
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    initializeSubscription();
+  }, []); // Run once on mount
+
+  // Listen for auth changes
+  useEffect(() => {
+    if (session?.user?.id) {
+      checkSubscription();
+    } else {
+      setState(prev => ({
+        ...prev,
+        hasSubscription: false,
+        planType: null,
+        interval: null,
+        trialEnd: null,
+        currentPeriodEnd: null,
+        isLoading: false,
+        trialStarted: false,
+      }));
+    }
+  }, [session?.user?.id]);
 
   return (
     <SubscriptionContext.Provider 
