@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,9 @@ import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
 import { supabase } from "@/integrations/supabase/client";
+import { TagSuggestions } from "./TagSuggestions";
+import { Role } from "@/types/role";
+import { useQuery } from "@tanstack/react-query";
 
 interface ChatInputProps {
   threadId: string;
@@ -29,8 +32,28 @@ export function ChatInput({
   const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState<{ top: number; left: number } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+
+  // Fetch thread roles
+  const { data: threadRoles } = useQuery({
+    queryKey: ["thread-roles", threadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("thread_roles")
+        .select(`
+          role:roles (*)
+        `)
+        .eq("thread_id", threadId);
+      if (error) throw error;
+      return data.map(tr => tr.role) as Role[];
+    },
+    enabled: !!threadId,
+  });
 
   const handleSend = async () => {
     setIsSending(true);
@@ -84,10 +107,64 @@ export function ChatInput({
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (showSuggestions) {
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedIndex(prev => 
+            prev > 0 ? prev - 1 : (threadRoles?.length || 1) - 1
+          );
+          return;
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedIndex(prev => 
+            prev < (threadRoles?.length || 1) - 1 ? prev + 1 : 0
+          );
+          return;
+        case "Enter":
+          e.preventDefault();
+          if (threadRoles?.[selectedIndex]) {
+            handleRoleSelect(threadRoles[selectedIndex]);
+          }
+          return;
+        case "Escape":
+          e.preventDefault();
+          setShowSuggestions(false);
+          return;
+      }
+    } else if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setMessage(newValue);
+
+    // Check for @ symbol
+    const lastAtIndex = newValue.lastIndexOf('@');
+    if (lastAtIndex !== -1 && lastAtIndex === newValue.length - 1) {
+      const rect = e.target.getBoundingClientRect();
+      const position = {
+        top: rect.top + window.scrollY,
+        left: rect.left + window.scrollX + (e.target.selectionStart || 0) * 8, // Approximate char width
+      };
+      setCursorPosition(position);
+      setShowSuggestions(true);
+      setSelectedIndex(0);
+    } else if (!newValue.includes('@')) {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleRoleSelect = (role: Role) => {
+    const lastAtIndex = message.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const newMessage = message.slice(0, lastAtIndex) + `@${role.tag} `;
+      setMessage(newMessage);
+    }
+    setShowSuggestions(false);
   };
 
   const fileHandler = FileHandler({ onFileUpload: handleFileUpload });
@@ -108,7 +185,7 @@ export function ChatInput({
             messageCount={messageCount}
             maxMessages={maxMessages}
           >
-            <div className="flex gap-2">
+            <div className="flex gap-2 relative">
               <FileUploadButtons
                 threadId={threadId}
                 onFileUpload={(e) => fileHandler.handleFileUpload(e, 'document')}
@@ -116,11 +193,12 @@ export function ChatInput({
                 isUploading={isUploading}
               />
               <Input
+                ref={inputRef}
                 placeholder={disabled ? "Message limit reached" : "Type your message..."}
                 className="flex-1 text-base sm:text-sm"
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyPress}
                 disabled={isSending || disabled}
               />
               <Button 
@@ -141,6 +219,15 @@ export function ChatInput({
                   </>
                 )}
               </Button>
+              <TagSuggestions
+                roles={threadRoles || []}
+                visible={showSuggestions}
+                selectedIndex={selectedIndex}
+                onSelect={handleRoleSelect}
+                onKeyDown={handleKeyPress}
+                cursorPosition={cursorPosition}
+                inputRef={inputRef}
+              />
             </div>
           </MessageValidation>
         </div>
