@@ -49,9 +49,9 @@ serve(async (req) => {
     if (subscriptionData) {
       console.log('Found active subscription in database:', subscriptionData);
       
-      // If it's a development subscription or we're not in production, trust the database state
-      if (subscriptionData.is_development || process.env.NODE_ENV !== 'production') {
-        console.log('Using development subscription or non-production environment');
+      // If it's a development subscription or manual subscription (no Stripe ID)
+      if (subscriptionData.is_development || !subscriptionData.stripe_subscription_id) {
+        console.log('Using development/manual subscription');
         return new Response(
           JSON.stringify({
             hasSubscription: true,
@@ -68,36 +68,34 @@ serve(async (req) => {
         );
       }
 
-      // For production with real subscriptions, verify with Stripe
+      // For production with Stripe subscriptions, verify with Stripe
       const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
         apiVersion: '2023-10-16',
       });
 
-      if (subscriptionData.stripe_subscription_id) {
-        try {
-          const stripeSubscription = await stripe.subscriptions.retrieve(
-            subscriptionData.stripe_subscription_id
-          );
+      try {
+        const stripeSubscription = await stripe.subscriptions.retrieve(
+          subscriptionData.stripe_subscription_id
+        );
 
-          if (stripeSubscription.status === 'active') {
-            return new Response(
-              JSON.stringify({
-                hasSubscription: true,
-                planType: subscriptionData.plan_type,
-                interval: stripeSubscription.items.data[0]?.price?.recurring?.interval || 'month',
-                trialEnd: subscriptionData.trial_end,
-                currentPeriodEnd: subscriptionData.current_period_end,
-                trialStarted: subscriptionData.trial_started
-              }),
-              { 
-                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-                status: 200 
-              }
-            );
-          }
-        } catch (stripeError) {
-          console.error('Stripe verification error:', stripeError);
+        if (stripeSubscription.status === 'active') {
+          return new Response(
+            JSON.stringify({
+              hasSubscription: true,
+              planType: subscriptionData.plan_type,
+              interval: stripeSubscription.items.data[0]?.price?.recurring?.interval || 'month',
+              trialEnd: subscriptionData.trial_end,
+              currentPeriodEnd: subscriptionData.current_period_end,
+              trialStarted: subscriptionData.trial_started
+            }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              status: 200 
+            }
+          );
         }
+      } catch (stripeError) {
+        console.error('Stripe verification error:', stripeError);
       }
     }
 
