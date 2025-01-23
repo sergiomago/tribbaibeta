@@ -112,8 +112,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.error("Auth error:", error);
     
     if (error.message?.includes('refresh_token_not_found') || 
-        error.message?.includes('Invalid Refresh Token')) {
-      console.log("Session expired, clearing state and redirecting");
+        error.message?.includes('Invalid Refresh Token') ||
+        error.message?.includes('session_not_found')) {
+      console.log("Session expired or invalid, clearing state and redirecting");
       setSession(null);
       setUser(null);
       
@@ -131,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     toast({
       title: "Authentication error",
-      description: getErrorMessage(error),
+      description: error instanceof AuthError ? getErrorMessage(error) : error.message,
       variant: "destructive",
     });
   };
@@ -173,6 +174,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      // Clear state before signing out to prevent race conditions
+      setSession(null);
+      setUser(null);
+      
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       
@@ -180,6 +185,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         title: "Signed out",
         description: "Successfully signed out.",
       });
+      
+      // Force navigation to login after state is cleared
+      navigate("/login");
     } catch (error: any) {
       handleAuthError(error);
     }
