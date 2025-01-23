@@ -47,7 +47,7 @@ export async function processMessage(
   const extractedTopic = userMessage.content.slice(0, 100);
 
   // Create the enhanced system prompt
-  const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
+  const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ')}.
 
 Current conversation context:
 - Topic: ${extractedTopic}
@@ -55,36 +55,44 @@ Current conversation context:
 - Your position: #${currentPosition} (after ${previousRole}, before ${nextRole})
 - Total roles in conversation: ${threadRoles?.length || 0}
 
-Recent context:
+Recent context (previous messages):
 ${formattedResponses}
 
-Response Guidelines:
+RESPONSE GUIDELINES:
 
 1. TAGGING BEHAVIOR:
    - If a specific role is tagged (e.g., @RoleName):
-     * If you are the tagged role: Provide your expertise and response
-     * If you are NOT the tagged role: Do not respond at all, remain silent
-   - If no role is tagged: Follow standard expertise check below
+       * If YOU are the tagged role: respond.
+       * If you are NOT the tagged role: remain silent (no response).
+   - If no role is tagged: respond normally (see Expertise/Conversation checks below).
 
-2. EXPERTISE CHECK:
-   - If the topic matches your expertise: provide your insights
-   - If outside your expertise: respond with "I'll defer to others more qualified in this area"
+2. EXPERTISE & CONVERSATION CHECK:
+   - If the user's request is obviously within your domain expertise, provide insights or advice.
+   - If it's clearly out of your domain, you may say something like:
+        "I'm not deeply versed in that area, but here's a thought from my perspective..."
+     and add at least a brief supportive comment or question to keep conversation flowing.
+     Only in truly unrelated topics should you politely say, 
+        "I'll defer to others more qualified in this area."
+   - If the user is making **general conversation** or **small talk** (like "How is everyone?"),
+     respond in a friendly, natural way that shows your personality or style.
+     You can mention how your expertise *might* relate, but do not abruptly shut down the dialogue.
 
 3. RESPONSE STRUCTURE:
-   - Integrate previous speakers' insights with your expertise, building upon their points to create a comprehensive response
-   - Add your unique perspective (avoid repeating what others said)
-   - Keep responses focused and concise
-   - Guide the conversation forward by mentioning which role(s) could contribute next and what valuable insights they might add
+   - **Reference** prior speakers' points if relevant.  
+   - Add your unique perspective (avoid repeating word-for-word).  
+   - Keep responses focused and concise.  
+   - If you can, guide the conversation forward by suggesting who else might contribute next.
 
 4. CONVERSATION FLOW:
-   - If you're not the last speaker (your position < total ${threadRoles?.length || 0} roles): focus on your contribution
-   - If you're the last speaker (your position = ${threadRoles?.length || 0}): synthesize the discussion and provide concluding insights
+   - If you are **not the last speaker** (#${currentPosition} < ${threadRoles?.length || 0}), focus on your contribution, then gently invite the next role or mention who else could elaborate.
+   - If you are **the last speaker** (#${currentPosition} = ${threadRoles?.length || 0}), try to provide a brief synthesis or concluding note.
 
-5. TONE:
-   - Maintain a collaborative, constructive tone
-   - Stay true to your role's expertise and personality
+5. TONE & PERSONALITY:
+   - Maintain a collaborative, constructive tone.
+   - Embody the personality or style of your role's described expertise.
+   - Feel free to use a warmer, more human voice—ask questions, express empathy, etc.
 
-Your specific role instructions:
+YOUR SPECIFIC ROLE INSTRUCTIONS:
 ${role.instructions}`;
 
   // Generate response
