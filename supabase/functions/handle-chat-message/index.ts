@@ -30,50 +30,45 @@ serve(async (req) => {
 
     console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
-    // If taggedRoleId is present, look up the role
+    // If taggedRoleId is a string but not a UUID, assume it's a role tag and look up the ID
     let resolvedRoleId = taggedRoleId;
     if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
       console.log('Looking up role ID for tag:', taggedRoleId);
       
       // First check if the role exists in the thread
-      const { data: threadRoles, error: threadRoleError } = await supabase
+      const { data: threadRole, error: threadRoleError } = await supabase
         .from('thread_roles')
-        .select(`
-          roles (
-            id,
-            tag
-          )
-        `)
-        .eq('thread_id', threadId);
+        .select('roles(id, tag)')
+        .eq('thread_id', threadId)
+        .eq('roles.tag', taggedRoleId)
+        .maybeSingle();
 
       if (threadRoleError) {
-        console.error('Error looking up roles in thread:', threadRoleError);
-        throw new Error(`Error looking up roles: ${threadRoleError.message}`);
+        console.error('Error looking up role in thread:', threadRoleError);
+        throw new Error(`Error looking up role: ${threadRoleError.message}`);
       }
 
-      // Find the role with matching tag
-      const matchingRole = threadRoles?.find(tr => tr.roles?.tag === taggedRoleId);
-
-      if (!matchingRole) {
-        // If not found in thread, check if role exists at all
-        const { data: roles, error: roleError } = await supabase
+      if (!threadRole) {
+        // Check if the role exists at all
+        const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('id, tag')
-          .eq('tag', taggedRoleId);
+          .eq('tag', taggedRoleId)
+          .maybeSingle();
 
         if (roleError) {
           console.error('Error looking up role:', roleError);
           throw new Error(`Error looking up role: ${roleError.message}`);
         }
 
-        if (!roles || roles.length === 0) {
-          throw new Error(`No role found with tag "${taggedRoleId}". Please make sure you're using a valid role tag.`);
+        if (!role) {
+          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
         } else {
-          throw new Error(`The role "${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
         }
       }
 
-      resolvedRoleId = matchingRole.roles.id;
+      resolvedRoleId = threadRole.roles.id;
       console.log('Resolved role ID:', resolvedRoleId);
     }
 
