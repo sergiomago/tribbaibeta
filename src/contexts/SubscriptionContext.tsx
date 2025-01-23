@@ -44,13 +44,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const checkSubscription = async () => {
     try {
       // Only check subscription if we have a session
-      if (!session?.user?.id) {
+      if (!session?.access_token) {
         setState(prev => ({ ...prev, isLoading: false }));
         return;
       }
 
       console.log("Checking subscription status for user:", session.user.id);
-      const { data, error } = await supabase.functions.invoke('check-subscription');
+      const { data, error } = await supabase.functions.invoke('check-subscription', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
       
       if (error) {
         console.error('Subscription check error:', error);
@@ -148,7 +152,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
 
   // Check subscription on mount and when session changes
   useEffect(() => {
-    if (session?.user?.id) {
+    if (session?.access_token) {
       checkSubscription();
     } else {
       // Clear subscription state when logged out
@@ -164,15 +168,15 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       localStorage.setItem(SUBSCRIPTION_STORAGE_KEY, JSON.stringify(defaultState));
       setState(defaultState);
     }
-  }, [session?.user?.id]);
+  }, [session?.access_token]);
 
   // Periodic subscription check
   useEffect(() => {
-    if (!session?.user?.id) return;
+    if (!session?.access_token) return;
 
     const intervalId = setInterval(checkSubscription, SUBSCRIPTION_CHECK_INTERVAL);
     return () => clearInterval(intervalId);
-  }, [session?.user?.id]);
+  }, [session?.access_token]);
 
   return (
     <SubscriptionContext.Provider 
