@@ -26,6 +26,15 @@ export async function processMessage(
     .eq('thread_id', threadId)
     .neq('role_id', roleId);
 
+  // Get the sequence of roles
+  const roleSequence = threadRoles?.map(tr => tr.roles.name).join('\n') || '';
+
+  // Find current role's position and adjacent roles
+  const allRoles = threadRoles?.map(tr => tr.roles) || [];
+  const currentPosition = allRoles.findIndex(r => r.id === roleId) + 1;
+  const previousRole = currentPosition > 1 ? allRoles[currentPosition - 2]?.name : 'none';
+  const nextRole = currentPosition < allRoles.length ? allRoles[currentPosition]?.name : 'none';
+
   // Format previous responses for context
   const formattedResponses = previousResponses
     .map(msg => {
@@ -34,32 +43,44 @@ export async function processMessage(
     })
     .join('\n\n');
 
-  // Extract topic from user message (simplified)
+  // Extract topic from user message (simplified for now)
   const extractedTopic = userMessage.content.slice(0, 100);
 
-  // Create the system prompt
+  // Create the enhanced system prompt
   const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
 
 Current conversation context:
 - Topic: ${extractedTopic}
-- You were specifically chosen to respond to this message
-- Provide your expertise and insights directly
+- Previous speakers: ${roleSequence}
+- Your position: #${currentPosition} (after ${previousRole}, before ${nextRole})
+- Total roles in conversation: ${threadRoles?.length || 0}
 
 Recent context:
 ${formattedResponses}
 
 Response Guidelines:
-1. Since you were specifically chosen (either tagged or selected by the conversation chain):
-   - Provide your expertise and insights directly
-   - Do not defer to other roles
-   - Focus on your area of expertise
 
-2. Response Structure:
+1. TAGGING BEHAVIOR:
+   - If a specific role is tagged (e.g., @RoleName):
+     * If you are the tagged role: Provide your expertise and response
+     * If you are NOT the tagged role: Do not respond at all, remain silent
+   - If no role is tagged: Follow standard expertise check below
+
+2. EXPERTISE CHECK:
+   - If the topic matches your expertise: provide your insights
+   - If outside your expertise: respond with "I'll defer to others more qualified in this area"
+
+3. RESPONSE STRUCTURE:
+   - Integrate previous speakers' insights with your expertise, building upon their points to create a comprehensive response
+   - Add your unique perspective (avoid repeating what others said)
    - Keep responses focused and concise
-   - Add your unique perspective
-   - Stay within your expertise area
+   - Guide the conversation forward by mentioning which role(s) could contribute next and what valuable insights they might add
 
-3. Tone:
+4. CONVERSATION FLOW:
+   - If you're not the last speaker (your position < total ${threadRoles?.length || 0} roles): focus on your contribution
+   - If you're the last speaker (your position = ${threadRoles?.length || 0}): synthesize the discussion and provide concluding insights
+
+5. TONE:
    - Maintain a collaborative, constructive tone
    - Stay true to your role's expertise and personality
 
