@@ -36,25 +36,29 @@ serve(async (req) => {
       console.log('Looking up role ID for tag:', taggedRoleId);
       
       // First check if the role exists in the thread
-      const { data: threadRole, error: threadRoleError } = await supabase
+      const { data: threadRoles, error: threadRoleError } = await supabase
         .from('thread_roles')
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId.replace('@', ''))
-        .maybeSingle();
+        .eq('roles.tag', taggedRoleId.replace('@', ''));
 
       if (threadRoleError) {
         console.error('Error looking up role in thread:', threadRoleError);
         throw new Error(`Error looking up role: ${threadRoleError.message}`);
       }
 
-      if (!threadRole) {
+      // Find the exact match for the tag
+      const matchingRole = threadRoles?.find(tr => 
+        tr.roles?.tag.toLowerCase() === taggedRoleId.replace('@', '').toLowerCase()
+      );
+
+      if (!matchingRole) {
         // Check if the role exists at all
         const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('id, tag')
           .eq('tag', taggedRoleId.replace('@', ''))
-          .maybeSingle();
+          .single();
 
         if (roleError) {
           console.error('Error looking up role:', roleError);
@@ -68,7 +72,7 @@ serve(async (req) => {
         }
       }
 
-      resolvedRoleId = threadRole.roles.id;
+      resolvedRoleId = matchingRole.roles.id;
       console.log('Resolved role ID:', resolvedRoleId);
     }
 
