@@ -41,7 +41,7 @@ serve(async (req) => {
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
         .eq('roles.tag', taggedRoleId)
-        .maybeSingle();
+        .maybeSingle();  // Changed from single() to maybeSingle()
 
       if (threadRoleError) {
         console.error('Error looking up role in thread:', threadRoleError);
@@ -54,7 +54,7 @@ serve(async (req) => {
           .from('roles')
           .select('id, tag')
           .eq('tag', taggedRoleId)
-          .maybeSingle();
+          .maybeSingle();  // Changed from single() to maybeSingle()
 
         if (roleError) {
           console.error('Error looking up role:', roleError);
@@ -62,9 +62,9 @@ serve(async (req) => {
         }
 
         if (!role) {
-          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
+          throw new Error(`No role found with tag "${taggedRoleId}". Please make sure you're using a valid role tag.`);
         } else {
-          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+          throw new Error(`The role "${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
         }
       }
 
