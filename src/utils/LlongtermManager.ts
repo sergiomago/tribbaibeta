@@ -46,11 +46,16 @@ export class LlongtermManager {
       thread_id: this.threadId
     };
 
+    // Store memory with metadata in the content
+    const enrichedContent = JSON.stringify({
+      content,
+      metadata
+    });
+
     await MemoryStorage.storeMemory(
       this.roleId,
-      content,
-      'interaction',
-      metadata
+      enrichedContent,
+      'interaction'
     );
 
     // Update role interaction metrics in the database
