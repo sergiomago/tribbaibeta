@@ -22,29 +22,23 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId, chain } = await req.json();
+    const { threadId, content, chain } = await req.json();
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    console.log('Processing message:', { threadId, content, taggedRoleId, chain });
+    console.log('Processing message:', { threadId, content });
 
-    // Extract all tags using regex - looking for single @
-    const tags = content.match(/@(\w+)/g)?.map(tag => tag.slice(1)) || [];
+    // Extract tags using regex - looking for @tag format
+    const tags = content.match(/@(\w+)\b/g)?.map(tag => tag.slice(1)) || [];
     console.log('Extracted tags:', tags);
 
-    // If we have a legacy taggedRoleId, add it to tags if it's not a UUID
-    if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      tags.push(taggedRoleId.replace('@', ''));
-    }
-
-    // Resolve all tags to role IDs
-    let resolvedRoleIds: string[] = [];
+    // Get roles to respond
+    let rolesToRespond;
+    
     if (tags.length > 0) {
-      console.log('Resolving tags to role IDs');
-      
-      // Get all roles in the thread that match the tags
+      // If tags present, get only the tagged roles that exist in the thread
       const { data: threadRoles, error: threadRoleError } = await supabase
         .from('thread_roles')
         .select('roles(id, tag)')
@@ -55,44 +49,28 @@ serve(async (req) => {
         throw new Error(`Error looking up roles: ${threadRoleError.message}`);
       }
 
-      // Map tags to role IDs
-      for (const tag of tags) {
-        const matchingRole = threadRoles?.find(tr => tr.roles?.tag === tag);
-        if (!matchingRole) {
-          if (threadRoles?.length === 0) {
-            throw new Error(`No roles found in this conversation. Please add roles before tagging them.`);
-          }
-          // Format available roles with single @ in error message
-          const availableRoles = threadRoles?.map(tr => `@${tr.roles?.tag}`).join(', ');
-          throw new Error(`The role "@${tag}" is not assigned to this conversation. Available roles are: ${availableRoles}`);
+      // Validate tags against available roles
+      const availableRoles = threadRoles?.map(tr => tr.roles?.tag) || [];
+      const invalidTags = tags.filter(tag => !availableRoles.includes(tag));
+      
+      if (invalidTags.length > 0) {
+        if (threadRoles?.length === 0) {
+          throw new Error(`No roles found in this conversation. Please add roles before tagging them.`);
         }
-        resolvedRoleIds.push(matchingRole.roles.id);
+        const availableRolesStr = availableRoles.map(tag => `@${tag}`).join(', ');
+        throw new Error(`Invalid role tags: @${invalidTags.join(', @')}. Available roles are: ${availableRolesStr}`);
       }
-    }
 
-    // Save user message
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        content,
-        tagged_role_id: resolvedRoleIds[0] || null, // Maintain backward compatibility
-      })
-      .select('id, thread_id, content, tagged_role_id')
-      .single();
+      // Get role IDs for valid tags
+      rolesToRespond = threadRoles
+        ?.filter(tr => tags.includes(tr.roles?.tag))
+        .map(tr => ({ role_id: tr.roles?.id }));
 
-    if (messageError) throw messageError;
-
-    // Get roles to respond
-    let rolesToRespond;
-    if (resolvedRoleIds.length > 0) {
-      // If roles were tagged, only they respond
-      rolesToRespond = resolvedRoleIds.map(id => ({ role_id: id }));
     } else if (chain) {
-      // Use provided chain
+      // Use provided chain if no tags
       rolesToRespond = chain;
     } else {
-      // Get thread roles
+      // Get all thread roles if no tags or chain
       const { data: threadRoles, error: threadRolesError } = await supabase
         .from('thread_roles')
         .select('role_id')
@@ -107,6 +85,19 @@ serve(async (req) => {
     }
 
     console.log('Roles responding:', rolesToRespond);
+
+    // Save user message
+    const { data: message, error: messageError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        content,
+        tagged_role_id: rolesToRespond[0]?.role_id || null,
+      })
+      .select('id, thread_id, content, tagged_role_id')
+      .single();
+
+    if (messageError) throw messageError;
 
     // Get previous messages for context
     const { data: previousMessages } = await supabase
