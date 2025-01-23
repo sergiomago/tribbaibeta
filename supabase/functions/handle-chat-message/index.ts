@@ -41,7 +41,7 @@ serve(async (req) => {
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
         .eq('roles.tag', taggedRoleId.replace(/^@/, '')) // Remove @ prefix if present
-        .maybeSingle();
+        .maybeSingle(); // Changed from single() to maybeSingle()
 
       if (threadRoleError) {
         console.error('Error looking up role in thread:', threadRoleError);
@@ -54,7 +54,7 @@ serve(async (req) => {
           .from('roles')
           .select('id, tag')
           .eq('tag', taggedRoleId.replace(/^@/, '')) // Remove @ prefix if present
-          .maybeSingle();
+          .maybeSingle(); // Changed from single() to maybeSingle()
 
         if (roleError) {
           console.error('Error looking up role:', roleError);
@@ -72,7 +72,6 @@ serve(async (req) => {
       console.log('Resolved role ID:', resolvedRoleId);
     }
 
-    // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -155,8 +154,7 @@ serve(async (req) => {
       JSON.stringify({ success: true }), 
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in handle-chat-message:', error);
     return new Response(
       JSON.stringify({ 
