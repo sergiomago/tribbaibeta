@@ -20,16 +20,17 @@ serve(async (req) => {
   }
 
   try {
+    console.log('Starting handle-chat-message function');
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
+    // Parse request body
     const { threadId, content, taggedRoleId, chain } = await req.json();
+    console.log('Received request:', { threadId, content, taggedRoleId, chain });
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
-
-    console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
     // If taggedRoleId is a string but not a UUID, assume it's a role tag and look up the ID
     let resolvedRoleId = taggedRoleId;
@@ -40,43 +41,50 @@ serve(async (req) => {
       const cleanTag = taggedRoleId.replace(/^@/, '');
       console.log('Clean tag:', cleanTag);
       
-      // First check if the role exists in the thread
-      const { data: threadRole, error: threadRoleError } = await supabase
-        .from('thread_roles')
-        .select('roles(id, tag)')
-        .eq('thread_id', threadId)
-        .eq('roles.tag', cleanTag)
-        .maybeSingle();
-
-      if (threadRoleError) {
-        console.error('Error looking up role in thread:', threadRoleError);
-        throw new Error(`Error looking up role: ${threadRoleError.message}`);
-      }
-
-      if (!threadRole) {
-        // Check if the role exists at all
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('id, tag')
-          .eq('tag', cleanTag)
+      try {
+        // First check if the role exists in the thread
+        const { data: threadRole, error: threadRoleError } = await supabase
+          .from('thread_roles')
+          .select('roles(id, tag)')
+          .eq('thread_id', threadId)
+          .eq('roles.tag', cleanTag)
           .maybeSingle();
 
-        if (roleError) {
-          console.error('Error looking up role:', roleError);
-          throw new Error(`Error looking up role: ${roleError.message}`);
+        if (threadRoleError) {
+          console.error('Error looking up role in thread:', threadRoleError);
+          throw new Error(`Error looking up role: ${threadRoleError.message}`);
         }
 
-        if (!role) {
-          throw new Error(`No role found with tag "@${cleanTag}". Please make sure you're using a valid role tag.`);
-        } else {
-          throw new Error(`The role "@${cleanTag}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+        if (!threadRole) {
+          // Check if the role exists at all
+          const { data: role, error: roleError } = await supabase
+            .from('roles')
+            .select('id, tag')
+            .eq('tag', cleanTag)
+            .maybeSingle();
+
+          if (roleError) {
+            console.error('Error looking up role:', roleError);
+            throw new Error(`Error looking up role: ${roleError.message}`);
+          }
+
+          if (!role) {
+            throw new Error(`No role found with tag "@${cleanTag}". Please make sure you're using a valid role tag.`);
+          } else {
+            throw new Error(`The role "@${cleanTag}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
+          }
         }
+
+        resolvedRoleId = threadRole.roles.id;
+        console.log('Resolved role ID:', resolvedRoleId);
+      } catch (error) {
+        console.error('Error resolving role tag:', error);
+        throw error;
       }
-
-      resolvedRoleId = threadRole.roles.id;
-      console.log('Resolved role ID:', resolvedRoleId);
     }
 
+    // Save the user message
+    console.log('Saving user message');
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -142,6 +150,7 @@ serve(async (req) => {
     // Process responses for each role
     for (const { role_id } of rolesToRespond) {
       try {
+        console.log(`Processing response for role ${role_id}`);
         const responseContent = await processMessage(
           openai,
           supabase,
@@ -172,6 +181,7 @@ serve(async (req) => {
       }
     }
 
+    console.log('Successfully processed all responses');
     return new Response(
       JSON.stringify({ success: true }), 
       { 
