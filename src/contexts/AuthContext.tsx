@@ -43,10 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
         setSession(session);
         setUser(session?.user ?? null);
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
         setSession(null);
         setUser(null);
         navigate("/login");
+      } else if (event === 'INITIAL_SESSION') {
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
       }
     });
 
@@ -63,6 +67,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (error.message.includes('Email not confirmed')) {
             return 'Please verify your email address before signing in.';
           }
+          if (error.message.includes('refresh_token_not_found')) {
+            return 'Your session has expired. Please sign in again.';
+          }
           break;
         case 422:
           return 'Invalid email format. Please enter a valid email address.';
@@ -76,9 +83,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const handleAuthError = (error: any) => {
     console.error("Auth error:", error);
     
-    // Check for refresh token errors
+    // Check for refresh token errors and session expiration
     if (error.message?.includes('refresh_token_not_found') || 
-        error.message?.includes('Invalid Refresh Token')) {
+        error.message?.includes('Invalid Refresh Token') ||
+        error.message?.includes('JWT expired')) {
       setSession(null);
       setUser(null);
       navigate("/login");
