@@ -148,11 +148,17 @@ export function ChatInput({
       const textAfterAt = newValue.slice(lastAtIndex + 1);
       // Only show suggestions if @ is at the end or followed by word characters
       if (textAfterAt.length === 0 || /^\w+$/.test(textAfterAt)) {
-        const rect = e.target.getBoundingClientRect();
+        const input = e.target;
+        const atCharPosition = input.selectionStart || 0;
+        
+        // Calculate position based on input's position and character width
+        const rect = input.getBoundingClientRect();
+        const charWidth = 8; // Approximate character width in pixels
         const position = {
-          top: rect.top,
-          left: rect.left + (lastAtIndex * 8), // Approximate char width
+          top: rect.bottom,
+          left: rect.left + (lastAtIndex * charWidth),
         };
+        
         setCursorPosition(position);
         setShowSuggestions(true);
         setSelectedIndex(0);

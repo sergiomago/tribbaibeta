@@ -40,7 +40,7 @@ serve(async (req) => {
         .from('thread_roles')
         .select('roles(id, tag)')
         .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId.replace('@', '')) // Remove @ prefix if present
+        .eq('roles.tag', taggedRoleId.replace(/^@/, '')) // Remove @ prefix if present
         .maybeSingle();
 
       if (threadRoleError) {
@@ -53,7 +53,7 @@ serve(async (req) => {
         const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('id, tag')
-          .eq('tag', taggedRoleId.replace('@', '')) // Remove @ prefix if present
+          .eq('tag', taggedRoleId.replace(/^@/, '')) // Remove @ prefix if present
           .maybeSingle();
 
         if (roleError) {
