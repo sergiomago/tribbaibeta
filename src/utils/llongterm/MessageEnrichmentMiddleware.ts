@@ -13,7 +13,7 @@ export class MessageEnrichmentMiddleware {
       // Get role's mind
       const mindId = await mindManager.getMindForRole(message.role_id);
       const client = getLlongtermClient();
-      const memories = await client.retrieve({
+      const memories = await client.search({
         mindId,
         text: message.content,
         limit: 5
