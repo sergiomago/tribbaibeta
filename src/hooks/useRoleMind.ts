@@ -37,25 +37,30 @@ export function useRoleMind(roleId: string | null) {
 
       if (roleError) throw roleError;
 
-      // Create mind using the mindManager
-      const mindId = await mindManager.getMindForRole(roleId);
+      try {
+        // Create mind using the mindManager
+        const mindId = await mindManager.getMindForRole(roleId);
 
-      // Store mind association
-      const { error: mindError } = await supabase
-        .from("role_minds")
-        .insert({
-          role_id: roleId,
-          mind_id: mindId,
-          status: "active",
-          metadata: {
-            name: role.name,
-            expertise: role.expertise_areas,
-            capabilities: role.special_capabilities
-          }
-        });
+        // Store mind association
+        const { error: mindError } = await supabase
+          .from("role_minds")
+          .insert({
+            role_id: roleId,
+            mind_id: mindId,
+            status: "active",
+            metadata: {
+              name: role.name,
+              expertise: role.expertise_areas,
+              capabilities: role.special_capabilities
+            }
+          });
 
-      if (mindError) throw mindError;
-      return mindId;
+        if (mindError) throw mindError;
+        return mindId;
+      } catch (error) {
+        console.error("Error creating mind:", error);
+        throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["role-mind", roleId] });
@@ -77,10 +82,24 @@ export function useRoleMind(roleId: string | null) {
   const updateMindStatus = useMutation({
     mutationFn: async (status: "active" | "inactive" | "error") => {
       if (!roleId) throw new Error("No role ID provided");
-      await mindManager.updateMindStatus(roleId, status);
+
+      const { error } = await supabase
+        .from("role_minds")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("role_id", roleId);
+
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["role-mind", roleId] });
+    },
+    onError: (error) => {
+      console.error("Error updating mind status:", error);
+      toast({
+        title: "Error",
+        description: "Failed to update mind status",
+        variant: "destructive",
+      });
     },
   });
 
