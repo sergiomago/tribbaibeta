@@ -13,19 +13,16 @@ export class MessageEnrichmentMiddleware {
       // Get role's mind
       const mindId = await mindManager.getMindForRole(message.role_id);
       const client = getLlongtermClient();
-      const memories = await client.query({
-        mindId,
-        text: message.content,
-        limit: 5
-      });
+      const mind = await client.getMind(mindId);
+      const response = await mind.ask(message.content);
       
       // Enrich message metadata with context
       const enrichedMetadata = {
         ...message.metadata,
         llongterm_context: {
           mind_id: mindId,
-          memories: memories.results,
-          context_score: memories.metadata?.relevance,
+          memories: response.results,
+          context_score: response.metadata?.totalResults,
           timestamp: new Date().toISOString()
         }
       };

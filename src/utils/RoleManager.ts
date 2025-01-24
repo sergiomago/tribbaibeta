@@ -49,8 +49,8 @@ export class RoleManager {
     ]);
 
     // Convert Llongterm memories to the same format as Supabase memories
-    const llongtermMemories = llongtermResponse.memories.map(memory => ({
-      id: memory.id,
+    const llongtermMemories = llongtermResponse.results.map(memory => ({
+      id: memory.timestamp, // Using timestamp as ID since Llongterm doesn't provide IDs
       content: memory.content,
       relevance: memory.relevance,
       timestamp: memory.timestamp

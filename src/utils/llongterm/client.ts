@@ -26,7 +26,7 @@ export async function initializeLlongterm(userId: string): Promise<LlongtermClie
         llongterm: llongtermKey,
         openai: openaiKey
       }
-    }) as LlongtermClient;
+    }) as unknown as LlongtermClient;
 
     return llongtermClient;
   } catch (error) {
