@@ -76,9 +76,9 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      await client.add({
+      await client.store({
         mindId,
-        content: context
+        text: context
       });
     } catch (error) {
       console.error('Error enriching role context:', error);
@@ -90,9 +90,9 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      return await client.search({
+      return await client.query({
         mindId,
-        query,
+        text: query,
         limit: 5
       });
     } catch (error) {
