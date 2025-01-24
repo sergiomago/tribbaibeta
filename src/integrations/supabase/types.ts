@@ -538,6 +538,47 @@ export type Database = {
           },
         ]
       }
+      role_minds: {
+        Row: {
+          created_at: string
+          id: string
+          last_sync: string | null
+          metadata: Json | null
+          mind_id: string
+          role_id: string
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          metadata?: Json | null
+          mind_id: string
+          role_id: string
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_sync?: string | null
+          metadata?: Json | null
+          mind_id?: string
+          role_id?: string
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_minds_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: true
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       roles: {
         Row: {
           alias: string | null

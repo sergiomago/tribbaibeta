@@ -2,6 +2,7 @@ import { createRoleCapabilityManager } from "./roles/core/RoleCapabilityManager"
 import { createRoleMemoryManager } from "./roles/core/RoleMemoryManager";
 import { createRoleInteractionManager } from "./roles/core/RoleInteractionManager";
 import { SpecialCapability } from "./roles/types/roles";
+import { mindManager } from "./llongterm/MindManager";
 
 // Special role capabilities
 export const SPECIAL_CAPABILITIES = {
@@ -33,17 +34,22 @@ export class RoleManager {
     return await this.capabilityManager.getRoleCapabilities(roleId);
   }
 
-  // Memory methods
+  // Memory methods with Llongterm integration
   async storeRoleMemory(roleId: string, content: string, contextType: string = 'conversation', metadata: any = {}) {
-    return await this.memoryManager.storeRoleMemory(roleId, content, contextType, metadata);
+    // Store in both systems during transition
+    await this.memoryManager.storeRoleMemory(roleId, content, contextType, metadata);
+    await mindManager.enrichRoleContext(roleId, content);
   }
 
   async getRoleMemories(roleId: string, content: string) {
-    return await this.memoryManager.getRoleMemories(roleId, content);
-  }
+    // Get memories from both systems during transition
+    const [supabaseMemories, llongtermMemories] = await Promise.all([
+      this.memoryManager.getRoleMemories(roleId, content),
+      mindManager.getRoleMemories(roleId, content)
+    ]);
 
-  async updateMemoryRelevance(roleId: string, memoryId: string, relevanceScore: number) {
-    return await this.memoryManager.updateMemoryRelevance(roleId, memoryId, relevanceScore);
+    // Combine and deduplicate memories
+    return [...supabaseMemories, ...llongtermMemories];
   }
 
   // Interaction methods
