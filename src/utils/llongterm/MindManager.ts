@@ -76,7 +76,7 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      await client.add({
+      await client.store({
         mindId,
         text: context
       });
@@ -90,7 +90,7 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      return await client.search({
+      return await client.query({
         mindId,
         text: query,
         limit: 5
