@@ -1,5 +1,5 @@
 import { Tables } from "@/integrations/supabase/types";
-import { Edit, MessageCircle, Trash } from "lucide-react";
+import { Edit, MessageCircle, Trash, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -16,6 +16,8 @@ import { BaseRoleCard } from "./BaseRoleCard";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useThreadMutations } from "@/hooks/useThreadMutations";
+import { useRoleMind } from "@/hooks/useRoleMind";
+import { useToast } from "@/hooks/use-toast";
 
 type UserRoleCardProps = {
   role: Tables<"roles">;
@@ -33,6 +35,8 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { createThread } = useThreadMutations();
+  const { recreateMind } = useRoleMind();
+  const { toast } = useToast();
 
   const handleStartChat = async () => {
     if (!user) return;
@@ -45,6 +49,22 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
         },
       }
     );
+  };
+
+  const handleRecreateMind = async () => {
+    try {
+      await recreateMind(role.id);
+      toast({
+        title: "Mind recreation started",
+        description: "The role's mind is being recreated. This may take a moment.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to recreate mind. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -68,6 +88,15 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
           >
             <Edit className="h-3 w-3 mr-2" />
             Edit
+          </Button>
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={handleRecreateMind}
+            className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
+          >
+            <RefreshCw className="h-3 w-3 mr-2" />
+            Recreate Mind
           </Button>
           <Button 
             size="sm"
