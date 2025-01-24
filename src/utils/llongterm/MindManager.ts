@@ -58,25 +58,11 @@ export class MindManager {
     }
   }
 
-  async updateMindStatus(roleId: string, status: "active" | "inactive" | "error"): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('role_minds')
-        .update({ status })
-        .eq('role_id', roleId);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating mind status:', error);
-      throw error;
-    }
-  }
-
   async enrichRoleContext(roleId: string, context: string): Promise<void> {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      await client.store({
+      await client.remember({
         mindId,
         text: context
       });
@@ -90,7 +76,7 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      return await client.query({
+      return await client.retrieve({
         mindId,
         text: query,
         limit: 5
