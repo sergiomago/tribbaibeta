@@ -1,4 +1,4 @@
-import { Llongterm } from 'llongterm';
+import Llongterm from 'llongterm';
 import { supabase } from '@/integrations/supabase/client';
 
 let llongtermClient: Llongterm | null = null;

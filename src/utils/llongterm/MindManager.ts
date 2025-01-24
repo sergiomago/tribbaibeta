@@ -1,4 +1,4 @@
-import { Mind } from 'llongterm';
+import { Mind } from 'llongterm/dist/types';
 import { supabase } from '@/integrations/supabase/client';
 import { getLlongtermClient } from './client';
 
