@@ -16,7 +16,7 @@ export function useRoleMind(roleId: string | null) {
         .from("role_minds")
         .select("*")
         .eq("role_id", roleId)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== "PGRST116") throw error;
       return mindInfo;
