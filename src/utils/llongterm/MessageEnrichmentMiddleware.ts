@@ -1,6 +1,6 @@
 import { Message } from "@/types";
 import { mindManager } from "./MindManager";
-import { supabase } from "@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 import { getLlongtermClient } from "./client";
 
 export class MessageEnrichmentMiddleware {
