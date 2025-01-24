@@ -16,19 +16,30 @@ type BaseRoleCardProps = {
 };
 
 export const BaseRoleCard = ({ role, children }: BaseRoleCardProps) => {
-  const { data: mindStatus } = useQuery({
+  const { data: mindStatus, isLoading } = useQuery({
     queryKey: ["role-mind", role.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("role_minds")
         .select("status, metadata")
         .eq("role_id", role.id)
-        .single();
+        .maybeSingle();
+
+      if (error && error.code !== "PGRST116") throw error;
       return data;
     },
   });
 
   const getMindStatusBadge = () => {
+    if (isLoading) {
+      return (
+        <Badge variant="outline" className="gap-1">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading
+        </Badge>
+      );
+    }
+
     if (!mindStatus) {
       return (
         <Badge variant="outline" className="gap-1">
