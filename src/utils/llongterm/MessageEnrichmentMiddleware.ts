@@ -1,6 +1,6 @@
 import { Message } from "@/types";
 import { mindManager } from "./MindManager";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client';
 import { getLlongtermClient } from "./client";
 
 export class MessageEnrichmentMiddleware {
@@ -13,10 +13,7 @@ export class MessageEnrichmentMiddleware {
       // Get role's mind
       const mindId = await mindManager.getMindForRole(message.role_id);
       const client = getLlongtermClient();
-      const mind = await client.getMind(mindId);
-      
-      // Get relevant memories using official SDK
-      const memories = await mind.recall(message.content);
+      const memories = await client.recall(mindId, message.content);
       
       // Enrich message metadata with context
       const enrichedMetadata = {
@@ -24,7 +21,7 @@ export class MessageEnrichmentMiddleware {
         llongterm_context: {
           mind_id: mindId,
           memories: memories.results,
-          context_score: memories.metadata.relevance,
+          context_score: memories.metadata?.relevance,
           timestamp: new Date().toISOString()
         }
       };

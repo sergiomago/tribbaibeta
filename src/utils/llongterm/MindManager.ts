@@ -1,4 +1,4 @@
-import { Mind } from 'llongterm/dist/types';
+import type { Mind } from 'llongterm';
 import { supabase } from '@/integrations/supabase/client';
 import { getLlongtermClient } from './client';
 
@@ -32,7 +32,7 @@ export class MindManager {
 
       // Create new mind using official SDK
       const client = getLlongtermClient();
-      const mind = await client.createMind({
+      const { mindId } = await client.create({
         name: roleData.name,
         instructions: roleData.instructions,
         metadata: {
@@ -46,7 +46,7 @@ export class MindManager {
         .from('role_minds')
         .insert({
           role_id: roleId,
-          mind_id: mind.id,
+          mind_id: mindId,
           status: 'active',
           metadata: {
             name: roleData.name,
@@ -56,7 +56,7 @@ export class MindManager {
         });
 
       if (dbError) throw dbError;
-      return mind.id;
+      return mindId;
     } catch (error) {
       console.error('Error in getMindForRole:', error);
       throw error;
@@ -81,8 +81,7 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      const mind = await client.getMind(mindId);
-      await mind.remember(context);
+      await client.remember(mindId, context);
     } catch (error) {
       console.error('Error enriching role context:', error);
       throw error;
@@ -93,8 +92,7 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      const mind = await client.getMind(mindId);
-      return await mind.recall(query);
+      return await client.recall(mindId, query);
     } catch (error) {
       console.error('Error getting role memories:', error);
       throw error;
