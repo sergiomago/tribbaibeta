@@ -43,12 +43,20 @@ export class RoleManager {
 
   async getRoleMemories(roleId: string, content: string) {
     // Get memories from both systems during transition
-    const [supabaseMemories, llongtermMemories] = await Promise.all([
+    const [supabaseMemories, llongtermResponse] = await Promise.all([
       this.memoryManager.getRoleMemories(roleId, content),
       mindManager.getRoleMemories(roleId, content)
     ]);
 
-    // Combine and deduplicate memories
+    // Convert Llongterm memories to the same format as Supabase memories
+    const llongtermMemories = llongtermResponse.memories.map(memory => ({
+      id: memory.id,
+      content: memory.content,
+      relevance: memory.relevance,
+      timestamp: memory.timestamp
+    }));
+
+    // Combine and return all memories
     return [...supabaseMemories, ...llongtermMemories];
   }
 
