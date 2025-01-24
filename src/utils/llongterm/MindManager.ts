@@ -1,5 +1,6 @@
+import { Mind } from 'llongterm';
 import { supabase } from '@/integrations/supabase/client';
-import { llongtermClient } from './LlongtermClient';
+import { getLlongtermClient } from './client';
 
 export class MindManager {
   async getMindForRole(roleId: string): Promise<string> {
@@ -29,18 +30,33 @@ export class MindManager {
       if (roleError) throw roleError;
       if (!roleData) throw new Error('Role not found');
 
-      // Create new mind with role instructions
-      const mindId = await llongtermClient.createMind(
-        roleId,
-        roleData.instructions,
-        {
-          name: roleData.name,
+      // Create new mind using official SDK
+      const client = getLlongtermClient();
+      const mind = await client.createMind({
+        name: roleData.name,
+        instructions: roleData.instructions,
+        metadata: {
           expertise: roleData.expertise_areas,
           capabilities: roleData.special_capabilities
         }
-      );
+      });
 
-      return mindId;
+      // Store mind association
+      const { error: dbError } = await supabase
+        .from('role_minds')
+        .insert({
+          role_id: roleId,
+          mind_id: mind.id,
+          status: 'active',
+          metadata: {
+            name: roleData.name,
+            expertise: roleData.expertise_areas,
+            capabilities: roleData.special_capabilities
+          }
+        });
+
+      if (dbError) throw dbError;
+      return mind.id;
     } catch (error) {
       console.error('Error in getMindForRole:', error);
       throw error;
@@ -64,7 +80,9 @@ export class MindManager {
   async enrichRoleContext(roleId: string, context: string): Promise<void> {
     try {
       const mindId = await this.getMindForRole(roleId);
-      await llongtermClient.enrichContext(mindId, context);
+      const client = getLlongtermClient();
+      const mind = await client.getMind(mindId);
+      await mind.remember(context);
     } catch (error) {
       console.error('Error enriching role context:', error);
       throw error;
@@ -74,7 +92,9 @@ export class MindManager {
   async getRoleMemories(roleId: string, query: string) {
     try {
       const mindId = await this.getMindForRole(roleId);
-      return await llongtermClient.getMindMemories(mindId, query);
+      const client = getLlongtermClient();
+      const mind = await client.getMind(mindId);
+      return await mind.recall(query);
     } catch (error) {
       console.error('Error getting role memories:', error);
       throw error;

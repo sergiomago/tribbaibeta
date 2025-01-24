@@ -1,44 +1,41 @@
 import { Message } from "@/types";
 import { mindManager } from "./MindManager";
 import { supabase } from "@/integrations/supabase/client";
-
-interface EnrichmentContext {
-  threadId: string;
-  roleId: string;
-  content: string;
-  metadata?: Record<string, any>;
-}
+import { getLlongtermClient } from "./client";
 
 export class MessageEnrichmentMiddleware {
   async enrichMessage(message: Message): Promise<Message> {
     try {
-      // Get role's mind
-      const mindId = await mindManager.getMindForRole(message.role_id!);
-      
-      // Prepare enrichment context
-      const context: EnrichmentContext = {
-        threadId: message.thread_id,
-        roleId: message.role_id!,
-        content: message.content,
-        metadata: message.metadata || {}
-      };
+      if (!message.role_id) {
+        return message;
+      }
 
-      // Get relevant memories
-      const memories = await mindManager.getRoleMemories(message.role_id!, message.content);
+      // Get role's mind
+      const mindId = await mindManager.getMindForRole(message.role_id);
+      const client = getLlongtermClient();
+      const mind = await client.getMind(mindId);
+      
+      // Get relevant memories using official SDK
+      const memories = await mind.recall(message.content);
       
       // Enrich message metadata with context
       const enrichedMetadata = {
         ...message.metadata,
         llongterm_context: {
           mind_id: mindId,
-          memories: memories.memories,
-          context_score: memories.metadata.avgRelevance,
+          memories: memories.results,
+          context_score: memories.metadata.relevance,
           timestamp: new Date().toISOString()
         }
       };
 
       // Store the enriched context
-      await this.storeEnrichmentContext(context, enrichedMetadata);
+      await this.storeEnrichmentContext({
+        threadId: message.thread_id,
+        roleId: message.role_id,
+        content: message.content,
+        metadata: enrichedMetadata
+      });
 
       // Return enriched message
       return {
@@ -47,22 +44,28 @@ export class MessageEnrichmentMiddleware {
       };
     } catch (error) {
       console.error('Error enriching message:', error);
-      // If enrichment fails, return original message
       return message;
     }
   }
 
-  private async storeEnrichmentContext(
-    context: EnrichmentContext,
-    enrichedMetadata: Record<string, any>
-  ): Promise<void> {
+  private async storeEnrichmentContext({
+    threadId,
+    roleId,
+    content,
+    metadata
+  }: {
+    threadId: string;
+    roleId: string;
+    content: string;
+    metadata: Record<string, any>;
+  }): Promise<void> {
     try {
       await supabase.from('role_memories').insert({
-        role_id: context.roleId,
-        content: context.content,
+        role_id: roleId,
+        content: content,
         context_type: 'message_enrichment',
-        metadata: enrichedMetadata,
-        thread_id: context.threadId
+        metadata: metadata,
+        thread_id: threadId
       });
     } catch (error) {
       console.error('Error storing enrichment context:', error);
