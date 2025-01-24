@@ -5,7 +5,7 @@ export class LlongtermClient {
   private baseUrl: string;
 
   constructor() {
-    this.apiKey = process.env.LLONGTERM_API_KEY || '';
+    this.apiKey = import.meta.env.VITE_LLONGTERM_API_KEY || '';
     this.baseUrl = 'https://api.llongterm.com/v1';
   }
 
