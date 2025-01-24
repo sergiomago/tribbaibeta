@@ -36,7 +36,7 @@ export function RoleSelectionDialog({
     queryFn: async () => {
       if (!threadId || !user) return [];
       
-      // Reverted query to only fetch user's personal roles
+      // First get all roles for the user
       const { data: allRoles, error: rolesError } = await supabase
         .from("roles")
         .select("*")
@@ -44,6 +44,7 @@ export function RoleSelectionDialog({
 
       if (rolesError) throw rolesError;
 
+      // Then get thread roles
       const { data: threadRoles, error: threadRolesError } = await supabase
         .from("thread_roles")
         .select("role_id")
@@ -51,8 +52,10 @@ export function RoleSelectionDialog({
 
       if (threadRolesError) throw threadRolesError;
 
+      // Create a Set of assigned role IDs for efficient lookup
       const assignedRoleIds = new Set(threadRoles?.map(tr => tr.role_id) || []);
 
+      // Map roles with assignment status
       return allRoles.map(role => ({
         ...role,
         isAssigned: assignedRoleIds.has(role.id)
