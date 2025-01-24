@@ -79,6 +79,26 @@ export function useRoleMind(roleId: string | null) {
     },
   });
 
+  const recreateMind = async (roleId: string) => {
+    try {
+      // Delete existing mind
+      const { error: deleteError } = await supabase
+        .from("role_minds")
+        .delete()
+        .eq("role_id", roleId);
+
+      if (deleteError) throw deleteError;
+
+      // Create new mind
+      await createMind.mutateAsync();
+
+      return true;
+    } catch (error) {
+      console.error("Error recreating mind:", error);
+      throw error;
+    }
+  };
+
   const updateMindStatus = useMutation({
     mutationFn: async (status: "active" | "inactive" | "error") => {
       if (!roleId) throw new Error("No role ID provided");
@@ -108,5 +128,6 @@ export function useRoleMind(roleId: string | null) {
     isMindLoading,
     createMind,
     updateMindStatus,
+    recreateMind,
   };
 }

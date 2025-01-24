@@ -35,7 +35,7 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { createThread } = useThreadMutations();
-  const { recreateMind } = useRoleMind();
+  const { recreateMind } = useRoleMind(role.id);
   const { toast } = useToast();
 
   const handleStartChat = async () => {
