@@ -47,6 +47,20 @@ export class MindManager {
     }
   }
 
+  async updateMindStatus(roleId: string, status: "active" | "inactive" | "error"): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('role_minds')
+        .update({ status })
+        .eq('role_id', roleId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating mind status:', error);
+      throw error;
+    }
+  }
+
   async enrichRoleContext(roleId: string, context: string): Promise<void> {
     try {
       const mindId = await this.getMindForRole(roleId);
