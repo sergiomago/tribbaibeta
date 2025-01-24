@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 import { getLlongtermClient } from './client';
 import type { Mind, MindCreateOptions, LlongtermMessage, MindQueryResponse } from '@/types/llongterm';
 import { toast } from '@/hooks/use-toast';
