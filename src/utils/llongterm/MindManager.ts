@@ -1,4 +1,3 @@
-import type { Mind } from 'llongterm';
 import { supabase } from '@/integrations/supabase/client';
 import { getLlongtermClient } from './client';
 
@@ -33,12 +32,9 @@ export class MindManager {
       // Create new mind using official SDK
       const client = getLlongtermClient();
       const { mindId } = await client.create({
-        name: roleData.name,
-        instructions: roleData.instructions,
-        metadata: {
-          expertise: roleData.expertise_areas,
-          capabilities: roleData.special_capabilities
-        }
+        specialism: roleData.expertise_areas?.join(', '),
+        specialismDepth: 3,
+        customStructuredKeys: ['expertise', 'capabilities']
       });
 
       // Store mind association
@@ -49,7 +45,6 @@ export class MindManager {
           mind_id: mindId,
           status: 'active',
           metadata: {
-            name: roleData.name,
             expertise: roleData.expertise_areas,
             capabilities: roleData.special_capabilities
           }
@@ -81,7 +76,10 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      await client.remember(mindId, context);
+      await client.add({
+        mindId,
+        content: context
+      });
     } catch (error) {
       console.error('Error enriching role context:', error);
       throw error;
@@ -92,7 +90,11 @@ export class MindManager {
     try {
       const mindId = await this.getMindForRole(roleId);
       const client = getLlongtermClient();
-      return await client.recall(mindId, query);
+      return await client.search({
+        mindId,
+        query,
+        limit: 5
+      });
     } catch (error) {
       console.error('Error getting role memories:', error);
       throw error;
