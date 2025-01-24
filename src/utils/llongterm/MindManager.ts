@@ -1,7 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import { getLlongtermClient } from './client';
+import type { Mind, MindCreateOptions, LlongtermMessage } from '@/types/llongterm';
 
 export class MindManager {
+  private mindCache: Map<string, Mind> = new Map();
+
   async getMindForRole(roleId: string): Promise<string> {
     try {
       // Check if role already has a mind
@@ -16,6 +19,12 @@ export class MindManager {
       }
 
       if (mindData?.mind_id) {
+        // Initialize mind instance if not in cache
+        if (!this.mindCache.has(mindData.mind_id)) {
+          const client = getLlongtermClient();
+          const mind = await client.getMind(mindData.mind_id);
+          this.mindCache.set(mindData.mind_id, mind);
+        }
         return mindData.mind_id;
       }
 
@@ -31,11 +40,15 @@ export class MindManager {
 
       // Create new mind using official SDK
       const client = getLlongtermClient();
-      const { mindId } = await client.create({
+      const options: MindCreateOptions = {
         specialism: roleData.expertise_areas?.join(', '),
         specialismDepth: 3,
         customStructuredKeys: ['expertise', 'capabilities']
-      });
+      };
+
+      const { mindId } = await client.create(options);
+      const mind = await client.getMind(mindId);
+      this.mindCache.set(mindId, mind);
 
       // Store mind association
       const { error: dbError } = await supabase
@@ -75,11 +88,19 @@ export class MindManager {
   async enrichRoleContext(roleId: string, context: string): Promise<void> {
     try {
       const mindId = await this.getMindForRole(roleId);
-      const client = getLlongtermClient();
-      await client.store({
-        mindId,
-        text: context
-      });
+      const mind = this.mindCache.get(mindId);
+      
+      if (!mind) {
+        throw new Error('Mind not found in cache');
+      }
+
+      const message: LlongtermMessage = {
+        author: 'system',
+        message: context,
+        timestamp: new Date().toISOString()
+      };
+
+      await mind.remember([message]);
     } catch (error) {
       console.error('Error enriching role context:', error);
       throw error;
@@ -89,16 +110,21 @@ export class MindManager {
   async getRoleMemories(roleId: string, query: string) {
     try {
       const mindId = await this.getMindForRole(roleId);
-      const client = getLlongtermClient();
-      return await client.query({
-        mindId,
-        text: query,
-        limit: 5
-      });
+      const mind = this.mindCache.get(mindId);
+      
+      if (!mind) {
+        throw new Error('Mind not found in cache');
+      }
+
+      return await mind.ask(query);
     } catch (error) {
       console.error('Error getting role memories:', error);
       throw error;
     }
+  }
+
+  clearCache() {
+    this.mindCache.clear();
   }
 }
 

@@ -1,9 +1,14 @@
 import Llongterm from 'llongterm';
 import { supabase } from '@/integrations/supabase/client';
+import type { LlongtermClient } from '@/types/llongterm';
 
-let llongtermClient: Llongterm | null = null;
+let llongtermClient: LlongtermClient | null = null;
 
-export async function initializeLlongterm(userId: string) {
+export async function initializeLlongterm(userId: string): Promise<LlongtermClient> {
+  if (llongtermClient) {
+    return llongtermClient;
+  }
+
   try {
     const { data: { key: llongtermKey }, error: llongtermError } = await supabase
       .functions.invoke('get-secret', { body: { name: 'LLONGTERM_API_KEY' } });
@@ -21,7 +26,7 @@ export async function initializeLlongterm(userId: string) {
         llongterm: llongtermKey,
         openai: openaiKey
       }
-    });
+    }) as LlongtermClient;
 
     return llongtermClient;
   } catch (error) {
@@ -30,7 +35,7 @@ export async function initializeLlongterm(userId: string) {
   }
 }
 
-export function getLlongtermClient() {
+export function getLlongtermClient(): LlongtermClient {
   if (!llongtermClient) {
     throw new Error('Llongterm client not initialized');
   }
