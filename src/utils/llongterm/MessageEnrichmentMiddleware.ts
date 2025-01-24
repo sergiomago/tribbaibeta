@@ -32,7 +32,7 @@ export class MessageEnrichmentMiddleware {
         llongterm_context: {
           mind_id: mindId,
           memories: memories.memories,
-          context_score: memories.contextScore,
+          context_score: memories.metadata.avgRelevance,
           timestamp: new Date().toISOString()
         }
       };
