@@ -31,38 +31,48 @@ export function RoleSelectionDialog({
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const { data: roles, refetch } = useQuery({
-    queryKey: ["roles-with-assignment", threadId],
+  // Fetch all roles for the user
+  const { data: userRoles = [] } = useQuery({
+    queryKey: ["user-roles", user?.id],
     queryFn: async () => {
-      if (!threadId || !user) return [];
+      if (!user) return [];
       
-      // First get all roles for the user
-      const { data: allRoles, error: rolesError } = await supabase
+      const { data: roles, error } = await supabase
         .from("roles")
-        .select("*")
+        .select("id, name, instructions, expertise_areas, special_capabilities")
         .eq("user_id", user.id);
 
-      if (rolesError) throw rolesError;
+      if (error) {
+        console.error("Error fetching roles:", error);
+        throw error;
+      }
+      return roles || [];
+    },
+    enabled: !!user,
+  });
 
-      // Then get thread roles
-      const { data: threadRoles, error: threadRolesError } = await supabase
+  // Fetch thread roles separately
+  const { data: threadRoles = [] } = useQuery({
+    queryKey: ["thread-roles", threadId],
+    queryFn: async () => {
+      if (!threadId) return [];
+      
+      const { data, error } = await supabase
         .from("thread_roles")
         .select("role_id")
         .eq("thread_id", threadId);
 
-      if (threadRolesError) throw threadRolesError;
-
-      // Create a Set of assigned role IDs for efficient lookup
-      const assignedRoleIds = new Set(threadRoles?.map(tr => tr.role_id) || []);
-
-      // Map roles with assignment status
-      return allRoles.map(role => ({
-        ...role,
-        isAssigned: assignedRoleIds.has(role.id)
-      }));
+      if (error) {
+        console.error("Error fetching thread roles:", error);
+        throw error;
+      }
+      return data || [];
     },
-    enabled: !!threadId && !!user,
+    enabled: !!threadId,
   });
+
+  // Create a Set of assigned role IDs for efficient lookup
+  const assignedRoleIds = new Set(threadRoles.map(tr => tr.role_id));
 
   const handleRoleClick = async (roleId: string, isAssigned: boolean) => {
     if (!threadId) return;
@@ -73,7 +83,6 @@ export function RoleSelectionDialog({
       } else {
         await onRoleSelected(roleId);
       }
-      refetch();
     } catch (error) {
       console.error("Error managing role:", error);
       toast({
@@ -102,25 +111,29 @@ export function RoleSelectionDialog({
         </DialogHeader>
         <ScrollArea className="max-h-[300px] mt-4">
           <div className="space-y-2">
-            {roles?.map((role) => (
+            {userRoles.map((role) => (
               <Button
                 key={role.id}
-                variant={role.isAssigned ? "secondary" : "outline"}
+                variant={assignedRoleIds.has(role.id) ? "secondary" : "outline"}
                 className="w-full justify-between"
-                onClick={() => handleRoleClick(role.id, role.isAssigned)}
+                onClick={() => handleRoleClick(role.id, assignedRoleIds.has(role.id))}
               >
                 <div className="flex flex-col items-start">
                   <span className="font-medium">{role.name}</span>
-                  <span className="text-xs text-muted-foreground">{role.tag}</span>
+                  {role.expertise_areas && role.expertise_areas.length > 0 && (
+                    <span className="text-xs text-muted-foreground">
+                      {role.expertise_areas.join(", ")}
+                    </span>
+                  )}
                 </div>
-                {role.isAssigned ? (
+                {assignedRoleIds.has(role.id) ? (
                   <X className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Plus className="h-4 w-4 text-muted-foreground" />
                 )}
               </Button>
             ))}
-            {roles?.length === 0 && (
+            {userRoles.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No roles available
               </p>
