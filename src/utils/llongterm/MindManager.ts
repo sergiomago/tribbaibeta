@@ -7,6 +7,47 @@ export class MindManager {
   private mindCache: Map<string, Mind> = new Map();
   private mindInitQueue: Map<string, Promise<Mind>> = new Map();
 
+  private processRoleSpecialism(name: string, description: string, expertiseAreas: string[]): string {
+    // Combine name and first sentence of description
+    const firstSentence = description?.split('.')[0] || '';
+    const baseSpecialism = `${name}: ${firstSentence}`;
+
+    // Add expertise areas if available
+    if (expertiseAreas && expertiseAreas.length > 0) {
+      return `${baseSpecialism}. Expertise in: ${expertiseAreas.join(', ')}`;
+    }
+
+    return baseSpecialism;
+  }
+
+  private calculateSpecialismDepth(instructions: string, expertiseAreas: string[]): number {
+    // Calculate depth based on complexity of role
+    const hasDetailedInstructions = instructions?.length > 500;
+    const hasMultipleExpertise = expertiseAreas?.length > 3;
+    
+    if (hasDetailedInstructions && hasMultipleExpertise) {
+      return 4; // Maximum depth for complex roles
+    } else if (hasDetailedInstructions || hasMultipleExpertise) {
+      return 3; // Standard depth for moderately complex roles
+    }
+    return 2; // Base depth for simpler roles
+  }
+
+  private buildCustomStructuredKeys(
+    expertiseAreas: string[],
+    specialCapabilities: string[],
+    primaryTopics: string[]
+  ): string[] {
+    const keys = new Set<string>();
+    
+    // Add all unique keys
+    expertiseAreas?.forEach(area => keys.add(area));
+    specialCapabilities?.forEach(cap => keys.add(cap));
+    primaryTopics?.forEach(topic => keys.add(topic));
+
+    return Array.from(keys);
+  }
+
   async getMindForRole(roleId: string): Promise<string> {
     try {
       // Check if role already has a mind
@@ -21,12 +62,11 @@ export class MindManager {
       }
 
       if (mindData?.mind_id) {
-        // Initialize mind instance if not in cache
         await this.ensureMindInstance(mindData.mind_id);
         return mindData.mind_id;
       }
 
-      // If no mind exists, get role info and create one
+      // Get role data to create mind
       const { data: roleData, error: roleError } = await supabase
         .from('roles')
         .select('*')
@@ -36,18 +76,36 @@ export class MindManager {
       if (roleError) throw roleError;
       if (!roleData) throw new Error('Role not found');
 
+      // Process role data for mind creation
+      const specialism = this.processRoleSpecialism(
+        roleData.name,
+        roleData.description || '',
+        roleData.expertise_areas || []
+      );
+
+      const specialismDepth = this.calculateSpecialismDepth(
+        roleData.instructions,
+        roleData.expertise_areas || []
+      );
+
+      const customStructuredKeys = this.buildCustomStructuredKeys(
+        roleData.expertise_areas || [],
+        roleData.special_capabilities || [],
+        roleData.primary_topics || []
+      );
+
       // Create new mind using official SDK
       const client = getLlongtermClient();
       const options: MindCreateOptions = {
-        specialism: roleData.expertise_areas?.join(', '),
-        specialismDepth: 3,
-        customStructuredKeys: ['expertise', 'capabilities']
+        specialism,
+        specialismDepth,
+        customStructuredKeys
       };
 
       const { mindId } = await client.create(options);
       await this.ensureMindInstance(mindId);
 
-      // Store mind association
+      // Store mind association with metadata
       const { error: dbError } = await supabase
         .from('role_minds')
         .insert({
@@ -55,12 +113,20 @@ export class MindManager {
           mind_id: mindId,
           status: 'active',
           metadata: {
+            specialism,
             expertise: roleData.expertise_areas,
-            capabilities: roleData.special_capabilities
+            capabilities: roleData.special_capabilities,
+            creation_date: new Date().toISOString()
           }
         });
 
       if (dbError) throw dbError;
+      
+      toast({
+        title: "Mind Created",
+        description: `Successfully created mind for role: ${roleData.name}`,
+      });
+
       return mindId;
     } catch (error) {
       console.error('Error in getMindForRole:', error);
