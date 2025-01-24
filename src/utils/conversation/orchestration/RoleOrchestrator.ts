@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
+import { messageProcessor } from "./MessageProcessor";
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -44,7 +45,8 @@ export class RoleOrchestrator {
       body: {
         threadId: this.threadId,
         content,
-        taggedRoleId
+        taggedRoleId,
+        processMessage: true // Signal to use message processing
       },
     });
 
@@ -56,7 +58,8 @@ export class RoleOrchestrator {
       body: {
         threadId: this.threadId,
         content,
-        chain
+        chain,
+        processMessage: true // Signal to use message processing
       },
     });
 
