@@ -59,7 +59,7 @@ serve(async (req) => {
         .eq('thread_id', threadId);
 
       if (threadRolesError) throw threadRolesError;
-      rolesToRespond = threadRoles;
+      rolesToRespond = threadRoles || [];
     }
 
     if (!rolesToRespond?.length) {
