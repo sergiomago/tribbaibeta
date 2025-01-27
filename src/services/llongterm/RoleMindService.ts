@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { mindService } from './MindService';
 import type { CreateOptions, Mind } from 'llongterm';
+import { LlongtermError } from '@/lib/llongterm/errors';
 
 export class RoleMindService {
   async createMindForRole(roleId: string, options: CreateOptions): Promise<Mind> {
@@ -8,12 +9,24 @@ export class RoleMindService {
       // Update status to processing
       await this.updateMindStatus(roleId, 'processing');
 
+      // Get role details for mind metadata
+      const { data: role, error: roleError } = await supabase
+        .from('roles')
+        .select('name, description, tag, instructions')
+        .eq('id', roleId)
+        .single();
+
+      if (roleError) throw new Error('Failed to fetch role details');
+
       // Create mind using Llongterm
       const mind = await mindService.createMind({
         ...options,
         metadata: {
           ...options.metadata,
           role_id: roleId,
+          role_name: role.name,
+          role_tag: role.tag,
+          role_instructions: role.instructions,
           created_at: new Date().toISOString()
         }
       });
@@ -25,7 +38,11 @@ export class RoleMindService {
           mind_id: mind.id,
           status: 'active',
           updated_at: new Date().toISOString(),
-          last_sync: new Date().toISOString()
+          last_sync: new Date().toISOString(),
+          metadata: {
+            ...options.metadata,
+            role_details: role
+          }
         })
         .eq('role_id', roleId);
 
