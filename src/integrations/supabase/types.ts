@@ -806,6 +806,15 @@ export type Database = {
             }
             Returns: unknown
           }
+      calculate_memory_confidence: {
+        Args: {
+          p_memory_id: string
+          p_verification_count: number
+          p_contradiction_count: number
+          p_context_matches: number
+        }
+        Returns: number
+      }
       calculate_role_effectiveness: {
         Args: {
           p_role_id: string
