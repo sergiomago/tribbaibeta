@@ -8,11 +8,9 @@ export class MindManager {
   private mindInitQueue: Map<string, Promise<Mind>> = new Map();
 
   private processRoleSpecialism(name: string, description: string, expertiseAreas: string[]): string {
-    // Combine name and first sentence of description
     const firstSentence = description?.split('.')[0] || '';
     const baseSpecialism = `${name}: ${firstSentence}`;
 
-    // Add expertise areas if available
     if (expertiseAreas && expertiseAreas.length > 0) {
       return `${baseSpecialism}. Expertise in: ${expertiseAreas.join(', ')}`;
     }
@@ -21,16 +19,15 @@ export class MindManager {
   }
 
   private calculateSpecialismDepth(instructions: string, expertiseAreas: string[]): number {
-    // Calculate depth based on complexity of role
     const hasDetailedInstructions = instructions?.length > 500;
     const hasMultipleExpertise = expertiseAreas?.length > 3;
     
     if (hasDetailedInstructions && hasMultipleExpertise) {
-      return 4; // Maximum depth for complex roles
+      return 4;
     } else if (hasDetailedInstructions || hasMultipleExpertise) {
-      return 3; // Standard depth for moderately complex roles
+      return 3;
     }
-    return 2; // Base depth for simpler roles
+    return 2;
   }
 
   private buildCustomStructuredKeys(
@@ -40,7 +37,6 @@ export class MindManager {
   ): string[] {
     const keys = new Set<string>();
     
-    // Add all unique keys
     expertiseAreas?.forEach(area => keys.add(area));
     specialCapabilities?.forEach(cap => keys.add(cap));
     primaryTopics?.forEach(topic => keys.add(topic));
@@ -50,7 +46,6 @@ export class MindManager {
 
   async getMindForRole(roleId: string): Promise<string> {
     try {
-      // Check if role already has a mind
       const { data: mindData, error: mindError } = await supabase
         .from('role_minds')
         .select('*')
@@ -66,7 +61,6 @@ export class MindManager {
         return mindData.mind_id;
       }
 
-      // Get role data to create mind
       const { data: roleData, error: roleError } = await supabase
         .from('roles')
         .select('*')
@@ -76,7 +70,6 @@ export class MindManager {
       if (roleError) throw roleError;
       if (!roleData) throw new Error('Role not found');
 
-      // Process role data for mind creation
       const specialism = this.processRoleSpecialism(
         roleData.name,
         roleData.description || '',
@@ -94,7 +87,6 @@ export class MindManager {
         roleData.primary_topics || []
       );
 
-      // Create new mind using official SDK
       const client = getLlongtermClient();
       const options: MindCreateOptions = {
         specialism,
@@ -105,7 +97,6 @@ export class MindManager {
       const { mindId } = await client.create(options);
       await this.ensureMindInstance(mindId);
 
-      // Store mind association with metadata
       const { error: dbError } = await supabase
         .from('role_minds')
         .insert({
@@ -140,17 +131,14 @@ export class MindManager {
   }
 
   private async ensureMindInstance(mindId: string): Promise<Mind> {
-    // Check cache first
     if (this.mindCache.has(mindId)) {
       return this.mindCache.get(mindId)!;
     }
 
-    // Check if initialization is in progress
     if (this.mindInitQueue.has(mindId)) {
       return await this.mindInitQueue.get(mindId)!;
     }
 
-    // Initialize new mind instance
     const initPromise = this.initializeMind(mindId);
     this.mindInitQueue.set(mindId, initPromise);
 
@@ -175,17 +163,15 @@ export class MindManager {
 
   async enrichRoleContext(roleId: string, content: string): Promise<void> {
     console.log('Mind context enrichment not yet implemented', { roleId, content });
-    // Will be implemented in future updates
   }
 
   async getRoleMemories(roleId: string, query: string): Promise<MindQueryResponse> {
     console.log('Mind memory retrieval not yet implemented', { roleId, query });
-    // Return empty response until we implement full mind functionality
     return {
       results: [],
       metadata: {
         totalResults: 0,
-        searchTime: 0
+        processingTime: 0
       }
     };
   }
