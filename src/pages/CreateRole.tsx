@@ -25,7 +25,20 @@ const CreateRole = () => {
         .single();
 
       if (error) throw error;
-      return data;
+
+      // Transform the data to match RoleFormValues
+      const formValues: RoleFormValues = {
+        id: data.id,
+        name: data.name,
+        alias: data.alias || undefined,
+        tag: data.tag,
+        description: data.description || '',
+        instructions: data.instructions,
+        model: data.model === 'gpt-4o' ? 'gpt-4o' : 'gpt-4o-mini',
+        special_capabilities: data.special_capabilities || []
+      };
+
+      return formValues;
     },
     enabled: !!id,
   });
