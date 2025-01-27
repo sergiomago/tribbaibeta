@@ -541,32 +541,41 @@ export type Database = {
       role_minds: {
         Row: {
           created_at: string
+          error_message: string | null
           id: string
+          last_error_at: string | null
           last_sync: string | null
           metadata: Json | null
           mind_id: string
+          retry_count: number | null
           role_id: string
-          status: string | null
+          status: Database["public"]["Enums"]["mind_status"] | null
           updated_at: string
         }
         Insert: {
           created_at?: string
+          error_message?: string | null
           id?: string
+          last_error_at?: string | null
           last_sync?: string | null
           metadata?: Json | null
           mind_id: string
+          retry_count?: number | null
           role_id: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["mind_status"] | null
           updated_at?: string
         }
         Update: {
           created_at?: string
+          error_message?: string | null
           id?: string
+          last_error_at?: string | null
           last_sync?: string | null
           metadata?: Json | null
           mind_id?: string
+          retry_count?: number | null
           role_id?: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["mind_status"] | null
           updated_at?: string
         }
         Relationships: [
@@ -1099,6 +1108,14 @@ export type Database = {
         }
         Returns: number
       }
+      update_mind_status: {
+        Args: {
+          p_role_id: string
+          p_status: string
+          p_error_message?: string
+        }
+        Returns: undefined
+      }
       update_role_combination_success: {
         Args: {
           p_initiator_role_id: string
@@ -1165,6 +1182,7 @@ export type Database = {
         | "poor"
         | "needs_improvement"
       message_type: "text" | "file" | "analysis"
+      mind_status: "pending" | "creating" | "active" | "failed" | "deleted"
     }
     CompositeTypes: {
       [_ in never]: never
