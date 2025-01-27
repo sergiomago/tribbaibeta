@@ -44,24 +44,20 @@ export function RoleSelectionDialog({
 
       if (rolesError) throw rolesError;
 
-      // Get thread role assignments
-      const roleAssignments = await Promise.all(
-        allRoles.map(async (role) => {
-          const { data: threadRole } = await supabase
-            .from("thread_roles")
-            .select("thread_id, role_id")
-            .eq("thread_id", threadId)
-            .eq("role_id", role.id)
-            .maybeSingle();
+      // Get all thread role assignments in one query
+      const { data: threadRoles } = await supabase
+        .from("thread_roles")
+        .select("role_id")
+        .eq("thread_id", threadId);
 
-          return {
-            ...role,
-            isAssigned: !!threadRole
-          };
-        })
-      );
+      // Create a Set of assigned role IDs for efficient lookup
+      const assignedRoleIds = new Set(threadRoles?.map(tr => tr.role_id) || []);
 
-      return roleAssignments;
+      // Map roles with their assignment status
+      return allRoles.map(role => ({
+        ...role,
+        isAssigned: assignedRoleIds.has(role.id)
+      }));
     },
     enabled: !!threadId && !!user,
   });

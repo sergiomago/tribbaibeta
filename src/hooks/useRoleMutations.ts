@@ -8,18 +8,18 @@ export function useRoleMutations() {
 
   const addRoleToThread = useMutation({
     mutationFn: async ({ threadId, roleId }: { threadId: string; roleId: string }) => {
-      // First check if role exists in thread
-      const { data: existingRole } = await supabase
+      // First get all current role assignments for this thread
+      const { data: existingAssignments } = await supabase
         .from("thread_roles")
-        .select()
-        .eq("thread_id", threadId)
-        .eq("role_id", roleId)
-        .single();
+        .select("role_id")
+        .eq("thread_id", threadId);
 
-      if (existingRole) {
+      // Check if role is already assigned
+      if (existingAssignments?.some(assignment => assignment.role_id === roleId)) {
         throw new Error("Role already exists in thread");
       }
 
+      // If not assigned, add the role
       const { error } = await supabase
         .from("thread_roles")
         .insert({
