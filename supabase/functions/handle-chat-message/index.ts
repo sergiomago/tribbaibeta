@@ -13,16 +13,16 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
   try {
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
+    }
+
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
     const { threadId, content, taggedRoleId } = await req.json();
-
     console.log('Processing message:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
@@ -40,27 +40,49 @@ serve(async (req) => {
       .select('id, thread_id, content, tagged_role_id')
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error saving user message:', messageError);
+      throw messageError;
+    }
 
-    // Get conversation chain (simplified approach)
+    console.log('User message saved:', message);
+
+    // Get conversation chain
     const { data: chain, error: chainError } = await supabase
       .rpc('get_conversation_chain', { 
         p_thread_id: threadId,
         p_tagged_role_id: taggedRoleId 
       });
 
-    if (chainError) throw chainError;
-    console.log('Got conversation chain:', chain);
+    if (chainError) {
+      console.error('Error getting conversation chain:', chainError);
+      throw chainError;
+    }
+
+    if (!chain || chain.length === 0) {
+      console.log('No roles found in chain');
+      return new Response(
+        JSON.stringify({ success: true, message: 'No roles to respond' }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Processing chain:', chain);
 
     // Process responses for each role in chain
     for (const { role_id, chain_order } of chain) {
       try {
         // Get role details
-        const { data: role } = await supabase
+        const { data: role, error: roleError } = await supabase
           .from('roles')
           .select('*')
           .eq('id', role_id)
-          .single();
+          .maybeSingle();
+
+        if (roleError) {
+          console.error(`Error fetching role ${role_id}:`, roleError);
+          continue;
+        }
 
         if (!role) {
           console.error(`Role ${role_id} not found`);
@@ -68,12 +90,17 @@ serve(async (req) => {
         }
 
         // Get recent conversation history
-        const { data: history } = await supabase
+        const { data: history, error: historyError } = await supabase
           .from('messages')
           .select('content, role_id, roles(name)')
           .eq('thread_id', threadId)
           .order('created_at', { ascending: false })
           .limit(5);
+
+        if (historyError) {
+          console.error('Error fetching conversation history:', historyError);
+          continue;
+        }
 
         const conversationContext = history 
           ? history.reverse()
@@ -81,9 +108,11 @@ serve(async (req) => {
               .join('\n\n')
           : '';
 
+        console.log(`Generating response for role ${role.name}`);
+
         // Generate response using OpenAI
         const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
+          model: role.model || 'gpt-4-turbo-preview',
           messages: [
             { 
               role: 'system', 
@@ -99,11 +128,14 @@ serve(async (req) => {
 
         const responseContent = completion.choices[0].message.content;
         if (!responseContent) {
-          throw new Error('No response generated from OpenAI');
+          console.error('No response generated from OpenAI');
+          continue;
         }
 
+        console.log(`Saving response for role ${role.name}`);
+
         // Save role's response
-        await supabase
+        const { error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
@@ -113,9 +145,14 @@ serve(async (req) => {
             chain_order
           });
 
+        if (responseError) {
+          console.error(`Error saving response for role ${role_id}:`, responseError);
+          continue;
+        }
+
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
-        throw error;
+        continue;
       }
     }
 
