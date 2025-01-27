@@ -141,7 +141,7 @@ serve(async (req) => {
             role_id: role_id,
             content: responseContent,
             chain_id: message.id,
-            chain_order
+            chain_order: chain_order || 1 // Provide safe default
           });
 
         if (responseError) {
