@@ -47,7 +47,7 @@ serve(async (req) => {
 
     console.log('User message saved:', message);
 
-    // Get conversation chain using our new simplified function
+    // Get conversation chain using simplified function
     const { data: chain, error: chainError } = await supabase
       .rpc('get_simple_conversation_chain', { 
         p_thread_id: threadId
@@ -109,13 +109,13 @@ serve(async (req) => {
 
         console.log(`Generating response for role ${role.name}`);
 
-        // Generate response using OpenAI
+        // Generate response using OpenAI with safe defaults
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4-turbo-preview',
           messages: [
             { 
               role: 'system', 
-              content: `You are ${role.name}, ${role.description || 'an AI assistant'}.\n\n${role.instructions}` 
+              content: `You are ${role.name}, ${role.description || 'an AI assistant'}.\n\n${role.instructions || 'Be helpful and concise.'}` 
             },
             { 
               role: 'system', 
@@ -133,7 +133,7 @@ serve(async (req) => {
 
         console.log(`Saving response for role ${role.name}`);
 
-        // Save role's response
+        // Save role's response with safe defaults
         const { error: responseError } = await supabase
           .from('messages')
           .insert({
