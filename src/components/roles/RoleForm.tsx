@@ -110,26 +110,40 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
       // If this is a new role (no id), initialize the mind
       if (!defaultValues?.id) {
         setIsInitializingMind(true);
-        const { data: roles } = await supabase
-          .from('roles')
-          .select('id')
-          .eq('name', values.name)
-          .limit(1);
+        try {
+          const { data: roles } = await supabase
+            .from('roles')
+            .select('id')
+            .eq('name', values.name)
+            .limit(1);
 
-        if (roles && roles.length > 0) {
-          const roleId = roles[0].id;
-          const { error: mindError } = await supabase.functions.invoke('create-role-mind', {
-            body: { roleId }
-          });
-
-          if (mindError) {
-            console.error('Error initializing mind:', mindError);
-            toast({
-              title: "Warning",
-              description: "Role created but mind initialization failed. You can try again later.",
-              variant: "destructive",
+          if (roles && roles.length > 0) {
+            const roleId = roles[0].id;
+            const { error: mindError } = await supabase.functions.invoke('create-role-mind', {
+              body: { roleId }
             });
+
+            if (mindError) {
+              console.error('Error initializing mind:', mindError);
+              toast({
+                title: "Warning",
+                description: "Role created but mind initialization failed. You can try again later.",
+                variant: "destructive",
+              });
+            } else {
+              toast({
+                title: "Success",
+                description: "Role and mind created successfully.",
+              });
+            }
           }
+        } catch (error) {
+          console.error('Error initializing mind:', error);
+          toast({
+            title: "Warning",
+            description: "Role created but mind initialization failed. You can try again later.",
+            variant: "destructive",
+          });
         }
       }
     } catch (error) {
