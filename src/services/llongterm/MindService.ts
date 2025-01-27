@@ -1,7 +1,7 @@
 import { llongtermClient } from '@/lib/llongterm/client';
 import { validateCreateOptions, validateMessage } from '@/lib/llongterm/validation';
 import type { CreateOptions, Mind, Message, RememberResponse, KnowledgeResponse } from 'llongterm';
-import { MindNotFoundError } from '@/lib/llongterm/errors';
+import { LlongtermError } from './errors';
 
 export class MindService {
   async createMind(options: CreateOptions): Promise<Mind> {

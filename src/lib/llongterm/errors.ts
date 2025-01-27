@@ -7,14 +7,7 @@ export class LlongtermError extends Error {
 
 export class MindNotFoundError extends LlongtermError {
   constructor(mindId: string) {
-    super(`Mind with ID ${mindId} not found`);
+    super(`Mind not found with ID: ${mindId}`);
     this.name = 'MindNotFoundError';
-  }
-}
-
-export class MindCreationError extends LlongtermError {
-  constructor(message: string) {
-    super(`Failed to create mind: ${message}`);
-    this.name = 'MindCreationError';
   }
 }
