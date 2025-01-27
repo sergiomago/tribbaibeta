@@ -22,55 +22,13 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId, chain } = await req.json();
+    const { threadId, content, taggedRoleId, roles } = await req.json();
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    console.log('Processing message:', { threadId, content, taggedRoleId, chain });
-
-    // If taggedRoleId is a string but not a UUID, assume it's a role tag and look up the ID
-    let resolvedRoleId = taggedRoleId;
-    if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      console.log('Looking up role ID for tag:', taggedRoleId);
-      
-      // First check if the role exists in the thread
-      const { data: threadRole, error: threadRoleError } = await supabase
-        .from('thread_roles')
-        .select('roles(id, tag)')
-        .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId)
-        .maybeSingle();
-
-      if (threadRoleError) {
-        console.error('Error looking up role in thread:', threadRoleError);
-        throw new Error(`Error looking up role: ${threadRoleError.message}`);
-      }
-
-      if (!threadRole) {
-        // Check if the role exists at all
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('id, tag')
-          .eq('tag', taggedRoleId)
-          .maybeSingle();
-
-        if (roleError) {
-          console.error('Error looking up role:', roleError);
-          throw new Error(`Error looking up role: ${roleError.message}`);
-        }
-
-        if (!role) {
-          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
-        } else {
-          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
-        }
-      }
-
-      resolvedRoleId = threadRole.roles.id;
-      console.log('Resolved role ID:', resolvedRoleId);
-    }
+    console.log('Processing message:', { threadId, content, taggedRoleId, roles });
 
     // Save user message
     const { data: message, error: messageError } = await supabase
@@ -78,7 +36,7 @@ serve(async (req) => {
       .insert({
         thread_id: threadId,
         content,
-        tagged_role_id: resolvedRoleId || null,
+        tagged_role_id: taggedRoleId || null,
       })
       .select('id, thread_id, content, tagged_role_id')
       .single();
@@ -87,12 +45,12 @@ serve(async (req) => {
 
     // Get roles to respond
     let rolesToRespond;
-    if (resolvedRoleId) {
+    if (taggedRoleId) {
       // If tagged, only that role responds
-      rolesToRespond = [{ role_id: resolvedRoleId }];
-    } else if (chain) {
-      // Use provided chain
-      rolesToRespond = chain;
+      rolesToRespond = [{ role_id: taggedRoleId }];
+    } else if (roles) {
+      // Use provided roles
+      rolesToRespond = roles;
     } else {
       // Get thread roles
       const { data: threadRoles, error: threadRolesError } = await supabase
@@ -110,20 +68,6 @@ serve(async (req) => {
 
     console.log('Roles responding:', rolesToRespond);
 
-    // Get previous messages for context
-    const { data: previousMessages } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        role:roles(
-          name,
-          tag
-        )
-      `)
-      .eq('thread_id', threadId)
-      .eq('chain_id', message.id)
-      .order('created_at', { ascending: true });
-
     // Process responses for each role
     for (const { role_id } of rolesToRespond) {
       try {
@@ -132,8 +76,7 @@ serve(async (req) => {
           supabase,
           threadId,
           role_id,
-          message,
-          previousMessages || []
+          message
         );
 
         // Save role's response
@@ -148,7 +91,7 @@ serve(async (req) => {
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
-        throw error; // Re-throw to handle in outer catch
+        throw error;
       }
     }
 

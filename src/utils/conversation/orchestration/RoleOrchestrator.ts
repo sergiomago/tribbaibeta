@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -19,19 +18,20 @@ export class RoleOrchestrator {
         return;
       }
 
-      // 2. For untagged messages, get conversation chain
-      const { data: chain } = await supabase.rpc(
-        'get_conversation_chain',
-        { 
-          p_thread_id: this.threadId,
-          p_tagged_role_id: null
-        }
-      );
+      // 2. For untagged messages, get thread roles in order
+      const { data: threadRoles } = await supabase
+        .from('thread_roles')
+        .select('role_id')
+        .eq('thread_id', this.threadId);
 
-      console.log('Conversation chain:', chain);
+      if (!threadRoles?.length) {
+        throw new Error('No roles found in thread');
+      }
 
-      // 3. Process message through chain
-      await this.processMessageThroughChain(content, chain);
+      console.log('Thread roles:', threadRoles);
+
+      // 3. Process message through roles
+      await this.processMessageThroughRoles(content, threadRoles);
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
@@ -51,12 +51,12 @@ export class RoleOrchestrator {
     if (error) throw error;
   }
 
-  private async processMessageThroughChain(content: string, chain: any[]): Promise<void> {
+  private async processMessageThroughRoles(content: string, threadRoles: { role_id: string }[]): Promise<void> {
     const { error } = await supabase.functions.invoke("handle-chat-message", {
       body: {
         threadId: this.threadId,
         content,
-        chain
+        roles: threadRoles
       },
     });
 
