@@ -50,7 +50,7 @@ export async function processMessage(
     })
     .join('\n\n');
 
-  // Create memory context string
+  // Create memory context string with safe access
   const memoryContext = relevantMemories?.length 
     ? `Relevant memories:\n${relevantMemories.map(m => m.content).join('\n\n')}`
     : '';
@@ -77,7 +77,7 @@ ${role.instructions}`;
 
   const responseContent = completion.choices[0].message.content;
 
-  // Store response as memory
+  // Store response as memory with safe scoring
   try {
     await storeMessageMemory(supabase, roleId, threadId, {
       content: responseContent,
@@ -116,9 +116,23 @@ async function storeMessageMemory(
   threadId: string,
   message: any
 ) {
-  // Ensure we have valid values before calculating scores
+  // Calculate safe importance score
   const baseScore = 0.5; // Default base score
-  const importanceScore = Math.max(0, Math.min(1, baseScore)); // Clamp between 0 and 1
+  const contextMultiplier = message.metadata?.is_response ? 1.2 : 1.0;
+  const importanceScore = Math.max(0, Math.min(1, baseScore * contextMultiplier));
+
+  // Ensure metadata is always an object
+  const metadata = {
+    thread_id: threadId,
+    message_id: message.id,
+    timestamp: new Date().toISOString(),
+    memory_type: 'conversation',
+    importance_score: importanceScore,
+    conversation_context: {
+      is_response: message.metadata?.is_response || false,
+      to_message_id: message.metadata?.to_message_id
+    }
+  };
 
   await supabase
     .from('role_memories')
@@ -126,16 +140,6 @@ async function storeMessageMemory(
       role_id: roleId,
       content: message.content,
       context_type: 'conversation',
-      metadata: {
-        thread_id: threadId,
-        message_id: message.id,
-        timestamp: new Date().toISOString(),
-        memory_type: 'conversation',
-        importance_score: importanceScore,
-        conversation_context: {
-          is_response: message.metadata?.is_response || false,
-          to_message_id: message.metadata?.to_message_id
-        }
-      }
+      metadata
     });
 }
