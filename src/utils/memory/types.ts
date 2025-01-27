@@ -2,70 +2,78 @@ import { Json } from "@/integrations/supabase/types";
 
 export interface MemoryMetadata {
   timestamp: number;
-  context_type: string;
-  interaction_count: number;
-  importance_score: number;
-  consolidated: boolean;
-  verification_count?: number;
-  contradiction_count?: number;
-  context_matches?: number;
-  last_verification?: string;
-  message_id?: string;
-  verification_status?: 'verified' | 'partially_verified' | 'needs_verification' | 'contradicted';
-  verification_score?: number;
+  source?: string;
+  context?: string;
+  interaction_count?: number;
+  importance_score?: number;
+  consolidated?: boolean;
+  context_type?: string;
+  expires_at?: string;
   last_accessed?: string;
-  relevance_score?: number;
   source_count?: number;
   source_ids?: string[];
+  relevance_score?: number;
 }
 
 export interface Memory {
   id: string;
   content: string;
   metadata: MemoryMetadata;
-  embedding?: string;
-  relevance_score?: number;
+  embedding?: number[];
+  relevanceScore?: number;
 }
 
 export interface DatabaseMemory {
   id: string;
   role_id: string;
   content: string;
-  embedding: string | null;
+  embedding: string;
   context_type: string;
-  metadata: MemoryMetadata;
+  metadata: Json;
   created_at: string;
   relevance_score?: number;
+  last_accessed?: string;
+  access_count?: number;
   context_relevance?: number;
+  topic_vector?: string;
 }
 
-export const toJsonMetadata = (metadata: MemoryMetadata): Record<string, any> => {
+export type JsonMetadata = Json & MemoryMetadata;
+
+// Helper functions for type conversion
+export const toJsonMetadata = (metadata: MemoryMetadata): Json => {
+  // First convert to unknown, then to Json to satisfy TypeScript
   return {
-    ...metadata,
-    timestamp: metadata.timestamp || Date.now(),
-    verification_count: metadata.verification_count || 0,
-    contradiction_count: metadata.contradiction_count || 0,
-    context_matches: metadata.context_matches || 0
-  };
+    timestamp: metadata.timestamp,
+    source: metadata.source,
+    context: metadata.context,
+    interaction_count: metadata.interaction_count,
+    importance_score: metadata.importance_score,
+    consolidated: metadata.consolidated,
+    context_type: metadata.context_type,
+    expires_at: metadata.expires_at,
+    last_accessed: metadata.last_accessed,
+    source_count: metadata.source_count,
+    source_ids: metadata.source_ids,
+    relevance_score: metadata.relevance_score
+  } as unknown as Json;
 };
 
-export const fromJsonMetadata = (json: Record<string, any>): MemoryMetadata => {
+export const fromJsonMetadata = (json: Json): MemoryMetadata => {
+  // First convert to unknown, then to MemoryMetadata to satisfy TypeScript
+  const metadata = json as { [key: string]: Json };
   return {
-    timestamp: json.timestamp || Date.now(),
-    context_type: json.context_type || 'conversation',
-    interaction_count: json.interaction_count || 0,
-    importance_score: json.importance_score || 0.5,
-    consolidated: json.consolidated || false,
-    verification_count: json.verification_count || 0,
-    contradiction_count: json.contradiction_count || 0,
-    context_matches: json.context_matches || 0,
-    last_verification: json.last_verification,
-    verification_status: json.verification_status,
-    verification_score: json.verification_score,
-    message_id: json.message_id,
-    last_accessed: json.last_accessed,
-    relevance_score: json.relevance_score,
-    source_count: json.source_count,
-    source_ids: json.source_ids
+    timestamp: metadata.timestamp as number,
+    source: metadata.source as string | undefined,
+    context: metadata.context as string | undefined,
+    interaction_count: metadata.interaction_count as number | undefined,
+    importance_score: metadata.importance_score as number | undefined,
+    consolidated: metadata.consolidated as boolean | undefined,
+    context_type: metadata.context_type as string | undefined,
+    expires_at: metadata.expires_at as string | undefined,
+    last_accessed: metadata.last_accessed as string | undefined,
+    source_count: metadata.source_count as number | undefined,
+    source_ids: metadata.source_ids as string[] | undefined,
+    relevance_score: metadata.relevance_score as number | undefined
   };
 };

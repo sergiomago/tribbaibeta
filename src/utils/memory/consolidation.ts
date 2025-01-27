@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { MemoryMetadata, DatabaseMemory, fromJsonMetadata } from "./types";
+import { MemoryMetadata, DatabaseMemory } from "./types";
 import { createEmbedding } from "../embeddings";
 import { summarizeMemories } from "../summarization";
 
@@ -28,20 +28,14 @@ async function findSimilarMemories(
 
 export async function consolidateMemories(roleId: string): Promise<void> {
   try {
-    const { data: rawMemories, error } = await supabase
+    const { data: memories, error } = await supabase
       .from('role_memories')
       .select('*')
       .eq('role_id', roleId)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    if (!rawMemories || rawMemories.length < CONSOLIDATION_THRESHOLD) return;
-
-    // Convert raw memories to DatabaseMemory type with proper metadata
-    const memories: DatabaseMemory[] = rawMemories.map(memory => ({
-      ...memory,
-      metadata: fromJsonMetadata(memory.metadata as Record<string, any>)
-    }));
+    if (!memories || memories.length < CONSOLIDATION_THRESHOLD) return;
 
     const processedIds = new Set<string>();
     const consolidatedGroups: DatabaseMemory[][] = [];
@@ -67,7 +61,6 @@ export async function consolidateMemories(roleId: string): Promise<void> {
       const contents = group.map(m => m.content);
       const summary = await summarizeMemories(contents);
       const summaryEmbedding = await createEmbedding(summary);
-
       const oldestTimestamp = Math.min(...group.map(m => new Date(m.created_at).getTime()));
 
       // Create new consolidated memory
@@ -82,13 +75,7 @@ export async function consolidateMemories(roleId: string): Promise<void> {
             timestamp: oldestTimestamp,
             consolidated: true,
             source_count: group.length,
-            source_ids: group.map(m => m.id),
-            context_type: 'consolidated',
-            interaction_count: 0,
-            importance_score: 1.0,
-            verification_count: 0,
-            contradiction_count: 0,
-            context_matches: 0
+            source_ids: group.map(m => m.id)
           }
         });
 

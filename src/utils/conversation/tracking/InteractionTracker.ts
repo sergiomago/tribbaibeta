@@ -21,11 +21,6 @@ export class InteractionTracker {
       }
     );
 
-    // Calculate simplified scores based on boolean flags
-    const expertiseMatchScore = metadata.expertiseMatch ? 1.0 : 0.0;
-    const contextMatchScore = metadata.contextMatch ? 1.0 : 0.0;
-    const interactionSuccess = metadata.success ?? true;
-
     const { error } = await supabase
       .from('role_interactions')
       .insert({
@@ -34,9 +29,6 @@ export class InteractionTracker {
         responder_role_id: responderRoleId,
         interaction_type: type,
         conversation_depth: (depth || 0) + 1,
-        expertise_match_score: expertiseMatchScore,
-        context_match_score: contextMatchScore,
-        interaction_success: interactionSuccess,
         metadata: {
           ...metadata,
           timestamp: new Date().toISOString(),

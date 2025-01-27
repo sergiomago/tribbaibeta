@@ -19,7 +19,7 @@ export async function buildResponseChain(
         .select('role_id')
         .eq('thread_id', threadId)
         .eq('role_id', taggedRoleId)
-        .maybeSingle();
+        .single();
 
       if (!threadRole) {
         console.log('Tagged role not found in thread');
@@ -33,45 +33,35 @@ export async function buildResponseChain(
       }];
     }
 
-    // Get thread roles with error handling
+    // If no role is tagged, continue with existing logic for role selection
+    // Get thread roles
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
       .select('role_id')
       .eq('thread_id', threadId);
 
-    if (threadRolesError) {
-      console.error('Error fetching thread roles:', threadRolesError);
-      throw threadRolesError;
-    }
+    if (threadRolesError) throw threadRolesError;
     
     if (!threadRoles?.length) {
       console.log('No roles found for thread');
       return [];
     }
 
-    // Calculate effectiveness for all roles with safe defaults
+    // Calculate effectiveness for all roles
     const scoredRoles = await Promise.all(
       threadRoles.map(async (tr) => {
-        try {
-          const { data: score } = await supabase.rpc(
-            'calculate_role_effectiveness',
-            {
-              p_role_id: tr.role_id,
-              p_thread_id: threadId,
-              p_context: content
-            }
-          );
-          return {
-            roleId: tr.role_id,
-            score: score || 0
-          };
-        } catch (error) {
-          console.error('Error calculating role effectiveness:', error);
-          return {
-            roleId: tr.role_id,
-            score: 0
-          };
-        }
+        const { data: score } = await supabase.rpc(
+          'calculate_role_effectiveness',
+          {
+            p_role_id: tr.role_id,
+            p_thread_id: threadId,
+            p_context: content
+          }
+        );
+        return {
+          roleId: tr.role_id,
+          score: score || 0
+        };
       })
     );
 

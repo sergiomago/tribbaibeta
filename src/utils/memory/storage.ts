@@ -29,10 +29,7 @@ export class MemoryStorage {
         context_type: contextType,
         interaction_count: 1,
         importance_score: 0.5,
-        consolidated: false,
-        verification_count: 0,
-        contradiction_count: 0,
-        context_matches: 0
+        consolidated: false
       };
 
       const { error } = await supabase
@@ -42,9 +39,7 @@ export class MemoryStorage {
           content,
           embedding: JSON.stringify(embedding),
           context_type: contextType,
-          metadata: toJsonMetadata(metadata),
-          verification_status: 'needs_verification',
-          verification_score: 0
+          metadata: toJsonMetadata(metadata)
         });
 
       if (error) throw error;
@@ -77,14 +72,12 @@ export class MemoryStorage {
       if (fetchError) throw fetchError;
       if (!memory) continue;
 
-      const currentMetadata = fromJsonMetadata(memory.metadata as Record<string, any>);
+      const currentMetadata = fromJsonMetadata(memory.metadata);
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
         timestamp: currentMetadata.timestamp || Date.now(),
         interaction_count: (currentMetadata.interaction_count || 0) + 1,
-        verification_count: (currentMetadata.verification_count || 0) + 1,
-        context_matches: (currentMetadata.context_matches || 0) + 1,
-        last_verification: new Date().toISOString()
+        last_accessed: new Date().toISOString()
       };
 
       const { error: updateError } = await supabase
