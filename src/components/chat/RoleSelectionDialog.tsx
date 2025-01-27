@@ -49,7 +49,7 @@ export function RoleSelectionDialog({
         allRoles.map(async (role) => {
           const { data: threadRole } = await supabase
             .from("thread_roles")
-            .select("id")
+            .select("thread_id, role_id")
             .eq("thread_id", threadId)
             .eq("role_id", role.id)
             .maybeSingle();
