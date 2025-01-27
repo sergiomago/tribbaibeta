@@ -5,22 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useState } from "react";
-import { useRoleMind } from "@/hooks/useRoleMind";
 
 const CreateRole = () => {
   const { toast } = useToast();
   const { session } = useAuth();
   const navigate = useNavigate();
   const [isCreating, setIsCreating] = useState(false);
-  const { createMind } = useRoleMind(null);
 
   const handleSubmit = async (values: RoleFormValues) => {
     if (!session?.user.id) return;
     
     setIsCreating(true);
     try {
-      // Create role in Supabase
-      const { data: role, error } = await supabase
+      const { error } = await supabase
         .from('roles')
         .insert({
           name: values.name,
@@ -29,25 +26,18 @@ const CreateRole = () => {
           description: values.description,
           instructions: values.instructions,
           model: values.model,
-          special_capabilities: values.special_capabilities,
           user_id: session.user.id
-        })
-        .select()
-        .single();
+        });
 
       if (error) throw error;
 
-      // Create mind for the new role
-      await createMind.mutateAsync();
-
       toast({
         title: "Success",
-        description: "Role created successfully with associated mind",
+        description: "Role created successfully",
       });
       
       navigate('/roles');
     } catch (error) {
-      console.error('Error creating role:', error);
       toast({
         title: "Error",
         description: `Failed to create role: ${error.message}`,

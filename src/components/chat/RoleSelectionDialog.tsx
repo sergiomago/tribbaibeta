@@ -31,48 +31,35 @@ export function RoleSelectionDialog({
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Fetch all roles for the user
-  const { data: userRoles = [] } = useQuery({
-    queryKey: ["user-roles", user?.id],
+  const { data: roles, refetch } = useQuery({
+    queryKey: ["roles-with-assignment", threadId],
     queryFn: async () => {
-      if (!user) return [];
+      if (!threadId || !user) return [];
       
-      const { data: roles, error } = await supabase
+      // Reverted query to only fetch user's personal roles
+      const { data: allRoles, error: rolesError } = await supabase
         .from("roles")
-        .select("id, name, instructions, expertise_areas, special_capabilities")
+        .select("*")
         .eq("user_id", user.id);
 
-      if (error) {
-        console.error("Error fetching roles:", error);
-        throw error;
-      }
-      return roles || [];
-    },
-    enabled: !!user,
-  });
+      if (rolesError) throw rolesError;
 
-  // Fetch thread roles separately
-  const { data: threadRoles = [] } = useQuery({
-    queryKey: ["thread-roles", threadId],
-    queryFn: async () => {
-      if (!threadId) return [];
-      
-      const { data, error } = await supabase
+      const { data: threadRoles, error: threadRolesError } = await supabase
         .from("thread_roles")
         .select("role_id")
         .eq("thread_id", threadId);
 
-      if (error) {
-        console.error("Error fetching thread roles:", error);
-        throw error;
-      }
-      return data || [];
-    },
-    enabled: !!threadId,
-  });
+      if (threadRolesError) throw threadRolesError;
 
-  // Create a Set of assigned role IDs for efficient lookup
-  const assignedRoleIds = new Set(threadRoles.map(tr => tr.role_id));
+      const assignedRoleIds = new Set(threadRoles?.map(tr => tr.role_id) || []);
+
+      return allRoles.map(role => ({
+        ...role,
+        isAssigned: assignedRoleIds.has(role.id)
+      }));
+    },
+    enabled: !!threadId && !!user,
+  });
 
   const handleRoleClick = async (roleId: string, isAssigned: boolean) => {
     if (!threadId) return;
@@ -83,6 +70,7 @@ export function RoleSelectionDialog({
       } else {
         await onRoleSelected(roleId);
       }
+      refetch();
     } catch (error) {
       console.error("Error managing role:", error);
       toast({
@@ -111,29 +99,25 @@ export function RoleSelectionDialog({
         </DialogHeader>
         <ScrollArea className="max-h-[300px] mt-4">
           <div className="space-y-2">
-            {userRoles.map((role) => (
+            {roles?.map((role) => (
               <Button
                 key={role.id}
-                variant={assignedRoleIds.has(role.id) ? "secondary" : "outline"}
+                variant={role.isAssigned ? "secondary" : "outline"}
                 className="w-full justify-between"
-                onClick={() => handleRoleClick(role.id, assignedRoleIds.has(role.id))}
+                onClick={() => handleRoleClick(role.id, role.isAssigned)}
               >
                 <div className="flex flex-col items-start">
                   <span className="font-medium">{role.name}</span>
-                  {role.expertise_areas && role.expertise_areas.length > 0 && (
-                    <span className="text-xs text-muted-foreground">
-                      {role.expertise_areas.join(", ")}
-                    </span>
-                  )}
+                  <span className="text-xs text-muted-foreground">{role.tag}</span>
                 </div>
-                {assignedRoleIds.has(role.id) ? (
+                {role.isAssigned ? (
                   <X className="h-4 w-4 text-muted-foreground" />
                 ) : (
                   <Plus className="h-4 w-4 text-muted-foreground" />
                 )}
               </Button>
             ))}
-            {userRoles.length === 0 && (
+            {roles?.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No roles available
               </p>

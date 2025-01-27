@@ -14,7 +14,6 @@ import { ChatContent } from "./ChatContent";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { RoleMindMigration } from "@/components/roles/RoleMindMigration";
 
 export function ChatLayout() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -109,12 +108,9 @@ export function ChatLayout() {
             {isSidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
           {!isSidebarCollapsed && (
-            <>
-              <div className="px-2">
-                <SearchBar onResultSelect={handleSearchResultSelect} />
-              </div>
-              <RoleMindMigration />
-            </>
+            <div className="px-2">
+              <SearchBar onResultSelect={handleSearchResultSelect} />
+            </div>
           )}
           <div className="flex-1 overflow-hidden">
             <ThreadPanel

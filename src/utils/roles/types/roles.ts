@@ -38,6 +38,3 @@ export interface TaggingMetadata {
   tagging_timestamp: string;
   special_capabilities: string[];
 }
-
-// Add the missing SpecialCapability type
-export type SpecialCapability = 'web_search' | 'doc_analysis';

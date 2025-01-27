@@ -538,47 +538,6 @@ export type Database = {
           },
         ]
       }
-      role_minds: {
-        Row: {
-          created_at: string
-          id: string
-          last_sync: string | null
-          metadata: Json | null
-          mind_id: string
-          role_id: string
-          status: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          last_sync?: string | null
-          metadata?: Json | null
-          mind_id: string
-          role_id: string
-          status?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          last_sync?: string | null
-          metadata?: Json | null
-          mind_id?: string
-          role_id?: string
-          status?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "role_minds_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: true
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       roles: {
         Row: {
           alias: string | null
@@ -598,12 +557,10 @@ export type Database = {
           primary_topics: string[] | null
           response_priority: number | null
           response_style: Json | null
-          role_combinations: Json | null
           source: string
           special_capabilities: string[] | null
           tag: string
           template_id: string | null
-          topic_match_history: Json | null
           updated_at: string
           user_id: string | null
         }
@@ -625,12 +582,10 @@ export type Database = {
           primary_topics?: string[] | null
           response_priority?: number | null
           response_style?: Json | null
-          role_combinations?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
-          topic_match_history?: Json | null
           updated_at?: string
           user_id?: string | null
         }
@@ -652,12 +607,10 @@ export type Database = {
           primary_topics?: string[] | null
           response_priority?: number | null
           response_style?: Json | null
-          role_combinations?: Json | null
           source?: string
           special_capabilities?: string[] | null
           tag?: string
           template_id?: string | null
-          topic_match_history?: Json | null
           updated_at?: string
           user_id?: string | null
         }
@@ -1098,14 +1051,6 @@ export type Database = {
           "": unknown[]
         }
         Returns: number
-      }
-      update_role_combination_success: {
-        Args: {
-          p_initiator_role_id: string
-          p_responder_role_id: string
-          p_success_score: number
-        }
-        Returns: undefined
       }
       vector_avg: {
         Args: {

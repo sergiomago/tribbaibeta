@@ -1,44 +1,24 @@
-export interface Message {
-  id: string;
-  thread_id: string;
-  role_id: string | null;
+export interface ChatMessage {
+  threadId: string;
   content: string;
-  created_at: string;
-  tagged_role_id: string | null;
-  reply_to_message_id: string | null;
-  response_order: number | null;
-  chain_id: string | null;
-  chain_order: number | null;
-  role?: {
-    name: string;
-    tag: string;
-  };
+  taggedRoleId?: string;
 }
 
-export interface Role {
-  id: string;
-  name: string;
-  tag: string;
-  description?: string;
-  instructions: string;
-  model: string;
-  expertise_areas?: string[];
-  special_capabilities?: string[];
-  response_style?: Record<string, any>;
-  interaction_preferences?: Record<string, any>;
+export interface ResponseChain {
+  roleId: string;
+  chainOrder: number;
+}
+
+export interface AnalysisResult {
+  intent: string;
+  context: string;
+  specialRequirements?: string[];
+  suggestedRoles?: string[];
 }
 
 export interface MessageContext {
-  memories: Array<{
-    id: string;
-    content: string;
-    similarity: number;
-  }>;
-  previousInteractions: Array<{
-    id: string;
-    initiator: { name: string };
-    responder: { name: string };
-  }>;
+  memories?: any[];
+  previousInteractions?: any[];
   conversationDepth: number;
   chainContext: {
     lastUpdated: string;

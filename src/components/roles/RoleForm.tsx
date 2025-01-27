@@ -40,7 +40,6 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const { planType, hasSubscription } = useSubscription();
-  const [isCheckingTag, setIsCheckingTag] = useState(false);
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
@@ -56,85 +55,54 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
   });
 
   const handleSubmit = async (values: RoleFormValues) => {
-    setIsCheckingTag(true);
-    try {
-      // Check for duplicate tag
-      const { data: existingRole, error: tagCheckError } = await supabase
+    // Check role limits for Creator plan
+    if (!defaultValues?.id && planType === 'creator') {
+      const { count, error: countError } = await supabase
         .from('roles')
-        .select('id')
+        .select('id', { count: 'exact' })
         .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .eq('tag', values.tag)
-        .maybeSingle();
+        .not('is_template', 'eq', true);
 
-      if (tagCheckError) throw tagCheckError;
-
-      if (existingRole && (!defaultValues?.id || existingRole.id !== defaultValues.id)) {
+      if (countError) {
         toast({
-          title: "Tag Already Exists",
-          description: "You already have a role with this tag. Please choose a different tag.",
+          title: "Error",
+          description: "Could not verify role count. Please try again.",
           variant: "destructive",
         });
         return;
       }
 
-      // Check role limits for Creator plan
-      if (!defaultValues?.id && planType === 'creator') {
-        const { count, error: countError } = await supabase
-          .from('roles')
-          .select('id', { count: 'exact' })
-          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-          .not('is_template', 'eq', true);
-
-        if (countError) {
-          toast({
-            title: "Error",
-            description: "Could not verify role count. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        if (count && count >= 7) {
-          toast({
-            title: "Role Limit Reached",
-            description: "Creator plan is limited to 7 roles. Please upgrade to Maestro plan for unlimited roles.",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-
-      // Check special capabilities access
-      if (values.special_capabilities.length > 0 && (!hasSubscription || planType !== 'maestro')) {
+      if (count && count >= 7) {
         toast({
-          title: "Special Capabilities Not Available",
-          description: "Special capabilities are only available with the Maestro plan. Please upgrade to access these features.",
+          title: "Role Limit Reached",
+          description: "Creator plan is limited to 7 roles. Please upgrade to Maestro plan for unlimited roles.",
           variant: "destructive",
         });
         return;
       }
+    }
 
-      // Check model access
-      if (values.model === "gpt-4o" && (!hasSubscription || planType !== 'maestro')) {
-        toast({
-          title: "Model Not Available",
-          description: "GPT-4 is only available with the Maestro plan. Please upgrade to access this model.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      onSubmit(values);
-    } catch (error) {
-      console.error('Error in form submission:', error);
+    // Check special capabilities access
+    if (values.special_capabilities.length > 0 && (!hasSubscription || planType !== 'maestro')) {
       toast({
-        title: "Error",
-        description: "An error occurred while submitting the form. Please try again.",
+        title: "Special Capabilities Not Available",
+        description: "Special capabilities are only available with the Maestro plan. Please upgrade to access these features.",
         variant: "destructive",
       });
-    } finally {
-      setIsCheckingTag(false);
+      return;
     }
+
+    // Check model access
+    if (values.model === "gpt-4o" && (!hasSubscription || planType !== 'maestro')) {
+      toast({
+        title: "Model Not Available",
+        description: "GPT-4 is only available with the Maestro plan. Please upgrade to access this model.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onSubmit(values);
   };
 
   const generateContent = async (type: 'tag' | 'alias' | 'instructions') => {
@@ -237,12 +205,12 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
         <Button
           type="submit"
           className="w-full"
-          disabled={isCreating || isCheckingTag}
+          disabled={isCreating}
         >
-          {isCreating || isCheckingTag ? (
+          {isCreating ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {isCheckingTag ? "Checking..." : "Creating..."}
+              Creating...
             </>
           ) : defaultValues ? "Update Role" : "Create Role"}
         </Button>
