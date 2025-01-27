@@ -111,7 +111,7 @@ serve(async (req) => {
 
         // Generate response using OpenAI with safe defaults
         const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4-turbo-preview',
+          model: role.model || 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
@@ -133,7 +133,7 @@ serve(async (req) => {
 
         console.log(`Saving response for role ${role.name}`);
 
-        // Save role's response with safe defaults
+        // Save role's response with chain information
         const { error: responseError } = await supabase
           .from('messages')
           .insert({
@@ -141,7 +141,7 @@ serve(async (req) => {
             role_id: role_id,
             content: responseContent,
             chain_id: message.id,
-            chain_order: chain_order || 1 // Provide safe default
+            chain_order: chain_order
           });
 
         if (responseError) {
