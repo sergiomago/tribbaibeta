@@ -7,18 +7,22 @@ export const MessageSchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+const MemorySectionSchema = z.object({
+  content: z.string(),
+  timestamp: z.number(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const MemoryStructureSchema = z.object({
+  summary: z.string(),
+  unstructured: z.record(z.unknown()),
+  structured: z.record(z.string(), MemorySectionSchema),
+});
+
 export const CreateOptionsSchema = z.object({
   specialism: z.string().optional(),
   specialismDepth: z.number().min(1).max(10).optional(),
-  initialMemory: z.object({
-    summary: z.string(),
-    unstructured: z.record(z.unknown()),
-    structured: z.record(z.object({
-      content: z.string(),
-      timestamp: z.number(),
-      metadata: z.record(z.unknown()).optional(),
-    })),
-  }).optional(),
+  initialMemory: MemoryStructureSchema.optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 

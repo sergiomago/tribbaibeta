@@ -49,7 +49,4 @@ declare module 'llongterm' {
     success: boolean;
     mindId: string;
   }
-
-  export function create(options: CreateOptions): Promise<Mind>;
-  export function get(id: string): Promise<Mind>;
 }
