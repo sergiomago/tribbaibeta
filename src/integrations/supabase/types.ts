@@ -318,13 +318,16 @@ export type Database = {
         Row: {
           chain_effectiveness: number | null
           chain_position: number | null
+          context_match_score: number | null
           conversation_depth: number | null
           created_at: string
           effectiveness_score: number | null
+          expertise_match_score: number | null
           expertise_relevance: number | null
           id: string
           initiator_role_id: string
           interaction_context: Json | null
+          interaction_success: boolean | null
           interaction_type: string
           metadata: Json | null
           parent_interaction_id: string | null
@@ -340,13 +343,16 @@ export type Database = {
         Insert: {
           chain_effectiveness?: number | null
           chain_position?: number | null
+          context_match_score?: number | null
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_match_score?: number | null
           expertise_relevance?: number | null
           id?: string
           initiator_role_id: string
           interaction_context?: Json | null
+          interaction_success?: boolean | null
           interaction_type: string
           metadata?: Json | null
           parent_interaction_id?: string | null
@@ -362,13 +368,16 @@ export type Database = {
         Update: {
           chain_effectiveness?: number | null
           chain_position?: number | null
+          context_match_score?: number | null
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_match_score?: number | null
           expertise_relevance?: number | null
           id?: string
           initiator_role_id?: string
           interaction_context?: Json | null
+          interaction_success?: boolean | null
           interaction_type?: string
           metadata?: Json | null
           parent_interaction_id?: string | null
@@ -534,6 +543,57 @@ export type Database = {
             columns: ["role_id"]
             isOneToOne: false
             referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_metrics: {
+        Row: {
+          created_at: string | null
+          effectiveness_score: number | null
+          id: string
+          interaction_success_rate: number | null
+          last_calculated: string | null
+          response_quality: number | null
+          role_id: string | null
+          thread_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          id?: string
+          interaction_success_rate?: number | null
+          last_calculated?: string | null
+          response_quality?: number | null
+          role_id?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          id?: string
+          interaction_success_rate?: number | null
+          last_calculated?: string | null
+          response_quality?: number | null
+          role_id?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_metrics_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_metrics_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
             referencedColumns: ["id"]
           },
         ]
@@ -806,19 +866,12 @@ export type Database = {
             }
             Returns: unknown
           }
-      calculate_role_effectiveness: {
+      calculate_memory_confidence: {
         Args: {
-          p_role_id: string
-          p_thread_id: string
-          p_context: string
-        }
-        Returns: number
-      }
-      calculate_role_specialization_score: {
-        Args: {
-          p_role_id: string
-          p_context: string
-          p_thread_id: string
+          p_memory_id: string
+          p_verification_count: number
+          p_contradiction_count: number
+          p_context_matches: number
         }
         Returns: number
       }
@@ -856,19 +909,6 @@ export type Database = {
           user_id: string
         }
         Returns: number
-      }
-      get_best_responding_role: {
-        Args: {
-          p_thread_id: string
-          p_context: string
-          p_threshold?: number
-          p_max_roles?: number
-        }
-        Returns: {
-          role_id: string
-          score: number
-          chain_order: number
-        }[]
       }
       get_chain_depth: {
         Args: {
@@ -935,6 +975,15 @@ export type Database = {
           id: string
           content: string
           similarity: number
+        }[]
+      }
+      get_simple_conversation_chain: {
+        Args: {
+          p_thread_id: string
+        }
+        Returns: {
+          role_id: string
+          chain_order: number
         }[]
       }
       get_tagged_roles: {
