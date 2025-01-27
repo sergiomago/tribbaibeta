@@ -27,7 +27,7 @@ export async function processMessage(
       throw new Error('Role not found');
     }
 
-    // Get recent conversation history
+    // Get recent conversation history - limit to last 5 messages for context
     const { data: history } = await supabase
       .from('messages')
       .select('content, roles(name)')
@@ -39,7 +39,7 @@ export async function processMessage(
       ? history.reverse().map(msg => `${msg.roles?.name || 'User'}: ${msg.content}`).join('\n\n')
       : '';
 
-    // Generate response
+    // Generate response using OpenAI
     const completion = await openai.chat.completions.create({
       model: role.model || 'gpt-4o-mini',
       messages: [
