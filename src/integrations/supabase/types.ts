@@ -875,22 +875,6 @@ export type Database = {
         }
         Returns: number
       }
-      calculate_role_effectiveness: {
-        Args: {
-          p_role_id: string
-          p_thread_id: string
-          p_context: string
-        }
-        Returns: number
-      }
-      calculate_role_specialization_score: {
-        Args: {
-          p_role_id: string
-          p_context: string
-          p_thread_id: string
-        }
-        Returns: number
-      }
       calculate_text_similarity: {
         Args: {
           text1: string
@@ -925,19 +909,6 @@ export type Database = {
           user_id: string
         }
         Returns: number
-      }
-      get_best_responding_role: {
-        Args: {
-          p_thread_id: string
-          p_context: string
-          p_threshold?: number
-          p_max_roles?: number
-        }
-        Returns: {
-          role_id: string
-          score: number
-          chain_order: number
-        }[]
       }
       get_chain_depth: {
         Args: {
