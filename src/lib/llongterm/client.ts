@@ -1,4 +1,6 @@
 import { LLONGTERM_API_KEY } from '@/config/secrets';
+import { LlongtermError } from './errors';
+import type { CreateOptions, Mind, DeleteResponse } from 'llongterm';
 
 class LlongtermClient {
   private static instance: LlongtermClient;

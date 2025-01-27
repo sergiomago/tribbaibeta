@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/supabase';
 import { mindService } from './MindService';
 import type { CreateOptions, Mind } from 'llongterm';
 
@@ -14,7 +14,7 @@ export class RoleMindService {
         role_id: roleId,
         mind_id: mind.id,
         status: 'active',
-        metadata: options.metadata || {}
+        metadata: JSON.stringify(options.metadata || {})
       });
 
     if (error) {
