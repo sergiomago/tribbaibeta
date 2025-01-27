@@ -173,59 +173,6 @@ export class MindManager {
     }
   }
 
-  async updateMindStatus(roleId: string, status: "active" | "inactive" | "error"): Promise<void> {
-    try {
-      const { error } = await supabase
-        .from('role_minds')
-        .update({ status })
-        .eq('role_id', roleId);
-
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating mind status:', error);
-      throw error;
-    }
-  }
-
-  async enrichRoleContext(roleId: string, context: string): Promise<void> {
-    try {
-      const mindId = await this.getMindForRole(roleId);
-      const mind = await this.ensureMindInstance(mindId);
-      
-      const message: LlongtermMessage = {
-        author: 'system',
-        message: context,
-        timestamp: new Date().toISOString()
-      };
-
-      await mind.remember([message]);
-    } catch (error) {
-      console.error('Error enriching role context:', error);
-      toast({
-        title: "Error Enriching Context",
-        description: "Failed to update role's context",
-        variant: "destructive"
-      });
-      throw error;
-    }
-  }
-
-  async getRoleMemories(roleId: string, query: string): Promise<MindQueryResponse> {
-    try {
-      const mindId = await this.getMindForRole(roleId);
-      const mind = await this.ensureMindInstance(mindId);
-      return await mind.ask(query);
-    } catch (error) {
-      console.error('Error getting role memories:', error);
-      toast({
-        title: "Error Retrieving Memories",
-        description: "Failed to retrieve role memories",
-        variant: "destructive"
-      });
-      throw error;
-    }
-  }
-
   clearCache() {
     this.mindCache.clear();
     this.mindInitQueue.clear();

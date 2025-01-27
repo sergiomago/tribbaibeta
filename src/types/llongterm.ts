@@ -5,6 +5,21 @@ export interface LlongtermMessage {
   metadata?: Record<string, any>;
 }
 
+export interface Mind {
+  memory: {
+    summary: string;
+    unstructured: Record<string, unknown>;
+    structured: Record<string, {
+      summary: string;
+      unstructured: Record<string, unknown>;
+      structured: Record<string, unknown>;
+    }>;
+  };
+  remember(messages: LlongtermMessage[]): Promise<{ success: boolean }>;
+  ask(question: string): Promise<MindQueryResponse>;
+  kill(): Promise<{ success: boolean }>;
+}
+
 export interface MindResponse {
   success: boolean;
   mindId: string;
@@ -27,12 +42,6 @@ export interface MindCreateOptions {
   specialism?: string;
   specialismDepth?: number;
   customStructuredKeys?: string[];
-}
-
-export interface Mind {
-  remember(messages: LlongtermMessage[]): Promise<{ success: boolean }>;
-  ask(question: string): Promise<MindQueryResponse>;
-  kill(): Promise<{ success: boolean }>;
 }
 
 export interface LlongtermClient {
