@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { processMessage } from "./messageProcessor.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -22,13 +21,13 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId, roles } = await req.json();
+    const { threadId, content, taggedRoleId } = await req.json();
+
+    console.log('Processing message:', { threadId, content, taggedRoleId });
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
-
-    console.log('Processing message:', { threadId, content, taggedRoleId, roles });
 
     // Save user message
     const { data: message, error: messageError } = await supabase
@@ -43,41 +42,65 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get roles to respond
-    let rolesToRespond;
-    if (taggedRoleId) {
-      // If tagged, only that role responds
-      rolesToRespond = [{ role_id: taggedRoleId }];
-    } else if (roles) {
-      // Use provided roles
-      rolesToRespond = roles;
-    } else {
-      // Get thread roles
-      const { data: threadRoles, error: threadRolesError } = await supabase
-        .from('thread_roles')
-        .select('role_id')
-        .eq('thread_id', threadId);
+    // Get conversation chain (simplified approach)
+    const { data: chain, error: chainError } = await supabase
+      .rpc('get_conversation_chain', { 
+        p_thread_id: threadId,
+        p_tagged_role_id: taggedRoleId 
+      });
 
-      if (threadRolesError) throw threadRolesError;
-      rolesToRespond = threadRoles || [];
-    }
+    if (chainError) throw chainError;
+    console.log('Got conversation chain:', chain);
 
-    if (!rolesToRespond?.length) {
-      throw new Error('No roles found to respond');
-    }
-
-    console.log('Roles responding:', rolesToRespond);
-
-    // Process responses for each role
-    for (const { role_id } of rolesToRespond) {
+    // Process responses for each role in chain
+    for (const { role_id, chain_order } of chain) {
       try {
-        const responseContent = await processMessage(
-          openai,
-          supabase,
-          threadId,
-          role_id,
-          message
-        );
+        // Get role details
+        const { data: role } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', role_id)
+          .single();
+
+        if (!role) {
+          console.error(`Role ${role_id} not found`);
+          continue;
+        }
+
+        // Get recent conversation history
+        const { data: history } = await supabase
+          .from('messages')
+          .select('content, role_id, roles(name)')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const conversationContext = history 
+          ? history.reverse()
+              .map(msg => `${msg.roles?.name || 'User'}: ${msg.content}`)
+              .join('\n\n')
+          : '';
+
+        // Generate response using OpenAI
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: `You are ${role.name}, ${role.description || 'an AI assistant'}.\n\n${role.instructions}` 
+            },
+            { 
+              role: 'system', 
+              content: `Recent conversation:\n${conversationContext}` 
+            },
+            { role: 'user', content }
+          ],
+        });
+
+        const responseContent = completion.choices[0].message.content;
+        if (!responseContent) {
+          throw new Error('No response generated from OpenAI');
+        }
 
         // Save role's response
         await supabase
@@ -87,6 +110,7 @@ serve(async (req) => {
             role_id: role_id,
             content: responseContent,
             chain_id: message.id,
+            chain_order
           });
 
       } catch (error) {
