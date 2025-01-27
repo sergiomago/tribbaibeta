@@ -83,13 +83,16 @@ ${role.instructions}`;
 
     const responseContent = completion.choices[0].message.content;
 
-    // Store response as memory
+    // Store response as memory with safe defaults and null checks
     try {
       await storeMessageMemory(supabase, roleId, threadId, {
         content: responseContent,
         metadata: {
           is_response: true,
-          to_message_id: userMessage.id
+          to_message_id: userMessage.id,
+          importance_score: 1.0,  // Safe default
+          confidence_score: 1.0,  // Safe default
+          relevance_score: 1.0    // Safe default
         }
       });
     } catch (error) {
@@ -100,7 +103,7 @@ ${role.instructions}`;
     return responseContent;
   } catch (error) {
     console.error('Error in processMessage:', error);
-    throw error; // Re-throw to be handled by the caller
+    throw error;
   }
 }
 
@@ -108,7 +111,7 @@ async function getRelevantMemories(supabase: SupabaseClient, roleId: string, con
   try {
     const { data: memories, error } = await supabase
       .from('role_memories')
-      .select('content, metadata, importance_score')
+      .select('content, metadata')
       .eq('role_id', roleId)
       .order('importance_score', { ascending: false })
       .limit(5);
@@ -143,7 +146,9 @@ async function storeMessageMemory(
           message_id: message.id,
           timestamp: new Date().toISOString(),
           memory_type: 'conversation',
-          importance_score: 1.0,
+          importance_score: 1.0,    // Safe default
+          confidence_score: 1.0,    // Safe default
+          relevance_score: 1.0,     // Safe default
           conversation_context: {
             is_response: message.metadata?.is_response || false,
             to_message_id: message.metadata?.to_message_id
