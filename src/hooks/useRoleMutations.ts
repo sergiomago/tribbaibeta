@@ -29,7 +29,7 @@ export function useRoleMutations() {
 
       if (error) throw error;
 
-      // Initialize role interaction metrics
+      // Initialize role interaction metrics with neutral scores
       await supabase
         .from("role_interactions")
         .insert({

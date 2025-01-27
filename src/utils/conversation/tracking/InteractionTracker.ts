@@ -21,7 +21,7 @@ export class InteractionTracker {
       }
     );
 
-    // Calculate simplified scores
+    // Calculate simplified scores based on boolean flags
     const expertiseMatchScore = metadata.expertiseMatch ? 1.0 : 0.0;
     const contextMatchScore = metadata.contextMatch ? 1.0 : 0.0;
     const interactionSuccess = metadata.success ?? true;
