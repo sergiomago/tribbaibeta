@@ -102,7 +102,8 @@ async function getRelevantMemories(supabase: SupabaseClient, roleId: string, con
       .order('importance_score', { ascending: false })
       .limit(5);
 
-    return memories;
+    // Ensure we don't try to access properties of null/undefined memories
+    return memories || [];
   } catch (error) {
     console.error('Error retrieving memories:', error);
     return [];
@@ -115,6 +116,10 @@ async function storeMessageMemory(
   threadId: string,
   message: any
 ) {
+  // Ensure we have valid values before calculating scores
+  const baseScore = 0.5; // Default base score
+  const importanceScore = Math.max(0, Math.min(1, baseScore)); // Clamp between 0 and 1
+
   await supabase
     .from('role_memories')
     .insert({
@@ -126,7 +131,7 @@ async function storeMessageMemory(
         message_id: message.id,
         timestamp: new Date().toISOString(),
         memory_type: 'conversation',
-        importance_score: 1.0,
+        importance_score: importanceScore,
         conversation_context: {
           is_response: message.metadata?.is_response || false,
           to_message_id: message.metadata?.to_message_id
