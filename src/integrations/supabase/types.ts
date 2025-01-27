@@ -547,6 +547,57 @@ export type Database = {
           },
         ]
       }
+      role_metrics: {
+        Row: {
+          created_at: string | null
+          effectiveness_score: number | null
+          id: string
+          interaction_success_rate: number | null
+          last_calculated: string | null
+          response_quality: number | null
+          role_id: string | null
+          thread_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          id?: string
+          interaction_success_rate?: number | null
+          last_calculated?: string | null
+          response_quality?: number | null
+          role_id?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          effectiveness_score?: number | null
+          id?: string
+          interaction_success_rate?: number | null
+          last_calculated?: string | null
+          response_quality?: number | null
+          role_id?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_metrics_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "role_metrics_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_minds: {
         Row: {
           created_at: string
@@ -953,6 +1004,15 @@ export type Database = {
           id: string
           content: string
           similarity: number
+        }[]
+      }
+      get_simple_conversation_chain: {
+        Args: {
+          p_thread_id: string
+        }
+        Returns: {
+          role_id: string
+          chain_order: number
         }[]
       }
       get_tagged_roles: {

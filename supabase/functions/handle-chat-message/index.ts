@@ -47,11 +47,10 @@ serve(async (req) => {
 
     console.log('User message saved:', message);
 
-    // Get conversation chain
+    // Get conversation chain using our new simplified function
     const { data: chain, error: chainError } = await supabase
-      .rpc('get_conversation_chain', { 
-        p_thread_id: threadId,
-        p_tagged_role_id: taggedRoleId 
+      .rpc('get_simple_conversation_chain', { 
+        p_thread_id: threadId
       });
 
     if (chainError) {
