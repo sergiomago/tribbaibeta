@@ -44,12 +44,12 @@ export function RoleSelectionDialog({
 
       if (rolesError) throw rolesError;
 
-      // Get thread role assignments, using maybeSingle() for each role
+      // Get thread role assignments more efficiently
       const roleAssignments = await Promise.all(
         allRoles.map(async (role) => {
           const { data: threadRole } = await supabase
             .from("thread_roles")
-            .select("*")
+            .select("id")
             .eq("thread_id", threadId)
             .eq("role_id", role.id)
             .maybeSingle();
