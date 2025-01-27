@@ -148,6 +148,7 @@ serve(async (req) => {
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
+        throw error; // Re-throw to handle in outer catch
       }
     }
 
