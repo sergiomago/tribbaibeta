@@ -1,49 +1,42 @@
-import { createClient } from '@supabase/supabase-js';
-import { corsHeaders } from '../_shared/cors.ts';
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { corsHeaders } from '../_shared/cors.ts'
 
-interface RoleData {
-  id: string;
-  name: string;
-  description: string;
-  instructions: string;
-  tag: string;
-}
+const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')
+const supabaseUrl = Deno.env.get('SUPABASE_URL')
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const supabase = createClient(supabaseUrl!, supabaseServiceKey!)
 
-const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-
-Deno.serve(async (req) => {
-  // Handle CORS
+serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { roleId } = await req.json();
-    console.log(`Creating mind for role: ${roleId}`);
+    const { roleId } = await req.json()
+    console.log(`Creating mind for role: ${roleId}`)
 
     if (!roleId) {
-      throw new Error('Role ID is required');
+      throw new Error('Role ID is required')
     }
 
     // Update status to creating
     await supabase
       .from('role_minds')
       .update({ status: 'creating' })
-      .eq('role_id', roleId);
+      .eq('role_id', roleId)
 
     // Get role details
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
       .eq('id', roleId)
-      .single();
+      .single()
 
     if (roleError || !role) {
-      throw new Error(`Failed to fetch role: ${roleError?.message}`);
+      throw new Error(`Failed to fetch role: ${roleError?.message}`)
     }
 
     // Create mind in Llongterm
@@ -70,14 +63,14 @@ Deno.serve(async (req) => {
           created_at: new Date().toISOString()
         }
       })
-    });
+    })
 
     if (!mindResponse.ok) {
-      throw new Error(`Llongterm API error: ${mindResponse.statusText}`);
+      throw new Error(`Llongterm API error: ${mindResponse.statusText}`)
     }
 
-    const mind = await mindResponse.json();
-    console.log(`Mind created successfully: ${mind.id}`);
+    const mind = await mindResponse.json()
+    console.log(`Mind created successfully: ${mind.id}`)
 
     // Update role_minds with success
     const { error: updateError } = await supabase
@@ -88,23 +81,23 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
         last_sync: new Date().toISOString()
       })
-      .eq('role_id', roleId);
+      .eq('role_id', roleId)
 
     if (updateError) {
-      throw new Error(`Failed to update role_minds: ${updateError.message}`);
+      throw new Error(`Failed to update role_minds: ${updateError.message}`)
     }
 
     return new Response(
       JSON.stringify({ success: true, mindId: mind.id }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    )
 
   } catch (error) {
-    console.error('Error creating mind:', error);
+    console.error('Error creating mind:', error)
     
     // Update role_minds with error
     if (req.body) {
-      const { roleId } = await req.json();
+      const { roleId } = await req.json()
       await supabase
         .from('role_minds')
         .update({
@@ -112,7 +105,7 @@ Deno.serve(async (req) => {
           error_message: error.message,
           last_error_at: new Date().toISOString()
         })
-        .eq('role_id', roleId);
+        .eq('role_id', roleId)
     }
 
     return new Response(
@@ -121,6 +114,6 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
-    );
+    )
   }
-});
+})
