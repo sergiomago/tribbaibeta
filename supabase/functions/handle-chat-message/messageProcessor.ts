@@ -32,11 +32,27 @@ export async function processMessage(
       .eq('status', 'active')
       .maybeSingle();
 
-    // Get relevant memories for context
-    const relevantMemories = await getRelevantMemories(supabase, roleId, userMessage.content);
+    // Get relevant memories for context with safe error handling
+    let relevantMemories = [];
+    try {
+      const { data: memories, error: memoriesError } = await supabase
+        .from('role_memories')
+        .select('content, metadata')
+        .eq('role_id', roleId)
+        .order('importance_score', { ascending: false })
+        .limit(5);
+
+      if (!memoriesError && memories) {
+        relevantMemories = memories;
+      }
+    } catch (error) {
+      console.error('Error fetching memories:', error);
+      // Continue without memories rather than failing
+    }
+
     console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
 
-    // Store message as memory
+    // Store message as memory with error handling
     try {
       await storeMessageMemory(supabase, roleId, threadId, userMessage);
     } catch (error) {
@@ -44,21 +60,25 @@ export async function processMessage(
       // Continue processing even if memory storage fails
     }
 
-    // Format previous responses for context
-    const formattedResponses = previousResponses
+    // Format previous responses for context with null checks
+    const formattedResponses = (previousResponses || [])
       .map(msg => {
         const roleName = msg.role?.name || 'Unknown';
         return `${roleName}: ${msg.content}`;
       })
       .join('\n\n');
 
-    // Create memory context string
+    // Create memory context string with null check
     const memoryContext = relevantMemories?.length 
       ? `Relevant memories:\n${relevantMemories.map(m => m.content).join('\n\n')}`
       : '';
 
-    // Create the enhanced system prompt
-    const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
+    // Create the enhanced system prompt with null checks
+    const systemPrompt = `You are ${role.name || 'an AI assistant'}, ${
+      role.expertise_areas?.length 
+        ? `an AI role with expertise in: ${role.expertise_areas.join(', ')}`
+        : 'an AI assistant with general knowledge'
+    }
 
 ${memoryContext}
 
@@ -66,7 +86,7 @@ Recent conversation:
 ${formattedResponses}
 
 Your specific role instructions:
-${role.instructions}`;
+${role.instructions || 'Be helpful and informative.'}`;
 
     // Generate response with error handling
     const completion = await openai.chat.completions.create({
@@ -104,27 +124,6 @@ ${role.instructions}`;
   } catch (error) {
     console.error('Error in processMessage:', error);
     throw error;
-  }
-}
-
-async function getRelevantMemories(supabase: SupabaseClient, roleId: string, content: string) {
-  try {
-    const { data: memories, error } = await supabase
-      .from('role_memories')
-      .select('content, metadata')
-      .eq('role_id', roleId)
-      .order('importance_score', { ascending: false })
-      .limit(5);
-
-    if (error) {
-      console.error('Error fetching memories:', error);
-      return [];
-    }
-
-    return memories || [];
-  } catch (error) {
-    console.error('Error retrieving memories:', error);
-    return [];
   }
 }
 
