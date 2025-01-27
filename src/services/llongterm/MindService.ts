@@ -5,43 +5,64 @@ import { LlongtermError, MindNotFoundError } from '@/lib/llongterm/errors';
 
 export class MindService {
   async createMind(options: CreateOptions): Promise<Mind> {
-    const validatedOptions = validateCreateOptions({
-      ...options,
-      initialMemory: options.initialMemory || {
-        summary: '',
-        unstructured: {},
-        structured: {}
-      }
-    });
-    
-    return await llongtermClient.createMind(validatedOptions);
+    try {
+      const validatedOptions = validateCreateOptions({
+        ...options,
+        initialMemory: options.initialMemory || {
+          summary: '',
+          unstructured: {},
+          structured: {}
+        }
+      });
+      
+      return await llongtermClient.createMind(validatedOptions);
+    } catch (error) {
+      throw new LlongtermError(`Failed to create mind: ${error.message}`);
+    }
   }
 
   async getMind(mindId: string): Promise<Mind> {
     try {
       return await llongtermClient.getMind(mindId);
     } catch (error) {
-      throw new MindNotFoundError(mindId);
+      if (error.message.includes('not found')) {
+        throw new MindNotFoundError(mindId);
+      }
+      throw new LlongtermError(`Failed to get mind: ${error.message}`);
     }
   }
 
   async remember(mind: Mind, messages: Message[]): Promise<RememberResponse> {
-    const validatedMessages = messages.map(msg => validateMessage({
-      author: msg.author || 'user',
-      message: msg.message || '',
-      timestamp: msg.timestamp || Date.now(),
-      metadata: msg.metadata || {}
-    }));
-    return await mind.remember(validatedMessages);
+    try {
+      const validatedMessages = messages.map(msg => validateMessage({
+        author: msg.author || 'user',
+        message: msg.message || '',
+        timestamp: msg.timestamp || Date.now(),
+        metadata: msg.metadata || {}
+      }));
+      return await mind.remember(validatedMessages);
+    } catch (error) {
+      throw new LlongtermError(`Failed to store memory: ${error.message}`);
+    }
   }
 
   async ask(mind: Mind, question: string): Promise<KnowledgeResponse> {
-    return await mind.ask(question);
+    try {
+      return await mind.ask(question);
+    } catch (error) {
+      throw new LlongtermError(`Failed to query mind: ${error.message}`);
+    }
   }
 
   async deleteMind(mindId: string): Promise<boolean> {
-    const response = await llongtermClient.deleteMind(mindId);
-    return response.success;
+    try {
+      const response = await llongtermClient.deleteMind(mindId);
+      return response.success;
+    } catch (error) {
+      // Don't throw on deletion errors, just return false
+      console.error(`Failed to delete mind ${mindId}:`, error);
+      return false;
+    }
   }
 }
 

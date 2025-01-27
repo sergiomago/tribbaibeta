@@ -4,41 +4,64 @@ import type { CreateOptions, Mind } from 'llongterm';
 
 export class RoleMindService {
   async createMindForRole(roleId: string, options: CreateOptions): Promise<Mind> {
-    // Create mind using Llongterm
-    const mind = await mindService.createMind(options);
+    try {
+      // Update status to processing
+      await this.updateMindStatus(roleId, 'processing');
 
-    // Store the association in the database
-    const { error } = await supabase
-      .from('role_minds')
-      .insert({
-        role_id: roleId,
-        mind_id: mind.id,
-        status: 'active',
-        metadata: JSON.stringify(options.metadata || {})
+      // Create mind using Llongterm
+      const mind = await mindService.createMind({
+        ...options,
+        metadata: {
+          ...options.metadata,
+          role_id: roleId,
+          created_at: new Date().toISOString()
+        }
       });
 
-    if (error) {
-      // If database insertion fails, clean up the created mind
-      await mindService.deleteMind(mind.id);
+      // Store the association and update status
+      const { error } = await supabase
+        .from('role_minds')
+        .update({
+          mind_id: mind.id,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+          last_sync: new Date().toISOString()
+        })
+        .eq('role_id', roleId);
+
+      if (error) {
+        // If database update fails, clean up the created mind
+        await mindService.deleteMind(mind.id);
+        throw error;
+      }
+
+      return mind;
+    } catch (error) {
+      // Update status to failed with error message
+      await this.updateMindStatus(roleId, 'failed', error.message);
       throw error;
     }
-
-    return mind;
   }
 
   async getMindForRole(roleId: string): Promise<Mind | null> {
     const { data, error } = await supabase
       .from('role_minds')
-      .select('mind_id')
+      .select('mind_id, status')
       .eq('role_id', roleId)
       .eq('status', 'active')
       .single();
 
-    if (error || !data) {
+    if (error || !data?.mind_id) {
       return null;
     }
 
-    return await mindService.getMind(data.mind_id);
+    try {
+      return await mindService.getMind(data.mind_id);
+    } catch (error) {
+      // If mind retrieval fails, update status
+      await this.updateMindStatus(roleId, 'failed', error.message);
+      return null;
+    }
   }
 
   async deleteMindForRole(roleId: string): Promise<boolean> {
@@ -52,16 +75,32 @@ export class RoleMindService {
       return false;
     }
 
-    // Delete from Llongterm
-    await mindService.deleteMind(data.mind_id);
+    try {
+      // Delete from Llongterm
+      await mindService.deleteMind(data.mind_id);
 
-    // Update database record
-    await supabase
-      .from('role_minds')
-      .update({ status: 'deleted' })
-      .eq('role_id', roleId);
+      // Update database record
+      await supabase
+        .from('role_minds')
+        .update({ 
+          status: 'deleted',
+          updated_at: new Date().toISOString()
+        })
+        .eq('role_id', roleId);
 
-    return true;
+      return true;
+    } catch (error) {
+      await this.updateMindStatus(roleId, 'failed', error.message);
+      return false;
+    }
+  }
+
+  private async updateMindStatus(roleId: string, status: string, errorMessage?: string): Promise<void> {
+    await supabase.rpc('update_mind_status', {
+      p_role_id: roleId,
+      p_status: status,
+      p_error_message: errorMessage
+    });
   }
 }
 
