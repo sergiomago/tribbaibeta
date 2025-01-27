@@ -173,6 +173,37 @@ export class MindManager {
     }
   }
 
+  async enrichRoleContext(roleId: string, content: string): Promise<void> {
+    console.log('Mind context enrichment not yet implemented', { roleId, content });
+    // Will be implemented in future updates
+  }
+
+  async getRoleMemories(roleId: string, query: string): Promise<MindQueryResponse> {
+    console.log('Mind memory retrieval not yet implemented', { roleId, query });
+    // Return empty response until we implement full mind functionality
+    return {
+      results: [],
+      metadata: {
+        totalResults: 0,
+        searchTime: 0
+      }
+    };
+  }
+
+  async updateMindStatus(roleId: string, status: "active" | "inactive" | "error"): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('role_minds')
+        .update({ status })
+        .eq('role_id', roleId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating mind status:', error);
+      throw error;
+    }
+  }
+
   clearCache() {
     this.mindCache.clear();
     this.mindInitQueue.clear();
