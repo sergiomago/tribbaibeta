@@ -40,6 +40,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
   const { toast } = useToast();
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
   const { planType, hasSubscription } = useSubscription();
+  const [isInitializingMind, setIsInitializingMind] = useState(false);
 
   const form = useForm<RoleFormValues>({
     resolver: zodResolver(roleFormSchema),
@@ -55,54 +56,92 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
   });
 
   const handleSubmit = async (values: RoleFormValues) => {
-    // Check role limits for Creator plan
-    if (!defaultValues?.id && planType === 'creator') {
-      const { count, error: countError } = await supabase
-        .from('roles')
-        .select('id', { count: 'exact' })
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .not('is_template', 'eq', true);
+    try {
+      // Check role limits for Creator plan
+      if (!defaultValues?.id && planType === 'creator') {
+        const { count, error: countError } = await supabase
+          .from('roles')
+          .select('id', { count: 'exact' })
+          .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
+          .not('is_template', 'eq', true);
 
-      if (countError) {
+        if (countError) {
+          toast({
+            title: "Error",
+            description: "Could not verify role count. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        if (count && count >= 7) {
+          toast({
+            title: "Role Limit Reached",
+            description: "Creator plan is limited to 7 roles. Please upgrade to Maestro plan for unlimited roles.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Check special capabilities access
+      if (values.special_capabilities.length > 0 && (!hasSubscription || planType !== 'maestro')) {
         toast({
-          title: "Error",
-          description: "Could not verify role count. Please try again.",
+          title: "Special Capabilities Not Available",
+          description: "Special capabilities are only available with the Maestro plan. Please upgrade to access these features.",
           variant: "destructive",
         });
         return;
       }
 
-      if (count && count >= 7) {
+      // Check model access
+      if (values.model === "gpt-4o" && (!hasSubscription || planType !== 'maestro')) {
         toast({
-          title: "Role Limit Reached",
-          description: "Creator plan is limited to 7 roles. Please upgrade to Maestro plan for unlimited roles.",
+          title: "Model Not Available",
+          description: "GPT-4 is only available with the Maestro plan. Please upgrade to access this model.",
           variant: "destructive",
         });
         return;
       }
-    }
 
-    // Check special capabilities access
-    if (values.special_capabilities.length > 0 && (!hasSubscription || planType !== 'maestro')) {
+      // Call the parent onSubmit
+      await onSubmit(values);
+
+      // If this is a new role (no id), initialize the mind
+      if (!defaultValues?.id) {
+        setIsInitializingMind(true);
+        const { data: roles } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('name', values.name)
+          .limit(1);
+
+        if (roles && roles.length > 0) {
+          const roleId = roles[0].id;
+          const { error: mindError } = await supabase.functions.invoke('create-role-mind', {
+            body: { roleId }
+          });
+
+          if (mindError) {
+            console.error('Error initializing mind:', mindError);
+            toast({
+              title: "Warning",
+              description: "Role created but mind initialization failed. You can try again later.",
+              variant: "destructive",
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error in form submission:', error);
       toast({
-        title: "Special Capabilities Not Available",
-        description: "Special capabilities are only available with the Maestro plan. Please upgrade to access these features.",
+        title: "Error",
+        description: `Failed to create role: ${error.message}`,
         variant: "destructive",
       });
-      return;
+    } finally {
+      setIsInitializingMind(false);
     }
-
-    // Check model access
-    if (values.model === "gpt-4o" && (!hasSubscription || planType !== 'maestro')) {
-      toast({
-        title: "Model Not Available",
-        description: "GPT-4 is only available with the Maestro plan. Please upgrade to access this model.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    onSubmit(values);
   };
 
   const generateContent = async (type: 'tag' | 'alias' | 'instructions') => {
@@ -205,12 +244,12 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
         <Button
           type="submit"
           className="w-full"
-          disabled={isCreating}
+          disabled={isCreating || isInitializingMind}
         >
-          {isCreating ? (
+          {isCreating || isInitializingMind ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Creating...
+              {isInitializingMind ? "Initializing..." : "Creating..."}
             </>
           ) : defaultValues ? "Update Role" : "Create Role"}
         </Button>
