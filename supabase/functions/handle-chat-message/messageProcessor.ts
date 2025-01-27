@@ -13,50 +13,52 @@ export async function processMessage(
 ) {
   console.log('Processing message for role:', roleId);
 
-  // Get role details
-  const { data: role } = await supabase
-    .from('roles')
-    .select('*')
-    .eq('id', roleId)
-    .single();
-
-  if (!role) throw new Error('Role not found');
-
-  // Get role's mind
-  const { data: mindData } = await supabase
-    .from('role_minds')
-    .select('*')
-    .eq('role_id', roleId)
-    .eq('status', 'active')
-    .maybeSingle();
-
-  // Get relevant memories for context
-  const relevantMemories = await getRelevantMemories(supabase, roleId, userMessage.content);
-  console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
-
-  // Store message as memory
   try {
-    await storeMessageMemory(supabase, roleId, threadId, userMessage);
-  } catch (error) {
-    console.error('Error storing memory:', error);
-    // Continue processing even if memory storage fails
-  }
+    // Get role details
+    const { data: role, error: roleError } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('id', roleId)
+      .single();
 
-  // Format previous responses for context
-  const formattedResponses = previousResponses
-    .map(msg => {
-      const roleName = msg.role?.name || 'Unknown';
-      return `${roleName}: ${msg.content}`;
-    })
-    .join('\n\n');
+    if (roleError) throw new Error(`Error fetching role: ${roleError.message}`);
+    if (!role) throw new Error('Role not found');
 
-  // Create memory context string
-  const memoryContext = relevantMemories?.length 
-    ? `Relevant memories:\n${relevantMemories.map(m => m.content).join('\n\n')}`
-    : '';
+    // Get role's mind
+    const { data: mindData } = await supabase
+      .from('role_minds')
+      .select('*')
+      .eq('role_id', roleId)
+      .eq('status', 'active')
+      .maybeSingle();
 
-  // Create the enhanced system prompt
-  const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
+    // Get relevant memories for context
+    const relevantMemories = await getRelevantMemories(supabase, roleId, userMessage.content);
+    console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
+
+    // Store message as memory
+    try {
+      await storeMessageMemory(supabase, roleId, threadId, userMessage);
+    } catch (error) {
+      console.error('Error storing memory:', error);
+      // Continue processing even if memory storage fails
+    }
+
+    // Format previous responses for context
+    const formattedResponses = previousResponses
+      .map(msg => {
+        const roleName = msg.role?.name || 'Unknown';
+        return `${roleName}: ${msg.content}`;
+      })
+      .join('\n\n');
+
+    // Create memory context string
+    const memoryContext = relevantMemories?.length 
+      ? `Relevant memories:\n${relevantMemories.map(m => m.content).join('\n\n')}`
+      : '';
+
+    // Create the enhanced system prompt
+    const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
 
 ${memoryContext}
 
@@ -66,43 +68,57 @@ ${formattedResponses}
 Your specific role instructions:
 ${role.instructions}`;
 
-  // Generate response
-  const completion = await openai.chat.completions.create({
-    model: role.model || 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage.content }
-    ],
-  });
-
-  const responseContent = completion.choices[0].message.content;
-
-  // Store response as memory
-  try {
-    await storeMessageMemory(supabase, roleId, threadId, {
-      content: responseContent,
-      metadata: {
-        is_response: true,
-        to_message_id: userMessage.id
-      }
+    // Generate response with error handling
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage.content }
+      ],
     });
-  } catch (error) {
-    console.error('Error storing response memory:', error);
-  }
 
-  return responseContent;
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('No response generated from OpenAI');
+    }
+
+    const responseContent = completion.choices[0].message.content;
+
+    // Store response as memory
+    try {
+      await storeMessageMemory(supabase, roleId, threadId, {
+        content: responseContent,
+        metadata: {
+          is_response: true,
+          to_message_id: userMessage.id
+        }
+      });
+    } catch (error) {
+      console.error('Error storing response memory:', error);
+      // Continue even if memory storage fails
+    }
+
+    return responseContent;
+  } catch (error) {
+    console.error('Error in processMessage:', error);
+    throw error; // Re-throw to be handled by the caller
+  }
 }
 
 async function getRelevantMemories(supabase: SupabaseClient, roleId: string, content: string) {
   try {
-    const { data: memories } = await supabase
+    const { data: memories, error } = await supabase
       .from('role_memories')
       .select('content, metadata, importance_score')
       .eq('role_id', roleId)
       .order('importance_score', { ascending: false })
       .limit(5);
 
-    return memories;
+    if (error) {
+      console.error('Error fetching memories:', error);
+      return [];
+    }
+
+    return memories || [];
   } catch (error) {
     console.error('Error retrieving memories:', error);
     return [];
@@ -115,22 +131,32 @@ async function storeMessageMemory(
   threadId: string,
   message: any
 ) {
-  await supabase
-    .from('role_memories')
-    .insert({
-      role_id: roleId,
-      content: message.content,
-      context_type: 'conversation',
-      metadata: {
-        thread_id: threadId,
-        message_id: message.id,
-        timestamp: new Date().toISOString(),
-        memory_type: 'conversation',
-        importance_score: 1.0,
-        conversation_context: {
-          is_response: message.metadata?.is_response || false,
-          to_message_id: message.metadata?.to_message_id
+  try {
+    const { error } = await supabase
+      .from('role_memories')
+      .insert({
+        role_id: roleId,
+        content: message.content,
+        context_type: 'conversation',
+        metadata: {
+          thread_id: threadId,
+          message_id: message.id,
+          timestamp: new Date().toISOString(),
+          memory_type: 'conversation',
+          importance_score: 1.0,
+          conversation_context: {
+            is_response: message.metadata?.is_response || false,
+            to_message_id: message.metadata?.to_message_id
+          }
         }
-      }
-    });
+      });
+
+    if (error) {
+      console.error('Error storing memory:', error);
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error in storeMessageMemory:', error);
+    throw error;
+  }
 }
