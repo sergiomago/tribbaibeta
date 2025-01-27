@@ -318,13 +318,16 @@ export type Database = {
         Row: {
           chain_effectiveness: number | null
           chain_position: number | null
+          context_match_score: number | null
           conversation_depth: number | null
           created_at: string
           effectiveness_score: number | null
+          expertise_match_score: number | null
           expertise_relevance: number | null
           id: string
           initiator_role_id: string
           interaction_context: Json | null
+          interaction_success: boolean | null
           interaction_type: string
           metadata: Json | null
           parent_interaction_id: string | null
@@ -340,13 +343,16 @@ export type Database = {
         Insert: {
           chain_effectiveness?: number | null
           chain_position?: number | null
+          context_match_score?: number | null
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_match_score?: number | null
           expertise_relevance?: number | null
           id?: string
           initiator_role_id: string
           interaction_context?: Json | null
+          interaction_success?: boolean | null
           interaction_type: string
           metadata?: Json | null
           parent_interaction_id?: string | null
@@ -362,13 +368,16 @@ export type Database = {
         Update: {
           chain_effectiveness?: number | null
           chain_position?: number | null
+          context_match_score?: number | null
           conversation_depth?: number | null
           created_at?: string
           effectiveness_score?: number | null
+          expertise_match_score?: number | null
           expertise_relevance?: number | null
           id?: string
           initiator_role_id?: string
           interaction_context?: Json | null
+          interaction_success?: boolean | null
           interaction_type?: string
           metadata?: Json | null
           parent_interaction_id?: string | null
