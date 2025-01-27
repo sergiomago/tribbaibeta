@@ -1,7 +1,6 @@
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 export async function processMessage(
   openai: OpenAI,
@@ -14,17 +13,23 @@ export async function processMessage(
   console.log('Processing message for role:', roleId);
 
   try {
-    // Get role details
+    // Get role details with error handling
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
       .eq('id', roleId)
-      .single();
+      .maybeSingle();
 
-    if (roleError) throw new Error(`Error fetching role: ${roleError.message}`);
-    if (!role) throw new Error('Role not found');
+    if (roleError) {
+      console.error('Error fetching role:', roleError);
+      throw new Error(`Error fetching role: ${roleError.message}`);
+    }
+    if (!role) {
+      console.error('Role not found:', roleId);
+      throw new Error('Role not found');
+    }
 
-    // Get role's mind
+    // Get role's mind with safe defaults
     const { data: mindData } = await supabase
       .from('role_minds')
       .select('*')
@@ -32,7 +37,7 @@ export async function processMessage(
       .eq('status', 'active')
       .maybeSingle();
 
-    // Get relevant memories for context with safe error handling
+    // Get relevant memories with error handling
     let relevantMemories = [];
     try {
       const { data: memories, error: memoriesError } = await supabase
@@ -52,15 +57,7 @@ export async function processMessage(
 
     console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
 
-    // Store message as memory with error handling
-    try {
-      await storeMessageMemory(supabase, roleId, threadId, userMessage);
-    } catch (error) {
-      console.error('Error storing memory:', error);
-      // Continue processing even if memory storage fails
-    }
-
-    // Format previous responses for context with null checks
+    // Format previous responses with null checks
     const formattedResponses = (previousResponses || [])
       .map(msg => {
         const roleName = msg.role?.name || 'Unknown';
@@ -105,16 +102,22 @@ ${role.instructions || 'Be helpful and informative.'}`;
 
     // Store response as memory with safe defaults and null checks
     try {
-      await storeMessageMemory(supabase, roleId, threadId, {
-        content: responseContent,
-        metadata: {
-          is_response: true,
-          to_message_id: userMessage.id,
-          importance_score: 1.0,  // Safe default
-          confidence_score: 1.0,  // Safe default
-          relevance_score: 1.0    // Safe default
-        }
-      });
+      await supabase
+        .from('role_memories')
+        .insert({
+          role_id: roleId,
+          content: responseContent,
+          context_type: 'conversation',
+          metadata: {
+            message_id: userMessage.id,
+            thread_id: threadId,
+            is_response: true,
+            to_message_id: userMessage.id,
+            importance_score: 1.0,  // Safe default
+            confidence_score: 1.0,  // Safe default
+            relevance_score: 1.0    // Safe default
+          }
+        });
     } catch (error) {
       console.error('Error storing response memory:', error);
       // Continue even if memory storage fails
@@ -123,44 +126,6 @@ ${role.instructions || 'Be helpful and informative.'}`;
     return responseContent;
   } catch (error) {
     console.error('Error in processMessage:', error);
-    throw error;
-  }
-}
-
-async function storeMessageMemory(
-  supabase: SupabaseClient,
-  roleId: string,
-  threadId: string,
-  message: any
-) {
-  try {
-    const { error } = await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: message.content,
-        context_type: 'conversation',
-        metadata: {
-          thread_id: threadId,
-          message_id: message.id,
-          timestamp: new Date().toISOString(),
-          memory_type: 'conversation',
-          importance_score: 1.0,    // Safe default
-          confidence_score: 1.0,    // Safe default
-          relevance_score: 1.0,     // Safe default
-          conversation_context: {
-            is_response: message.metadata?.is_response || false,
-            to_message_id: message.metadata?.to_message_id
-          }
-        }
-      });
-
-    if (error) {
-      console.error('Error storing memory:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error in storeMessageMemory:', error);
     throw error;
   }
 }
