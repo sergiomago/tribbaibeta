@@ -5,14 +5,17 @@ import { LlongtermError, MindNotFoundError } from '@/lib/llongterm/errors';
 
 export class MindService {
   async createMind(options: CreateOptions): Promise<Mind> {
+    const defaultMemory: CreateOptions['initialMemory'] = {
+      summary: '',
+      unstructured: {},
+      structured: {}
+    };
+
     const validatedOptions = validateCreateOptions({
       ...options,
-      initialMemory: options.initialMemory || {
-        summary: '',
-        unstructured: {},
-        structured: {}
-      }
+      initialMemory: options.initialMemory || defaultMemory
     });
+    
     return await llongtermClient.createMind(validatedOptions);
   }
 
@@ -27,7 +30,8 @@ export class MindService {
   async remember(mind: Mind, messages: Message[]): Promise<RememberResponse> {
     const validatedMessages = messages.map(msg => validateMessage({
       ...msg,
-      author: msg.author || 'user'
+      author: msg.author || 'user',
+      message: msg.message || ''
     }));
     return await mind.remember(validatedMessages);
   }
