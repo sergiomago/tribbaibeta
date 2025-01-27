@@ -1,3 +1,5 @@
+import { Json } from "@/integrations/supabase/types";
+
 export interface MemoryMetadata {
   timestamp: number;
   context_type: string;
@@ -13,6 +15,8 @@ export interface MemoryMetadata {
   verification_score?: number;
   last_accessed?: string;
   relevance_score?: number;
+  source_count?: number;
+  source_ids?: string[];
 }
 
 export interface Memory {
@@ -60,6 +64,8 @@ export const fromJsonMetadata = (json: Record<string, any>): MemoryMetadata => {
     verification_score: json.verification_score,
     message_id: json.message_id,
     last_accessed: json.last_accessed,
-    relevance_score: json.relevance_score
+    relevance_score: json.relevance_score,
+    source_count: json.source_count,
+    source_ids: json.source_ids
   };
 };
