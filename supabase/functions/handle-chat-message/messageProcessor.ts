@@ -30,55 +30,17 @@ export async function processMessage(
     .eq('status', 'active')
     .maybeSingle();
 
-  if (!mindData?.mind_id) {
-    console.log('No active mind found for role:', roleId);
-  } else {
-    console.log('Found active mind:', mindData.mind_id);
-    
-    try {
-      // Store message as memory
-      await supabase
-        .from('role_memories')
-        .insert({
-          role_id: roleId,
-          content: userMessage.content,
-          context_type: 'conversation',
-          metadata: {
-            thread_id: threadId,
-            message_id: userMessage.id,
-            timestamp: new Date().toISOString(),
-            memory_type: 'conversation',
-            importance_score: 1.0,
-            conversation_context: {
-              previous_messages: previousResponses.map(msg => ({
-                content: msg.content,
-                role: msg.role?.name
-              }))
-            }
-          }
-        });
-
-      console.log('Stored message as memory for role:', roleId);
-    } catch (error) {
-      console.error('Error storing memory:', error);
-      // Continue processing even if memory storage fails
-    }
-  }
-
-  // Get other roles in the thread
-  const { data: threadRoles } = await supabase
-    .from('thread_roles')
-    .select('roles(*)')
-    .eq('thread_id', threadId)
-    .neq('role_id', roleId);
-
   // Get relevant memories for context
-  const { data: relevantMemories } = await supabase
-    .from('role_memories')
-    .select('content, metadata')
-    .eq('role_id', roleId)
-    .order('importance_score', { ascending: false })
-    .limit(5);
+  const relevantMemories = await getRelevantMemories(supabase, roleId, userMessage.content);
+  console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
+
+  // Store message as memory
+  try {
+    await storeMessageMemory(supabase, roleId, threadId, userMessage);
+  } catch (error) {
+    console.error('Error storing memory:', error);
+    // Continue processing even if memory storage fails
+  }
 
   // Format previous responses for context
   const formattedResponses = previousResponses
@@ -96,7 +58,6 @@ export async function processMessage(
   // Create the enhanced system prompt
   const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
 
-Current conversation context:
 ${memoryContext}
 
 Recent conversation:
@@ -118,26 +79,58 @@ ${role.instructions}`;
 
   // Store response as memory
   try {
-    await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: responseContent,
-        context_type: 'response',
-        metadata: {
-          thread_id: threadId,
-          message_id: userMessage.id,
-          timestamp: new Date().toISOString(),
-          memory_type: 'conversation',
-          importance_score: 1.0,
-          is_response: true
-        }
-      });
-
-    console.log('Stored response as memory for role:', roleId);
+    await storeMessageMemory(supabase, roleId, threadId, {
+      content: responseContent,
+      metadata: {
+        is_response: true,
+        to_message_id: userMessage.id
+      }
+    });
   } catch (error) {
     console.error('Error storing response memory:', error);
   }
 
   return responseContent;
+}
+
+async function getRelevantMemories(supabase: SupabaseClient, roleId: string, content: string) {
+  try {
+    const { data: memories } = await supabase
+      .from('role_memories')
+      .select('content, metadata, importance_score')
+      .eq('role_id', roleId)
+      .order('importance_score', { ascending: false })
+      .limit(5);
+
+    return memories;
+  } catch (error) {
+    console.error('Error retrieving memories:', error);
+    return [];
+  }
+}
+
+async function storeMessageMemory(
+  supabase: SupabaseClient,
+  roleId: string,
+  threadId: string,
+  message: any
+) {
+  await supabase
+    .from('role_memories')
+    .insert({
+      role_id: roleId,
+      content: message.content,
+      context_type: 'conversation',
+      metadata: {
+        thread_id: threadId,
+        message_id: message.id,
+        timestamp: new Date().toISOString(),
+        memory_type: 'conversation',
+        importance_score: 1.0,
+        conversation_context: {
+          is_response: message.metadata?.is_response || false,
+          to_message_id: message.metadata?.to_message_id
+        }
+      }
+    });
 }
