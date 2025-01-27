@@ -112,7 +112,7 @@ export class RoleMindService {
     }
   }
 
-  private async updateMindStatus(roleId: string, status: string, errorMessage?: string): Promise<void> {
+  async updateMindStatus(roleId: string, status: string, errorMessage?: string): Promise<void> {
     await supabase.rpc('update_mind_status', {
       p_role_id: roleId,
       p_status: status,
