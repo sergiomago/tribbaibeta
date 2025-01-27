@@ -45,6 +45,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/roles/edit/:id"
+                  element={
+                    <ProtectedRoute>
+                      <CreateRole />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/chats"
                   element={
                     <ProtectedRoute>

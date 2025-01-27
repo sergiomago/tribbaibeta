@@ -23,12 +23,7 @@ type UserRoleCardProps = {
   onEdit: (id: string) => void;
 };
 
-interface Thread {
-  id: string;
-  name: string;
-}
-
-export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
+export const UserRoleCard = ({ role, onDelete }: UserRoleCardProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -40,11 +35,15 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
     createThread.mutate(
       { userId: user.id, roleId: role.id },
       {
-        onSuccess: (thread: Thread) => {
+        onSuccess: (thread: { id: string; name: string }) => {
           navigate(`/chats?thread=${thread.id}`);
         },
       }
     );
+  };
+
+  const handleEdit = () => {
+    navigate(`/roles/edit/${role.id}`);
   };
 
   return (
@@ -63,7 +62,7 @@ export const UserRoleCard = ({ role, onDelete, onEdit }: UserRoleCardProps) => {
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => onEdit(role.id)}
+            onClick={handleEdit}
             className="flex-1 text-primary hover:text-primary hover:bg-primary/5 border-gray-200 dark:border-gray-800"
           >
             <Edit className="h-3 w-3 mr-2" />

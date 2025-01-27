@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Mind } from 'llongterm';
 import { roleMindService } from '@/services/llongterm/RoleMindService';
 import { useToast } from './use-toast';
+import { RoleFormValues } from '@/components/roles/RoleForm';
 
 interface RoleMindState {
   mind: Mind | null;
@@ -58,6 +59,46 @@ export const useRoleMind = (roleId: string | null) => {
     }
   };
 
+  const refreshMind = async (updates: RoleFormValues) => {
+    if (!roleId) return;
+
+    setState(prev => ({ ...prev, loading: true }));
+    try {
+      // First, update the mind status
+      await roleMindService.updateMindStatus(roleId, 'updating');
+
+      // Kill the existing mind if it exists
+      if (state.mind) {
+        await state.mind.kill();
+      }
+
+      // Create a new mind with updated parameters
+      const newMind = await roleMindService.createMindForRole(roleId, {
+        specialism: updates.name,
+        specialismDepth: 2,
+        metadata: {
+          roleId,
+          updated: new Date().toISOString(),
+          special_capabilities: updates.special_capabilities
+        }
+      });
+
+      setState({ mind: newMind, loading: false, error: null });
+      toast({
+        title: "Mind Updated",
+        description: "Successfully refreshed role's mind",
+      });
+    } catch (error) {
+      console.error('Error refreshing mind:', error);
+      setState(prev => ({ ...prev, loading: false, error: error as Error }));
+      toast({
+        title: "Error",
+        description: "Failed to refresh role's mind",
+        variant: "destructive",
+      });
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -72,11 +113,6 @@ export const useRoleMind = (roleId: string | null) => {
       isMounted = false;
     };
   }, [roleId]);
-
-  const refreshMind = async () => {
-    setState(prev => ({ ...prev, loading: true }));
-    await initializeMind();
-  };
 
   const deleteMind = async () => {
     if (!roleId) return;
