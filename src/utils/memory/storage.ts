@@ -77,7 +77,7 @@ export class MemoryStorage {
       if (fetchError) throw fetchError;
       if (!memory) continue;
 
-      const currentMetadata = fromJsonMetadata(memory.metadata);
+      const currentMetadata = fromJsonMetadata(memory.metadata as Record<string, any>);
       const newMetadata: MemoryMetadata = {
         ...currentMetadata,
         timestamp: currentMetadata.timestamp || Date.now(),
