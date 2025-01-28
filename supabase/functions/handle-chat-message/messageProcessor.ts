@@ -1,7 +1,6 @@
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 export async function processMessage(
   openai: OpenAI,
@@ -35,7 +34,7 @@ export async function processMessage(
 
   console.log('Retrieved relevant memories:', memories?.length || 0);
 
-  // Store message as memory (simple storage)
+  // Store message as memory
   try {
     await storeMessageMemory(supabase, roleId, threadId, userMessage);
   } catch (error) {
@@ -55,7 +54,7 @@ export async function processMessage(
     ? `Relevant memories:\n${memories.map(m => m.content).join('\n\n')}`
     : '';
 
-  // Create the enhanced system prompt
+  // Create the system prompt
   const systemPrompt = `You are ${role.name}, an AI role with expertise in: ${role.expertise_areas?.join(', ') || 'general knowledge'}
 
 ${memoryContext}
@@ -77,7 +76,7 @@ ${role.instructions}`;
 
   const responseContent = completion.choices[0].message.content;
 
-  // Store response as memory (simple storage)
+  // Store response as memory
   try {
     await storeMessageMemory(supabase, roleId, threadId, {
       content: responseContent,

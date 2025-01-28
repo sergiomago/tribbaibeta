@@ -19,16 +19,13 @@ export class RoleOrchestrator {
         return;
       }
 
-      // 2. For untagged messages, get conversation chain
+      // 2. For untagged messages, get simple conversation chain
       const { data: chain } = await supabase.rpc(
-        'get_conversation_chain',
-        { 
-          p_thread_id: this.threadId,
-          p_tagged_role_id: null
-        }
+        'get_simple_conversation_chain',
+        { p_thread_id: this.threadId }
       );
 
-      console.log('Conversation chain:', chain);
+      console.log('Simple conversation chain:', chain);
 
       // 3. Process message through chain
       await this.processMessageThroughChain(content, chain);
