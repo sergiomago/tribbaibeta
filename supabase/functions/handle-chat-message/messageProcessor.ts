@@ -22,15 +22,12 @@ export async function processMessage(
   if (!role) throw new Error('Role not found');
 
   // Get relevant memories (simple retrieval)
-  const { data: memories } = await supabase.rpc(
-    'get_similar_memories',
-    {
-      p_embedding: userMessage.content,
-      p_match_threshold: 0.7,
-      p_match_count: 5,
-      p_role_id: roleId
-    }
-  );
+  const { data: memories } = await supabase
+    .from('role_memories')
+    .select('content')
+    .eq('role_id', roleId)
+    .order('created_at', { ascending: false })
+    .limit(5);
 
   console.log('Retrieved relevant memories:', memories?.length || 0);
 
