@@ -1,6 +1,32 @@
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { ResponseChain } from "./types.ts";
 
+function calculateSimpleScore(
+  role: any,
+  content: string,
+  expertise_areas: string[],
+  primary_topics: string[]
+): number {
+  // Topic Match (0.4) - Check if content matches role's expertise
+  const topicMatch = expertise_areas?.some(area => 
+    content.toLowerCase().includes(area.toLowerCase())
+  ) ? 1 : 0;
+
+  // Role Relevance (0.3) - Based on primary topics
+  const roleRelevance = primary_topics?.some(topic =>
+    content.toLowerCase().includes(topic.toLowerCase())
+  ) ? 1 : 0;
+
+  // Response Order (0.3) - Default to 1 for now, will be adjusted by position
+  const orderScore = 1;
+
+  return (
+    topicMatch * 0.4 +
+    roleRelevance * 0.3 +
+    orderScore * 0.3
+  );
+}
+
 export async function buildResponseChain(
   supabase: SupabaseClient,
   threadId: string,
@@ -13,7 +39,6 @@ export async function buildResponseChain(
     // If a role is tagged, only that role should respond
     if (taggedRoleId) {
       console.log('Tagged role response chain');
-      // Verify the role exists in the thread
       const { data: threadRole } = await supabase
         .from('thread_roles')
         .select('role_id')
@@ -26,18 +51,22 @@ export async function buildResponseChain(
         return [];
       }
 
-      // Return only the tagged role in the chain
       return [{
         roleId: taggedRoleId,
         chainOrder: 1
       }];
     }
 
-    // If no role is tagged, continue with existing logic for role selection
-    // Get thread roles
+    // Get thread roles with their expertise areas and primary topics
     const { data: threadRoles, error: threadRolesError } = await supabase
       .from('thread_roles')
-      .select('role_id')
+      .select(`
+        role_id,
+        roles (
+          expertise_areas,
+          primary_topics
+        )
+      `)
       .eq('thread_id', threadId);
 
     if (threadRolesError) throw threadRolesError;
@@ -47,42 +76,28 @@ export async function buildResponseChain(
       return [];
     }
 
-    // Calculate effectiveness for all roles
-    const scoredRoles = await Promise.all(
-      threadRoles.map(async (tr) => {
-        const { data: score } = await supabase.rpc(
-          'calculate_role_effectiveness',
-          {
-            p_role_id: tr.role_id,
-            p_thread_id: threadId,
-            p_context: content
-          }
-        );
-        return {
-          roleId: tr.role_id,
-          score: score || 0
-        };
-      })
-    );
-
-    // Sort by score and ensure at least one role responds
-    const sortedRoles = scoredRoles.sort((a, b) => b.score - a.score);
-    const threshold = 0.3;
-    
-    // Get roles that meet the threshold, or at least the best one
-    const selectedRoles = sortedRoles.filter(role => role.score >= threshold);
-    if (!selectedRoles.length && sortedRoles.length > 0) {
-      selectedRoles.push(sortedRoles[0]); // Include the best role even if below threshold
-    }
-
-    // Map to chain format with order
-    const chain = selectedRoles.map((role, index) => ({
-      roleId: role.roleId,
-      chainOrder: index + 1
+    // Score and sort roles
+    const scoredRoles = threadRoles.map(tr => ({
+      roleId: tr.role_id,
+      score: calculateSimpleScore(
+        tr.roles,
+        content,
+        tr.roles?.expertise_areas || [],
+        tr.roles?.primary_topics || []
+      )
     }));
+
+    // Sort by score and convert to chain format
+    const chain = scoredRoles
+      .sort((a, b) => b.score - a.score)
+      .map((role, index) => ({
+        roleId: role.roleId,
+        chainOrder: index + 1
+      }));
 
     console.log('Built response chain:', chain);
     return chain;
+
   } catch (error) {
     console.error('Error building response chain:', error);
     throw error;
