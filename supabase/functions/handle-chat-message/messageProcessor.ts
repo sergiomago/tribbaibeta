@@ -22,24 +22,24 @@ export async function processMessage(
 
   if (!role) throw new Error('Role not found');
 
-  // Get role's mind
-  const { data: mindData } = await supabase
-    .from('role_minds')
-    .select('*')
-    .eq('role_id', roleId)
-    .eq('status', 'active')
-    .maybeSingle();
+  // Get relevant memories (simple retrieval)
+  const { data: memories } = await supabase.rpc(
+    'get_similar_memories',
+    {
+      p_embedding: userMessage.content,
+      p_match_threshold: 0.7,
+      p_match_count: 5,
+      p_role_id: roleId
+    }
+  );
 
-  // Get relevant memories for context
-  const relevantMemories = await getRelevantMemories(supabase, roleId, userMessage.content);
-  console.log('Retrieved relevant memories:', relevantMemories?.length || 0);
+  console.log('Retrieved relevant memories:', memories?.length || 0);
 
-  // Store message as memory
+  // Store message as memory (simple storage)
   try {
     await storeMessageMemory(supabase, roleId, threadId, userMessage);
   } catch (error) {
     console.error('Error storing memory:', error);
-    // Continue processing even if memory storage fails
   }
 
   // Format previous responses for context
@@ -50,9 +50,9 @@ export async function processMessage(
     })
     .join('\n\n');
 
-  // Create memory context string with safe access
-  const memoryContext = relevantMemories?.length 
-    ? `Relevant memories:\n${relevantMemories.map(m => m.content).join('\n\n')}`
+  // Create memory context string
+  const memoryContext = memories?.length 
+    ? `Relevant memories:\n${memories.map(m => m.content).join('\n\n')}`
     : '';
 
   // Create the enhanced system prompt
@@ -77,7 +77,7 @@ ${role.instructions}`;
 
   const responseContent = completion.choices[0].message.content;
 
-  // Store response as memory with safe scoring
+  // Store response as memory (simple storage)
   try {
     await storeMessageMemory(supabase, roleId, threadId, {
       content: responseContent,
@@ -93,45 +93,19 @@ ${role.instructions}`;
   return responseContent;
 }
 
-async function getRelevantMemories(supabase: SupabaseClient, roleId: string, content: string) {
-  try {
-    const { data: memories } = await supabase
-      .from('role_memories')
-      .select('content, metadata, importance_score')
-      .eq('role_id', roleId)
-      .order('importance_score', { ascending: false })
-      .limit(5);
-
-    // Ensure we don't try to access properties of null/undefined memories
-    return memories || [];
-  } catch (error) {
-    console.error('Error retrieving memories:', error);
-    return [];
-  }
-}
-
 async function storeMessageMemory(
   supabase: SupabaseClient,
   roleId: string,
   threadId: string,
   message: any
 ) {
-  // Calculate safe importance score
-  const baseScore = 0.5; // Default base score
-  const contextMultiplier = message.metadata?.is_response ? 1.2 : 1.0;
-  const importanceScore = Math.max(0, Math.min(1, baseScore * contextMultiplier));
-
-  // Ensure metadata is always an object
   const metadata = {
     thread_id: threadId,
     message_id: message.id,
     timestamp: new Date().toISOString(),
     memory_type: 'conversation',
-    importance_score: importanceScore,
-    conversation_context: {
-      is_response: message.metadata?.is_response || false,
-      to_message_id: message.metadata?.to_message_id
-    }
+    is_response: message.metadata?.is_response || false,
+    to_message_id: message.metadata?.to_message_id
   };
 
   await supabase
