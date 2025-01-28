@@ -21,7 +21,7 @@ export async function processMessage(
 
   if (!role) throw new Error('Role not found');
 
-  // Get relevant memories (simple retrieval)
+  // Get recent memories
   const { data: memories } = await supabase
     .from('role_memories')
     .select('content')
@@ -29,11 +29,24 @@ export async function processMessage(
     .order('created_at', { ascending: false })
     .limit(5);
 
-  console.log('Retrieved relevant memories:', memories?.length || 0);
+  console.log('Retrieved memories:', memories?.length || 0);
 
-  // Store message as memory
+  // Store message as memory with simplified metadata
   try {
-    await storeMessageMemory(supabase, roleId, threadId, userMessage);
+    await supabase
+      .from('role_memories')
+      .insert({
+        role_id: roleId,
+        content: userMessage.content,
+        context_type: 'conversation',
+        metadata: {
+          message_id: userMessage.id,
+          thread_id: threadId,
+          timestamp: new Date().toISOString(),
+          memory_type: 'conversation'
+        },
+        importance_score: 1.0 // Default importance
+      });
   } catch (error) {
     console.error('Error storing memory:', error);
   }
@@ -73,43 +86,26 @@ ${role.instructions}`;
 
   const responseContent = completion.choices[0].message.content;
 
-  // Store response as memory
+  // Store response as memory with simplified metadata
   try {
-    await storeMessageMemory(supabase, roleId, threadId, {
-      content: responseContent,
-      metadata: {
-        is_response: true,
-        to_message_id: userMessage.id
-      }
-    });
+    await supabase
+      .from('role_memories')
+      .insert({
+        role_id: roleId,
+        content: responseContent,
+        context_type: 'conversation',
+        metadata: {
+          is_response: true,
+          thread_id: threadId,
+          to_message_id: userMessage.id,
+          timestamp: new Date().toISOString(),
+          memory_type: 'conversation'
+        },
+        importance_score: 1.0 // Default importance
+      });
   } catch (error) {
     console.error('Error storing response memory:', error);
   }
 
   return responseContent;
-}
-
-async function storeMessageMemory(
-  supabase: SupabaseClient,
-  roleId: string,
-  threadId: string,
-  message: any
-) {
-  const metadata = {
-    thread_id: threadId,
-    message_id: message.id,
-    timestamp: new Date().toISOString(),
-    memory_type: 'conversation',
-    is_response: message.metadata?.is_response || false,
-    to_message_id: message.metadata?.to_message_id
-  };
-
-  await supabase
-    .from('role_memories')
-    .insert({
-      role_id: roleId,
-      content: message.content,
-      context_type: 'conversation',
-      metadata
-    });
 }
