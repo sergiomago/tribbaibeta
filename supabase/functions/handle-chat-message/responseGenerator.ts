@@ -21,31 +21,42 @@ export async function generateRoleResponse(
     ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
     : '';
 
-  const completion = await openai.chat.completions.create({
-    model: role.model || 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: `${role.instructions}\n\n${memoryContext}`
-      },
-      { role: 'user', content: userMessage.content }
-    ],
-  });
+  console.log('Generating response with role:', role.name);
+  console.log('Memory context:', memoryContext ? 'Present' : 'None');
 
-  const responseContent = completion.choices[0].message.content;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `${role.instructions}\n\n${memoryContext}`
+        },
+        { role: 'user', content: userMessage.content }
+      ],
+    });
 
-  const { data: savedMessage } = await supabase
-    .from('messages')
-    .insert({
-      thread_id: threadId,
-      role_id: roleId,
-      content: responseContent,
-      chain_id: userMessage.id,
-    })
-    .select()
-    .single();
+    const responseContent = completion.choices[0].message.content;
+    console.log('Generated response successfully');
 
-  return { savedMessage, role };
+    const { data: savedMessage, error } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        role_id: roleId,
+        content: responseContent,
+        chain_id: userMessage.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return { savedMessage, role };
+  } catch (error) {
+    console.error('Error generating response:', error);
+    throw error;
+  }
 }
 
 export async function recordInteraction(
