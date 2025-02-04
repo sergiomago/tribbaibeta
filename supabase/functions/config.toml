@@ -1,0 +1,13 @@
+project_id = "wdffpyeesafsejfmzwvi"
+
+[create-checkout-session.http]
+port = 54321
+
+[check-subscription.http]
+port = 54321
+
+[stripe-webhook.http]
+port = 54321
+
+[create-role-mind.http]
+port = 54321

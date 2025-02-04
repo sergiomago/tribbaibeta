@@ -1,0 +1,1 @@
+export const LLONGTERM_API_KEY = process.env.LLONGTERM_API_KEY || '';
