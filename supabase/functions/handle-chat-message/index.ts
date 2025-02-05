@@ -30,91 +30,36 @@ serve(async (req) => {
 
     console.log('Processing message:', { threadId, content, taggedRoleId, chain });
 
-    // If taggedRoleId is a string but not a UUID, assume it's a role tag and look up the ID
-    let resolvedRoleId = taggedRoleId;
-    if (taggedRoleId && !taggedRoleId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-      console.log('Looking up role ID for tag:', taggedRoleId);
-      
-      // First check if the role exists in the thread
-      const { data: threadRole, error: threadRoleError } = await supabase
-        .from('thread_roles')
-        .select('roles(id, tag)')
-        .eq('thread_id', threadId)
-        .eq('roles.tag', taggedRoleId)
-        .maybeSingle();
-
-      if (threadRoleError) {
-        console.error('Error looking up role in thread:', threadRoleError);
-        throw new Error(`Error looking up role: ${threadRoleError.message}`);
-      }
-
-      if (!threadRole) {
-        // Check if the role exists at all
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('id, tag')
-          .eq('tag', taggedRoleId)
-          .maybeSingle();
-
-        if (roleError) {
-          console.error('Error looking up role:', roleError);
-          throw new Error(`Error looking up role: ${roleError.message}`);
-        }
-
-        if (!role) {
-          throw new Error(`No role found with tag "@${taggedRoleId}". Please make sure you're using a valid role tag.`);
-        } else {
-          throw new Error(`The role "@${taggedRoleId}" exists but is not assigned to this conversation. Please add it to the conversation first.`);
-        }
-      }
-
-      resolvedRoleId = threadRole.roles.id;
-      console.log('Resolved role ID:', resolvedRoleId);
-    }
-
-    // Get thread roles first to validate and reuse later
-    const { data: initialThreadRoles, error: initialThreadRolesError } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
-
-    if (initialThreadRolesError) throw initialThreadRolesError;
-
-    if (!initialThreadRoles?.length) {
-      throw new Error('This thread has no roles assigned. Please add at least one role before sending messages.');
-    }
-
     // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
-        tagged_role_id: resolvedRoleId || null,
-        current_state: 'initial_analysis'
+        tagged_role_id: taggedRoleId || null,
       })
-      .select('id, thread_id, content, tagged_role_id')
+      .select()
       .single();
 
     if (messageError) throw messageError;
 
-    // Update state to processing
-    await supabase
-      .from('messages')
-      .update({ current_state: 'processing' })
-      .eq('id', message.id);
-
     // Get roles to respond
     let rolesToRespond;
-    if (resolvedRoleId) {
+    if (taggedRoleId) {
       // If tagged, only that role responds
-      rolesToRespond = [{ role_id: resolvedRoleId }];
+      rolesToRespond = [{ role_id: taggedRoleId }];
     } else if (chain) {
       // Use provided chain
       rolesToRespond = chain;
     } else {
-      // Reuse initial thread roles
-      rolesToRespond = initialThreadRoles;
+      // Get thread roles in order
+      const { data: threadRoles } = await supabase
+        .from('thread_roles')
+        .select('role_id')
+        .eq('thread_id', threadId)
+        .order('response_order', { ascending: true });
+      
+      rolesToRespond = threadRoles;
     }
 
     if (!rolesToRespond?.length) {
@@ -123,22 +68,8 @@ serve(async (req) => {
 
     console.log('Roles responding:', rolesToRespond);
 
-    // Get previous messages for context
-    const { data: previousMessages } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        role:roles(
-          name,
-          tag
-        )
-      `)
-      .eq('thread_id', threadId)
-      .eq('chain_id', message.id)
-      .order('created_at', { ascending: true });
-
-    // Process responses for each role sequentially with accumulated context
-    let accumulatedContext = message.content;
+    // Process responses for each role sequentially
+    let currentPosition = 0;
     for (const { role_id } of rolesToRespond) {
       try {
         const responseContent = await processMessage(
@@ -146,11 +77,11 @@ serve(async (req) => {
           supabase,
           threadId,
           role_id,
-          { ...message, content: accumulatedContext },
-          previousMessages || []
+          message,
+          []
         );
 
-        // Save role's response
+        // Save role's response with chain position
         await supabase
           .from('messages')
           .insert({
@@ -158,29 +89,17 @@ serve(async (req) => {
             role_id: role_id,
             content: responseContent,
             chain_id: message.id,
-            current_state: 'completed',
+            chain_position: currentPosition,
             is_ai: true
           });
 
-        // Update accumulated context by appending role's response
-        accumulatedContext += '\n' + responseContent;
+        currentPosition++;
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
-        // Update original message state to error
-        await supabase
-          .from('messages')
-          .update({ current_state: 'error' })
-          .eq('id', message.id);
         throw error;
       }
     }
-
-    // Update original user message state to completed
-    await supabase
-      .from('messages')
-      .update({ current_state: 'completed' })
-      .eq('id', message.id);
 
     return new Response(
       JSON.stringify({ success: true }), 

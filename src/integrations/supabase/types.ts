@@ -175,6 +175,7 @@ export type Database = {
         Row: {
           chain_id: string | null
           chain_order: number | null
+          chain_position: number | null
           content: string
           created_at: string
           id: string
@@ -190,6 +191,7 @@ export type Database = {
         Insert: {
           chain_id?: string | null
           chain_order?: number | null
+          chain_position?: number | null
           content: string
           created_at?: string
           id?: string
@@ -205,6 +207,7 @@ export type Database = {
         Update: {
           chain_id?: string | null
           chain_order?: number | null
+          chain_position?: number | null
           content?: string
           created_at?: string
           id?: string
@@ -788,16 +791,19 @@ export type Database = {
       thread_roles: {
         Row: {
           created_at: string
+          response_order: number
           role_id: string
           thread_id: string
         }
         Insert: {
           created_at?: string
+          response_order?: never
           role_id: string
           thread_id: string
         }
         Update: {
           created_at?: string
+          response_order?: never
           role_id?: string
           thread_id?: string
         }
@@ -917,6 +923,17 @@ export type Database = {
         }
         Returns: number
       }
+      get_chain_responses: {
+        Args: {
+          p_thread_id: string
+          p_chain_id: string
+        }
+        Returns: {
+          content: string
+          role_name: string
+          role_expertise: string
+        }[]
+      }
       get_conversation_chain: {
         Args: {
           p_thread_id: string
@@ -954,6 +971,16 @@ export type Database = {
           current_order: number
         }
         Returns: string
+      }
+      get_next_role_in_sequence: {
+        Args: {
+          p_thread_id: string
+          p_current_position: number
+        }
+        Returns: {
+          role_id: string
+          sequence_order: number
+        }[]
       }
       get_role_tags: {
         Args: {
