@@ -1,7 +1,7 @@
 import Llongterm from 'llongterm';
 
 export class MemoryService {
-  private static llongterm = new Llongterm({
+  private static llongtermClient = new Llongterm.default({
     keys: {
       llongterm: import.meta.env.VITE_LLONGTERM_KEY,
       openai: import.meta.env.VITE_OPENAI_KEY
@@ -13,7 +13,7 @@ export class MemoryService {
   private static async getMind() {
     if (!this.mind) {
       try {
-        this.mind = await this.llongterm.create({ specialism: 'Tribbai' });
+        this.mind = await this.llongtermClient.create({ specialism: 'Tribbai' });
         console.log('Mind created successfully');
       } catch (error) {
         console.error('Error creating mind:', error);
@@ -25,7 +25,7 @@ export class MemoryService {
 
   static async getConversationContext(conversationId: string): Promise<string[]> {
     try {
-      const { memories } = await this.llongterm.retrieve({
+      const { memories } = await this.llongtermClient.retrieve({
         conversation_id: conversationId,
         depth: 3
       });
