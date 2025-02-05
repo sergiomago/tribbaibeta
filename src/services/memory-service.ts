@@ -1,7 +1,7 @@
 import Llongterm from 'llongterm';
 
 export class MemoryService {
-  private static llongtermClient = new Llongterm.default({
+  private static llongtermClient = new Llongterm({
     keys: {
       llongterm: import.meta.env.VITE_LLONGTERM_KEY,
       openai: import.meta.env.VITE_OPENAI_KEY
