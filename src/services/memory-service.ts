@@ -6,13 +6,19 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        this.llongtermClient = Llongterm({
+        this.llongtermClient = new Llongterm({
           keys: {
             llongterm: import.meta.env.VITE_LLONGTERM_KEY,
             openai: import.meta.env.VITE_OPENAI_KEY
           }
         });
+        
+        const mind = await this.llongtermClient.create({ 
+          specialism: 'Tribbai' 
+        });
+        
         console.log('Mind created successfully');
+        return mind;
       } catch (error) {
         console.error('Error creating mind:', error);
         throw error;
