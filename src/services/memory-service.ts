@@ -6,8 +6,8 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        // Create a new instance using the constructor
-        this.llongtermClient = new Llongterm({
+        // Initialize Llongterm as a function call, not a constructor
+        this.llongtermClient = Llongterm({
           keys: {
             llongterm: import.meta.env.VITE_LLONGTERM_KEY,
             openai: import.meta.env.VITE_OPENAI_KEY
