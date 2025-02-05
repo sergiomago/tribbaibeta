@@ -1,26 +1,29 @@
-import Llongterm from 'llongterm';
+import * as Llongterm from 'llongterm';
 
 export class MemoryService {
-  private static llongtermClient = new Llongterm({
+  private static llongtermClient = Llongterm.create({
     keys: {
       llongterm: import.meta.env.VITE_LLONGTERM_KEY,
       openai: import.meta.env.VITE_OPENAI_KEY
     }
   });
 
-  private static mind: any;
-
   private static async getMind() {
-    if (!this.mind) {
+    if (!this.llongtermClient) {
       try {
-        this.mind = await this.llongtermClient.create({ specialism: 'Tribbai' });
+        this.llongtermClient = Llongterm.create({ 
+          keys: {
+            llongterm: import.meta.env.VITE_LLONGTERM_KEY,
+            openai: import.meta.env.VITE_OPENAI_KEY
+          }
+        });
         console.log('Mind created successfully');
       } catch (error) {
         console.error('Error creating mind:', error);
         throw error;
       }
     }
-    return this.mind;
+    return this.llongtermClient;
   }
 
   static async getConversationContext(conversationId: string): Promise<string[]> {
