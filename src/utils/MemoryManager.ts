@@ -57,7 +57,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
+  async retrieveMemories(limit: number = 10) {
     try {
       const { data, error } = await supabase
         .from('role_memories')
