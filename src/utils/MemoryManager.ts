@@ -1,17 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
 
 // Define a simplified type for role memories to avoid deep recursion
+type RoleMemoryMetadata = {
+  thread_id?: string;
+  timestamp?: string;
+  memory_type?: string;
+  [key: string]: any;
+};
+
 type RoleMemoryData = {
   id: string;
   role_id: string | null;
   content: string;
   context_type: string;
-  metadata: {
-    thread_id?: string;
-    timestamp?: string;
-    memory_type?: string;
-    [key: string]: any;
-  };
+  metadata: RoleMemoryMetadata;
   created_at: string;
   relevance_score?: number | null;
   last_accessed?: string | null;
