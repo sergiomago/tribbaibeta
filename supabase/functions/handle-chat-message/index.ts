@@ -19,7 +19,15 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error('Supabase configuration is missing');
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
     const { threadId, content, chain, taggedRoleId } = await req.json();
@@ -41,12 +49,17 @@ serve(async (req) => {
       .select()
       .single();
 
-    if (messageError) throw messageError;
+    if (messageError) {
+      console.error('Error saving user message:', messageError);
+      throw messageError;
+    }
 
     // Process responses sequentially
     let currentPosition = 0;
     for (const { role_id } of chain) {
       try {
+        console.log(`Processing response for role ${role_id} at position ${currentPosition}`);
+        
         const responseContent = await processMessage(
           openai,
           supabase,
@@ -56,7 +69,7 @@ serve(async (req) => {
           []
         );
 
-        await supabase
+        const { error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
@@ -66,6 +79,11 @@ serve(async (req) => {
             chain_position: currentPosition,
             is_ai: true
           });
+
+        if (responseError) {
+          console.error(`Error saving response for role ${role_id}:`, responseError);
+          throw responseError;
+        }
 
         currentPosition++;
 
@@ -84,7 +102,8 @@ serve(async (req) => {
     console.error('Error in handle-chat-message:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'An error occurred while processing your request.'
+        error: error.message || 'An error occurred while processing your request.',
+        details: error.toString()
       }),
       { 
         status: 500,
