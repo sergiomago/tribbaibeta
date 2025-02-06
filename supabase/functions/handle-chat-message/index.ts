@@ -47,6 +47,21 @@ serve(async (req) => {
       throw messageError;
     }
 
+    // Get previous messages in this thread
+    const { data: previousMessages, error: previousMessagesError } = await supabase
+      .from('messages')
+      .select(`
+        *,
+        role:roles(name, expertise_areas)
+      `)
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: true });
+
+    if (previousMessagesError) {
+      console.error('Error fetching previous messages:', previousMessagesError);
+      throw previousMessagesError;
+    }
+
     // Process responses one at a time
     for (const { role_id } of chain) {
       try {
@@ -64,8 +79,22 @@ serve(async (req) => {
           continue;
         }
 
+        // Get current position in chain
+        const currentPosition = chain.findIndex(r => r.role_id === role_id) + 1;
+        const totalRoles = chain.length;
+
+        // Get previous and next roles
+        const previousRole = currentPosition > 1 ? 
+          await supabase.from('roles').select('name, expertise_areas').eq('id', chain[currentPosition - 2].role_id).single() : 
+          null;
+        
+        const nextRole = currentPosition < totalRoles ? 
+          await supabase.from('roles').select('name, expertise_areas').eq('id', chain[currentPosition].role_id).single() : 
+          null;
+
         // Format previous responses
-        const formattedResponses = previousResponses
+        const formattedResponses = previousMessages
+          .filter(msg => msg.role_id !== null) // Filter out user messages
           .map(msg => {
             const roleName = msg.role?.name || 'Unknown';
             return `${roleName}: ${msg.content}`;
@@ -85,7 +114,7 @@ ${nextRole ?
   `- You are the last role to respond`}
 
 Previous Responses:
-${previousResponses.length > 0 ? 
+${previousMessages.length > 0 ? 
   `${formattedResponses}` : 
   'You are the first to respond to this message.'}
 
