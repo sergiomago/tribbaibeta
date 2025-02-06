@@ -1,14 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
+type RoleMemoryInsert = Database['public']['Tables']['role_memories']['Insert'];
 type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
-
-// Define a simplified type for memory metadata
-interface MemoryMetadata {
-  thread_id?: string;
-  timestamp?: string;
-  memory_type?: string;
-}
 
 export class MemoryManager {
   private roleId: string;
@@ -21,18 +15,20 @@ export class MemoryManager {
 
   async storeMemory(content: string, contextType: string = 'conversation'): Promise<void> {
     try {
+      const memoryData: RoleMemoryInsert = {
+        role_id: this.roleId,
+        content,
+        context_type: contextType,
+        metadata: {
+          thread_id: this.threadId,
+          timestamp: new Date().toISOString(),
+          memory_type: 'conversation'
+        }
+      };
+
       const { error } = await supabase
         .from('role_memories')
-        .insert({
-          role_id: this.roleId,
-          content,
-          context_type: contextType,
-          metadata: {
-            thread_id: this.threadId,
-            timestamp: new Date().toISOString(),
-            memory_type: 'conversation'
-          }
-        });
+        .insert(memoryData);
 
       if (error) throw error;
       console.log('Memory stored successfully:', { roleId: this.roleId, content });
