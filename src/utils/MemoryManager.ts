@@ -1,22 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 
-// Define a simplified type for memory data
+type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
+
+// Define a simplified type for memory metadata
 interface MemoryMetadata {
   thread_id?: string;
   timestamp?: string;
   memory_type?: string;
-}
-
-interface RoleMemory {
-  id: string;
-  role_id: string | null;
-  content: string;
-  context_type: string;
-  metadata: MemoryMetadata;
-  created_at: string;
-  relevance_score?: number | null;
-  last_accessed?: string | null;
-  access_count?: number | null;
 }
 
 export class MemoryManager {
@@ -51,7 +42,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<RoleMemory[]> {
+  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
@@ -62,7 +53,7 @@ export class MemoryManager {
         .limit(limit);
 
       if (error) throw error;
-      return (data || []) as RoleMemory[];
+      return data || [];
     } catch (error) {
       console.error('Error retrieving memories:', error);
       throw error;
