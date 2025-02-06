@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
-type RoleMemory = Database['public']['Tables']['role_memories']['Row'];
+type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
 
 export class MemoryManager {
   private roleId: string;
@@ -35,7 +35,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<RoleMemory[]> {
+  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
