@@ -84,8 +84,27 @@ serve(async (req) => {
           nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
         ]);
 
+        // Get previous responses in this chain
+        const { data: previousResponses } = await supabase
+          .from('messages')
+          .select(`
+            content,
+            role:roles(name)
+          `)
+          .eq('thread_id', threadId)
+          .eq('chain_id', message.id)
+          .order('created_at', { ascending: true });
+
+        // Get relevant memories
+        const { data: memories } = await supabase
+          .from('role_memories')
+          .select('content')
+          .eq('role_id', role_id)
+          .order('importance_score', { ascending: false })
+          .limit(5);
+
         // Format previous responses
-        const formattedResponses = previousResponses
+        const formattedResponses = (previousResponses || [])
           .map(msg => {
             const roleName = msg.role?.name || 'Unknown';
             return `${roleName}: ${msg.content}`;
@@ -108,12 +127,12 @@ ${nextRole ?
   `- You are the last role to respond`}
 
 Previous Responses in This Chain:
-${previousResponses.length > 0 ? 
+${previousResponses?.length > 0 ? 
   `${formattedResponses}` : 
   'You are the first to respond to this message.'}
 
 Relevant Past Context:
-${memories ? 
+${memories?.length > 0 ? 
   `${memories.map(m => `- ${m.content}`).join('\n')}` :
   'No relevant past context available.'}
 
