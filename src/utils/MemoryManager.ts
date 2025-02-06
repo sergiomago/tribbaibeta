@@ -2,7 +2,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
 type RoleMemory = Database['public']['Tables']['role_memories']['Row'];
-type MemoryResponse = Awaited<ReturnType<typeof supabase.from<'role_memories'>>['data']>;
 
 export class MemoryManager {
   private roleId: string;
@@ -13,7 +12,7 @@ export class MemoryManager {
     this.threadId = threadId;
   }
 
-  async storeMemory(content: string, contextType: string = 'conversation') {
+  async storeMemory(content: string, contextType: string = 'conversation'): Promise<void> {
     try {
       const { error } = await supabase
         .from('role_memories')
@@ -54,7 +53,7 @@ export class MemoryManager {
     }
   }
 
-  async clearMemories() {
+  async clearMemories(): Promise<void> {
     try {
       const { error } = await supabase
         .from('role_memories')
@@ -71,6 +70,6 @@ export class MemoryManager {
   }
 }
 
-export const createMemoryManager = (roleId: string, threadId: string) => {
+export const createMemoryManager = (roleId: string, threadId: string): MemoryManager => {
   return new MemoryManager(roleId, threadId);
 };
