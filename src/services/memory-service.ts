@@ -1,4 +1,8 @@
-import Llongterm from 'llongterm';
+import { default as LlongtermClient } from 'llongterm';
+
+interface LlongtermResponse {
+  memories: { content: string }[];
+}
 
 export class MemoryService {
   private static llongtermClient: any = null;
@@ -6,7 +10,7 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        const client = Llongterm({
+        const client = LlongtermClient({
           keys: {
             llongterm: import.meta.env.VITE_LLONGTERM_KEY,
             openai: import.meta.env.VITE_OPENAI_KEY
@@ -30,7 +34,7 @@ export class MemoryService {
   static async getConversationContext(conversationId: string): Promise<string[]> {
     try {
       const mind = await this.getMind();
-      const { memories } = await mind.retrieve({
+      const { memories }: LlongtermResponse = await mind.retrieve({
         conversation_id: conversationId,
         depth: 3
       });
