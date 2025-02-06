@@ -12,23 +12,24 @@ export class RoleOrchestrator {
     console.log('Orchestrator handling message:', { content, taggedRoleId });
 
     try {
-      // 1. If a role is tagged, only that role should respond
-      if (taggedRoleId) {
-        console.log('Tagged role detected:', taggedRoleId);
-        await this.handleTaggedMessage(content, taggedRoleId);
-        return;
-      }
+      // Simple message handling - either use tagged role or get chain
+      const chain = taggedRoleId 
+        ? [{ role_id: taggedRoleId }]
+        : await this.getSimpleChain();
 
-      // 2. For untagged messages, get simple conversation chain
-      const { data: chain } = await supabase.rpc(
-        'get_simple_conversation_chain',
-        { p_thread_id: this.threadId }
-      );
+      console.log('Processing with chain:', chain);
 
-      console.log('Simple conversation chain:', chain);
+      // Process message through edge function
+      const { error } = await supabase.functions.invoke("handle-chat-message", {
+        body: {
+          threadId: this.threadId,
+          content,
+          chain,
+          taggedRoleId
+        },
+      });
 
-      // 3. Process message through chain
-      await this.processMessageThroughChain(content, chain);
+      if (error) throw error;
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
@@ -36,28 +37,14 @@ export class RoleOrchestrator {
     }
   }
 
-  private async handleTaggedMessage(content: string, taggedRoleId: string): Promise<void> {
-    const { error } = await supabase.functions.invoke("handle-chat-message", {
-      body: {
-        threadId: this.threadId,
-        content,
-        taggedRoleId
-      },
-    });
+  private async getSimpleChain() {
+    const { data: threadRoles } = await supabase
+      .from('thread_roles')
+      .select('role_id')
+      .eq('thread_id', this.threadId)
+      .order('created_at', { ascending: true });
 
-    if (error) throw error;
-  }
-
-  private async processMessageThroughChain(content: string, chain: any[]): Promise<void> {
-    const { error } = await supabase.functions.invoke("handle-chat-message", {
-      body: {
-        threadId: this.threadId,
-        content,
-        chain
-      },
-    });
-
-    if (error) throw error;
+    return threadRoles || [];
   }
 }
 

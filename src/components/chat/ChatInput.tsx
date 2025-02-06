@@ -9,7 +9,6 @@ import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
-import { supabase } from "@/integrations/supabase/client";
 
 interface ChatInputProps {
   threadId: string;
@@ -33,11 +32,13 @@ export function ChatInput({
   const isMobile = useIsMobile();
 
   const handleSend = async () => {
+    if (!message.trim()) return;
+    
     setIsSending(true);
     try {
       const orchestrator = createRoleOrchestrator(threadId);
       
-      // Extract tagged role if present (basic implementation)
+      // Extract tagged role if present
       const tagMatch = message.match(/@(\w+)/);
       const taggedRole = tagMatch ? tagMatch[1] : null;
       
@@ -49,37 +50,11 @@ export function ChatInput({
       console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
+        description: "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsSending(false);
-    }
-  };
-
-  const handleFileUpload = async (file: File) => {
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('threadId', threadId);
-
-      const { error } = await supabase.functions.invoke("upload-file", {
-        body: formData,
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "File uploaded",
-        description: "Your file has been uploaded successfully.",
-      });
-      
-      onMessageSent?.();
-    } catch (error) {
-      throw error;
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -90,7 +65,37 @@ export function ChatInput({
     }
   };
 
-  const fileHandler = FileHandler({ onFileUpload: handleFileUpload });
+  const fileHandler = FileHandler({ 
+    onFileUpload: async (file) => {
+      setIsUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('threadId', threadId);
+
+        const { error } = await supabase.functions.invoke("upload-file", {
+          body: formData,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "File uploaded successfully.",
+        });
+        
+        onMessageSent?.();
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to upload file. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsUploading(false);
+      }
+    }
+  });
 
   return (
     <div className="border-t bg-background mt-auto">
@@ -125,21 +130,16 @@ export function ChatInput({
               />
               <Button 
                 onClick={handleSend} 
-                disabled={isSending || disabled}
+                disabled={isSending || disabled || !message.trim()}
                 size={isMobile ? "sm" : "default"}
                 className="shrink-0"
               >
                 {isSending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {!isMobile && <span className="ml-2">Sending...</span>}
-                  </>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    {!isMobile && <span className="ml-2">Send</span>}
-                  </>
+                  <Send className="h-4 w-4" />
                 )}
+                {!isMobile && <span className="ml-2">{isSending ? "Sending..." : "Send"}</span>}
               </Button>
             </div>
           </MessageValidation>

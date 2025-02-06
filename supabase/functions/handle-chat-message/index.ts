@@ -22,13 +22,13 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId, chain } = await req.json();
+    const { threadId, content, chain, taggedRoleId } = await req.json();
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    console.log('Processing message:', { threadId, content, taggedRoleId, chain });
+    console.log('Processing message:', { threadId, content, chain, taggedRoleId });
 
     // Save user message
     const { data: message, error: messageError } = await supabase
@@ -43,34 +43,9 @@ serve(async (req) => {
 
     if (messageError) throw messageError;
 
-    // Get roles to respond
-    let rolesToRespond;
-    if (taggedRoleId) {
-      // If tagged, only that role responds
-      rolesToRespond = [{ role_id: taggedRoleId }];
-    } else if (chain) {
-      // Use provided chain
-      rolesToRespond = chain;
-    } else {
-      // Get thread roles in order
-      const { data: threadRoles } = await supabase
-        .from('thread_roles')
-        .select('role_id')
-        .eq('thread_id', threadId)
-        .order('response_order', { ascending: true });
-      
-      rolesToRespond = threadRoles;
-    }
-
-    if (!rolesToRespond?.length) {
-      throw new Error('No roles found to respond');
-    }
-
-    console.log('Roles responding:', rolesToRespond);
-
-    // Process responses for each role sequentially
+    // Process responses sequentially
     let currentPosition = 0;
-    for (const { role_id } of rolesToRespond) {
+    for (const { role_id } of chain) {
       try {
         const responseContent = await processMessage(
           openai,
@@ -81,7 +56,6 @@ serve(async (req) => {
           []
         );
 
-        // Save role's response with chain position
         await supabase
           .from('messages')
           .insert({
@@ -110,7 +84,7 @@ serve(async (req) => {
     console.error('Error in handle-chat-message:', error);
     return new Response(
       JSON.stringify({ 
-        error: 'An error occurred while processing your request. Please try again later.'
+        error: 'An error occurred while processing your request.'
       }),
       { 
         status: 500,
