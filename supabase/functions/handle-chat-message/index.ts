@@ -7,7 +7,6 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-// Define CORS headers
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -82,13 +81,25 @@ serve(async (req) => {
           .eq('chain_id', message.id)
           .order('created_at', { ascending: true });
 
-        // Get relevant memories
-        const { data: memories } = await supabase
-          .from('role_memories')
-          .select('content')
-          .eq('role_id', role_id)
-          .order('importance_score', { ascending: false })
-          .limit(5);
+        // Get chain position information
+        const { data: threadRoles } = await supabase
+          .from('thread_roles')
+          .select('role_id')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: true });
+
+        const totalRoles = threadRoles?.length || 0;
+        const currentPosition = threadRoles?.findIndex(tr => tr.role_id === role_id) + 1 || 0;
+        
+        // Get previous and next role information
+        const previousRoleId = currentPosition > 1 ? threadRoles[currentPosition - 2]?.role_id : null;
+        const nextRoleId = currentPosition < totalRoles ? threadRoles[currentPosition]?.role_id : null;
+
+        // Get previous and next role details if they exist
+        const [previousRole, nextRole] = await Promise.all([
+          previousRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', previousRoleId).single() : null,
+          nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
+        ]);
 
         // Format previous responses
         const formattedResponses = (previousResponses || [])
@@ -99,34 +110,42 @@ serve(async (req) => {
           })
           .join('\n\n');
 
-        // Create the system prompt
-        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ') || 'General assistance'}. 
+        // Create the system prompt with the new structure
+        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}. 
+Position: ${currentPosition} of ${totalRoles}
 
-Your Core Expertise Areas:
-${role.expertise_areas?.map(area => `- ${area}`).join('\n') || '- General assistance'}
+CONVERSATION CONTEXT:
+Previous Expert: ${previousRole ? `${previousRole.data.name} (expertise: ${previousRole.data.expertise_areas?.join(', ')})` : 'You are first to respond'}
+Next Expert: ${nextRole ? `${nextRole.data.name} (expertise: ${nextRole.data.expertise_areas?.join(', ')})` : 'You are last to respond'}
 
-Previous Responses in This Chain:
-${previousResponses?.length > 0 ? formattedResponses : 'You are the first to respond to this message.'}
+Previous Responses in Chain:
+${previousResponses?.length > 0 ? formattedResponses : 'You are first to respond'}
 
-Relevant Past Context:
-${memories?.length > 0 ? memories.map(m => `- ${m.content}`).join('\n') : 'No relevant past context available.'}
+COLLABORATION GUIDELINES:
 
-Response Guidelines:
-1. Primary Focus:
-   - Address aspects matching your expertise first
-   - Draw from your specialized knowledge
-   - Stay focused on the user's query
+1. Expertise Focus
+   - Analyze the conversation through the lens of your specific expertise: ${role.expertise_areas?.join(', ')}
+   - Provide insights that only someone with your background would offer
+   - Stay within your domain of expertise
 
-2. Response Style:
-   - Be clear, concise, and focused
-   - Maintain a professional yet engaging tone
-   - Ensure responses are relevant and helpful
+2. Progressive Building
+   - Reference valuable points from previous experts
+   - Add new insights based on your specific expertise
+   - Don't repeat analysis that's already been covered
+   - Identify gaps that align with the next expert's expertise
 
-Your Specific Role Instructions:
+3. Knowledge Integration
+   - Show how your expertise connects to or challenges previous points
+   - Highlight aspects where your expertise reveals new considerations
+   - Tag other roles when identifying areas that need their expertise
+
+Your Specific Instructions:
 ${role.instructions}
 
-Current User Query:
-${content}`;
+Current Discussion:
+${content}
+
+Remember: Focus on what makes your expertise unique while building upon the collective insights of the team.`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
