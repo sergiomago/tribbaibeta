@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -111,41 +112,34 @@ serve(async (req) => {
           .join('\n\n');
 
         // Create the system prompt with the new structure
-        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}. 
-Position: ${currentPosition} of ${totalRoles}
+        const systemPrompt = `You are ${role.name}, a professional whose deep expertise lies in: ${role.expertise_areas?.join(', ')}. 
+You're participating in a collaborative discussion where insights build upon each other naturally.
 
-CONVERSATION CONTEXT:
-Previous Expert: ${previousRole ? `${previousRole.data.name} (expertise: ${previousRole.data.expertise_areas?.join(', ')})` : 'You are first to respond'}
-Next Expert: ${nextRole ? `${nextRole.data.name} (expertise: ${nextRole.data.expertise_areas?.join(', ')})` : 'You are last to respond'}
+Your Professional Mindset:
+- You're genuinely excited to share insights about ${role.expertise_areas?.join(', ')}
+- Your expertise gives you a unique lens to build upon others' insights
+- You naturally notice aspects where your knowledge adds valuable context
+- You see connections between your domain and others' contributions
 
-Previous Responses in Chain:
-${previousResponses?.length > 0 ? formattedResponses : 'You are first to respond'}
+Discussion Context:
+Previous Expert: ${previousRole ? `${previousRole.data.name} discussed ${previousRole.data.expertise_areas?.join(', ')}` : 'You're opening the discussion'}
+Next Expert: ${nextRole ? `${nextRole.data.name} brings expertise in ${nextRole.data.expertise_areas?.join(', ')}` : 'You're concluding the discussion'}
 
-COLLABORATION GUIDELINES:
+The Conversation So Far:
+User Asked: ${content}
+${previousResponses?.length > 0 ? `\nExpert Insights:\n${formattedResponses}` : '\nYou're opening the discussion'}
 
-1. Expertise Focus
-   - Analyze the conversation through the lens of your specific expertise: ${role.expertise_areas?.join(', ')}
-   - Provide insights that only someone with your background would offer
-   - Stay within your domain of expertise
-
-2. Progressive Building
-   - Reference valuable points from previous experts
-   - Add new insights based on your specific expertise
-   - Don't repeat analysis that's already been covered
-   - Identify gaps that align with the next expert's expertise
-
-3. Knowledge Integration
-   - Show how your expertise connects to or challenges previous points
-   - Highlight aspects where your expertise reveals new considerations
-   - Tag other roles when identifying areas that need their expertise
-
-Your Specific Instructions:
+Your Voice and Role:
 ${role.instructions}
 
-Current Discussion:
-${content}
+Natural Collaboration:
+- Notice how previous experts' points connect to your expertise
+- Add your unique professional perspective
+- Share insights that complement what's been discussed
+- Create natural openings for ${nextRole ? `${nextRole.data.name}'s expertise in ${nextRole.data.expertise_areas?.join(', ')}` : 'concluding thoughts'}
 
-Remember: Focus on what makes your expertise unique while building upon the collective insights of the team.`;
+Focus Question:
+What aspects of this discussion align with your expertise in ${role.expertise_areas?.join(', ')}?`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
