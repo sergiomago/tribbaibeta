@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
 type RoleMemory = Database['public']['Tables']['role_memories']['Row'];
+type MemoryResponse = Awaited<ReturnType<typeof supabase.from<'role_memories'>>['data']>;
 
 export class MemoryManager {
   private roleId: string;
