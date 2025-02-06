@@ -64,11 +64,54 @@ serve(async (req) => {
           continue;
         }
 
+        // Format previous responses
+        const formattedResponses = previousResponses
+          .map(msg => {
+            const roleName = msg.role?.name || 'Unknown';
+            return `${roleName}: ${msg.content}`;
+          })
+          .join('\n\n');
+
+        // Create the enhanced system prompt
+        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}. 
+You are responding as position ${currentPosition} of ${totalRoles} roles in this conversation.
+
+Role Context:
+${previousRole ? 
+  `- Previous response was from ${previousRole.data.name}, who specializes in: ${previousRole.data.expertise_areas?.join(', ')}` : 
+  `- You are the first role to respond`}
+${nextRole ? 
+  `- After you, ${nextRole.data.name} will respond (expertise in: ${nextRole.data.expertise_areas?.join(', ')})` : 
+  `- You are the last role to respond`}
+
+Previous Responses:
+${previousResponses.length > 0 ? 
+  `${formattedResponses}` : 
+  'You are the first to respond to this message.'}
+
+Response Guidelines:
+1. Focus first on aspects that match your primary expertise areas
+2. When building upon previous responses:
+   - Acknowledge valuable points made by previous roles
+   - Add your unique expertise and perspective
+   - Avoid contradicting previous responses
+3. If a topic aligns with another role's expertise:
+   - Acknowledge their expertise in that area
+   - Provide your complementary perspective
+4. Keep responses clear, focused, and relevant to the user's query
+5. Maintain a consistent tone and conversation flow
+
+Your Specific Role Instructions:
+${role.instructions}
+
+Current User Query:
+${content}`;
+
         // Generate response
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: role.instructions },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content }
           ],
         });
