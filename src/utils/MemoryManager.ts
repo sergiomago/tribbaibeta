@@ -1,7 +1,17 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 
-type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
+// Define a simplified type for role memories to avoid deep recursion
+type RoleMemoryData = {
+  id: string;
+  role_id: string | null;
+  content: string;
+  context_type: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  relevance_score?: number | null;
+  last_accessed?: string | null;
+  access_count?: number | null;
+};
 
 export class MemoryManager {
   private roleId: string;
@@ -35,7 +45,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
+  async retrieveMemories(limit: number = 10): Promise<RoleMemoryData[]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
