@@ -173,6 +173,8 @@ export type Database = {
       }
       messages: {
         Row: {
+          chain_id: string | null
+          chain_position: number | null
           content: string
           created_at: string
           id: string
@@ -181,6 +183,8 @@ export type Database = {
           thread_id: string
         }
         Insert: {
+          chain_id?: string | null
+          chain_position?: number | null
           content: string
           created_at?: string
           id?: string
@@ -189,6 +193,8 @@ export type Database = {
           thread_id: string
         }
         Update: {
+          chain_id?: string | null
+          chain_position?: number | null
           content?: string
           created_at?: string
           id?: string
@@ -197,6 +203,13 @@ export type Database = {
           thread_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_chain_id_fkey"
+            columns: ["chain_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_role_id_fkey"
             columns: ["role_id"]

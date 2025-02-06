@@ -1,97 +1,84 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
 import { Json } from "@/integrations/supabase/types";
 
-type RoleMemoryInsert = Database['public']['Tables']['role_memories']['Insert'];
-type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
-
 interface MemoryMetadata {
-  thread_id: string;
-  timestamp: string;
-  memory_type: 'conversation';
+  message_id?: string;
+  thread_id?: string;
+  timestamp?: string;
+  memory_type?: string;
+  [key: string]: any;
 }
 
-// Helper function to convert MemoryMetadata to Json type
-const toJsonMetadata = (metadata: MemoryMetadata): Json => {
-  return {
-    thread_id: metadata.thread_id,
-    timestamp: metadata.timestamp,
-    memory_type: metadata.memory_type
-  } as Json;
+type RoleMemory = {
+  id: string;
+  content: string;
+  context_type: string;
+  metadata: Json;
+  relevance_score?: number;
 };
 
 export class MemoryManager {
   private roleId: string;
-  private threadId: string;
 
-  constructor(roleId: string, threadId: string) {
+  constructor(roleId: string) {
     this.roleId = roleId;
-    this.threadId = threadId;
   }
 
-  async storeMemory(content: string, contextType: string = 'conversation'): Promise<void> {
+  private toJsonMetadata(metadata: MemoryMetadata): Json {
+    return metadata as Json;
+  }
+
+  async storeMemory(content: string, contextType: string, metadata: MemoryMetadata = {}) {
     try {
-      const metadata: MemoryMetadata = {
-        thread_id: this.threadId,
-        timestamp: new Date().toISOString(),
-        memory_type: 'conversation'
-      };
-
-      const memoryData: RoleMemoryInsert = {
-        role_id: this.roleId,
-        content,
-        context_type: contextType,
-        metadata: toJsonMetadata(metadata),
-        importance_score: 1.0
-      };
-
       const { error } = await supabase
         .from('role_memories')
-        .insert(memoryData);
+        .insert({
+          role_id: this.roleId,
+          content,
+          context_type: contextType,
+          metadata: this.toJsonMetadata({
+            ...metadata,
+            timestamp: new Date().toISOString(),
+            memory_type: 'conversation'
+          }),
+          importance_score: 1.0
+        });
 
       if (error) throw error;
-      console.log('Memory stored successfully:', { roleId: this.roleId, content });
     } catch (error) {
       console.error('Error storing memory:', error);
       throw error;
     }
   }
 
-  async retrieveMemories(limit: number = 10) {
+  async retrieveMemories(limit: number = 5) {
     try {
       const { data, error } = await supabase
         .from('role_memories')
         .select('*')
         .eq('role_id', this.roleId)
-        .eq('metadata->thread_id', this.threadId)
-        .order('created_at', { ascending: false })
+        .order('importance_score', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
-      return data || [];
+      return data as RoleMemory[];
     } catch (error) {
       console.error('Error retrieving memories:', error);
       throw error;
     }
   }
 
-  async clearMemories(): Promise<void> {
+  async updateMemoryRelevance(memoryId: string, relevanceScore: number) {
     try {
       const { error } = await supabase
         .from('role_memories')
-        .delete()
-        .eq('role_id', this.roleId)
-        .eq('metadata->thread_id', this.threadId);
+        .update({ relevance_score: relevanceScore })
+        .eq('id', memoryId);
 
       if (error) throw error;
-      console.log('Memories cleared successfully for role:', this.roleId);
     } catch (error) {
-      console.error('Error clearing memories:', error);
+      console.error('Error updating memory relevance:', error);
       throw error;
     }
   }
 }
-
-export const createMemoryManager = (roleId: string, threadId: string): MemoryManager => {
-  return new MemoryManager(roleId, threadId);
-};
