@@ -1,8 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 
-// Define memory data type using Database types
-type RoleMemory = Database['public']['Tables']['role_memories']['Row'];
+// Define a simplified type for memory data
+type RoleMemory = {
+  id: string;
+  role_id: string | null;
+  content: string;
+  context_type: string;
+  metadata: {
+    thread_id?: string;
+    timestamp?: string;
+    memory_type?: string;
+  };
+  created_at: string;
+  relevance_score?: number | null;
+  last_accessed?: string | null;
+  access_count?: number | null;
+};
 
 export class MemoryManager {
   private roleId: string;
@@ -47,7 +60,7 @@ export class MemoryManager {
         .limit(limit);
 
       if (error) throw error;
-      return data || [];
+      return (data || []) as RoleMemory[];
     } catch (error) {
       console.error('Error retrieving memories:', error);
       throw error;
