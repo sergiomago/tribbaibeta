@@ -76,8 +76,7 @@ serve(async (req) => {
             role_id: role_id,
             content: responseContent,
             chain_id: message.id,
-            chain_position: currentPosition,
-            is_ai: true
+            chain_position: currentPosition
           });
 
         if (responseError) {
