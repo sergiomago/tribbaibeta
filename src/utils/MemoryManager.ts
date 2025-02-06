@@ -1,26 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/integrations/supabase/types";
 
-// Define simple metadata type with only essential fields
-type MemoryMetadata = {
-  thread_id?: string;
-  timestamp?: string;
-  memory_type?: string;
-  source?: string;
-  importance?: number;
-};
-
-// Define memory data type without nested complex types
-type MemoryData = {
-  id: string;
-  role_id: string | null;
-  content: string;
-  context_type: string;
-  metadata: MemoryMetadata;
-  created_at: string;
-  relevance_score?: number;
-  last_accessed?: string;
-  access_count?: number;
-};
+// Define memory data type using Database types
+type RoleMemory = Database['public']['Tables']['role_memories']['Row'];
 
 export class MemoryManager {
   private roleId: string;
@@ -54,7 +36,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<MemoryData[]> {
+  async retrieveMemories(limit: number = 10): Promise<RoleMemory[]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
@@ -65,7 +47,7 @@ export class MemoryManager {
         .limit(limit);
 
       if (error) throw error;
-      return (data || []) as MemoryData[];
+      return data || [];
     } catch (error) {
       console.error('Error retrieving memories:', error);
       throw error;
