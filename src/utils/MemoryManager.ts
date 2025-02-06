@@ -1,21 +1,23 @@
 import { supabase } from "@/integrations/supabase/client";
 
 // Define a simplified type for memory data
-type RoleMemory = {
+interface MemoryMetadata {
+  thread_id?: string;
+  timestamp?: string;
+  memory_type?: string;
+}
+
+interface RoleMemory {
   id: string;
   role_id: string | null;
   content: string;
   context_type: string;
-  metadata: {
-    thread_id?: string;
-    timestamp?: string;
-    memory_type?: string;
-  };
+  metadata: MemoryMetadata;
   created_at: string;
   relevance_score?: number | null;
   last_accessed?: string | null;
   access_count?: number | null;
-};
+}
 
 export class MemoryManager {
   private roleId: string;
