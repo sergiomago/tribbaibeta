@@ -40,11 +40,19 @@ export class RelevanceScorer {
 
       // Generate embedding for the content
       const embedding = await createEmbedding(content);
+      
+      if (!embedding || embedding.length === 0) {
+        console.warn('No embedding generated, falling back to basic matching');
+        return expertiseMatch + topicMatch;
+      }
+
+      // Format embedding for Supabase vector type
+      const formattedEmbedding = JSON.stringify(embedding);
 
       // Get similar memories using the embedding
       const { data: memories, error } = await supabase
         .rpc('get_similar_memories', {
-          p_embedding: embedding,
+          p_embedding: formattedEmbedding,
           p_match_threshold: 0.7,
           p_match_count: 5,
           p_role_id: role.id
