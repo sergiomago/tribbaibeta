@@ -12,12 +12,16 @@ export class MemoryManager {
   async storeMemory(content: string, contextType: string = 'conversation') {
     try {
       const { error } = await supabase
-        .from('messages_memory')
+        .from('role_memories')
         .insert({
           role_id: this.roleId,
-          thread_id: this.threadId,
           content,
-          context_type: contextType
+          context_type: contextType,
+          metadata: {
+            thread_id: this.threadId,
+            timestamp: new Date().toISOString(),
+            memory_type: 'conversation'
+          }
         });
 
       if (error) throw error;
@@ -31,10 +35,10 @@ export class MemoryManager {
   async retrieveMemories(limit: number = 10) {
     try {
       const { data, error } = await supabase
-        .from('messages_memory')
+        .from('role_memories')
         .select('*')
         .eq('role_id', this.roleId)
-        .eq('thread_id', this.threadId)
+        .eq('metadata->thread_id', this.threadId)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -49,10 +53,10 @@ export class MemoryManager {
   async clearMemories() {
     try {
       const { error } = await supabase
-        .from('messages_memory')
+        .from('role_memories')
         .delete()
         .eq('role_id', this.roleId)
-        .eq('thread_id', this.threadId);
+        .eq('metadata->thread_id', this.threadId);
 
       if (error) throw error;
       console.log('Memories cleared successfully for role:', this.roleId);
