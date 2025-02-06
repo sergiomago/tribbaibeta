@@ -173,61 +173,30 @@ export type Database = {
       }
       messages: {
         Row: {
-          chain_id: string | null
-          chain_order: number | null
-          chain_position: number | null
           content: string
           created_at: string
           id: string
-          message_type: Database["public"]["Enums"]["message_type"] | null
-          metadata: Json | null
-          reply_to_message_id: string | null
-          response_order: number | null
           role_id: string | null
-          search_vector: unknown | null
           tagged_role_id: string | null
           thread_id: string
         }
         Insert: {
-          chain_id?: string | null
-          chain_order?: number | null
-          chain_position?: number | null
           content: string
           created_at?: string
           id?: string
-          message_type?: Database["public"]["Enums"]["message_type"] | null
-          metadata?: Json | null
-          reply_to_message_id?: string | null
-          response_order?: number | null
           role_id?: string | null
-          search_vector?: unknown | null
           tagged_role_id?: string | null
           thread_id: string
         }
         Update: {
-          chain_id?: string | null
-          chain_order?: number | null
-          chain_position?: number | null
           content?: string
           created_at?: string
           id?: string
-          message_type?: Database["public"]["Enums"]["message_type"] | null
-          metadata?: Json | null
-          reply_to_message_id?: string | null
-          response_order?: number | null
           role_id?: string | null
-          search_vector?: unknown | null
           tagged_role_id?: string | null
           thread_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "messages_reply_to_message_id_fkey"
-            columns: ["reply_to_message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "messages_role_id_fkey"
             columns: ["role_id"]
@@ -251,47 +220,56 @@ export type Database = {
           },
         ]
       }
-      messages_memory: {
+      messages_backup: {
         Row: {
-          content: string
-          context_type: string
-          created_at: string
-          id: string
+          chain_id: string | null
+          chain_order: number | null
+          chain_position: number | null
+          content: string | null
+          created_at: string | null
+          id: string | null
+          message_type: Database["public"]["Enums"]["message_type"] | null
+          metadata: Json | null
+          reply_to_message_id: string | null
+          response_order: number | null
           role_id: string | null
+          search_vector: unknown | null
+          tagged_role_id: string | null
           thread_id: string | null
         }
         Insert: {
-          content: string
-          context_type: string
-          created_at?: string
-          id?: string
+          chain_id?: string | null
+          chain_order?: number | null
+          chain_position?: number | null
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+          metadata?: Json | null
+          reply_to_message_id?: string | null
+          response_order?: number | null
           role_id?: string | null
+          search_vector?: unknown | null
+          tagged_role_id?: string | null
           thread_id?: string | null
         }
         Update: {
-          content?: string
-          context_type?: string
-          created_at?: string
-          id?: string
+          chain_id?: string | null
+          chain_order?: number | null
+          chain_position?: number | null
+          content?: string | null
+          created_at?: string | null
+          id?: string | null
+          message_type?: Database["public"]["Enums"]["message_type"] | null
+          metadata?: Json | null
+          reply_to_message_id?: string | null
+          response_order?: number | null
           role_id?: string | null
+          search_vector?: unknown | null
+          tagged_role_id?: string | null
           thread_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "messages_memory_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_memory_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "threads"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -791,19 +769,16 @@ export type Database = {
       thread_roles: {
         Row: {
           created_at: string
-          response_order: number
           role_id: string
           thread_id: string
         }
         Insert: {
           created_at?: string
-          response_order?: never
           role_id: string
           thread_id: string
         }
         Update: {
           created_at?: string
-          response_order?: never
           role_id?: string
           thread_id?: string
         }
