@@ -2,7 +2,12 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type RoleMemoryInsert = Database['public']['Tables']['role_memories']['Insert'];
-type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
+
+interface MemoryMetadata {
+  thread_id: string;
+  timestamp: string;
+  memory_type: 'conversation';
+}
 
 export class MemoryManager {
   private roleId: string;
@@ -15,15 +20,18 @@ export class MemoryManager {
 
   async storeMemory(content: string, contextType: string = 'conversation'): Promise<void> {
     try {
+      const metadata: MemoryMetadata = {
+        thread_id: this.threadId,
+        timestamp: new Date().toISOString(),
+        memory_type: 'conversation'
+      };
+
       const memoryData: RoleMemoryInsert = {
         role_id: this.roleId,
         content,
         context_type: contextType,
-        metadata: {
-          thread_id: this.threadId,
-          timestamp: new Date().toISOString(),
-          memory_type: 'conversation'
-        }
+        metadata,
+        importance_score: 1.0
       };
 
       const { error } = await supabase
@@ -38,7 +46,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
+  async retrieveMemories(limit: number = 10): Promise<Database['public']['Tables']['role_memories']['Row'][]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
