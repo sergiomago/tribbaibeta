@@ -6,12 +6,17 @@ type RoleMemoryData = {
   role_id: string | null;
   content: string;
   context_type: string;
-  metadata: Record<string, any>; // Changed from unknown to any to match Json type
+  metadata: {
+    thread_id?: string;
+    timestamp?: string;
+    memory_type?: string;
+    [key: string]: any;
+  };
   created_at: string;
   relevance_score?: number | null;
   last_accessed?: string | null;
   access_count?: number | null;
-  context_chain?: any; // Added to match DB schema
+  context_chain?: any;
   context_effectiveness?: number | null;
   context_relevance?: number | null;
   context_source?: string | null;
