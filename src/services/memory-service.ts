@@ -1,4 +1,4 @@
-import { default as LlongtermClient } from 'llongterm';
+import { llongtermClient } from '@/lib/llongterm/client';
 
 interface LlongtermResponse {
   memories: { content: string }[];
@@ -10,14 +10,7 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        const client = LlongtermClient({
-          keys: {
-            llongterm: import.meta.env.VITE_LLONGTERM_KEY,
-            openai: import.meta.env.VITE_OPENAI_KEY
-          }
-        });
-        
-        this.llongtermClient = await client.create({ 
+        this.llongtermClient = await llongtermClient.createMind({ 
           specialism: 'Tribbai' 
         });
         
