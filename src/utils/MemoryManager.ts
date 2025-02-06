@@ -1,13 +1,24 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+import { Json } from "@/integrations/supabase/types";
 
 type RoleMemoryInsert = Database['public']['Tables']['role_memories']['Insert'];
+type RoleMemoryRow = Database['public']['Tables']['role_memories']['Row'];
 
 interface MemoryMetadata {
   thread_id: string;
   timestamp: string;
   memory_type: 'conversation';
 }
+
+// Helper function to convert MemoryMetadata to Json type
+const toJsonMetadata = (metadata: MemoryMetadata): Json => {
+  return {
+    thread_id: metadata.thread_id,
+    timestamp: metadata.timestamp,
+    memory_type: metadata.memory_type
+  } as Json;
+};
 
 export class MemoryManager {
   private roleId: string;
@@ -30,7 +41,7 @@ export class MemoryManager {
         role_id: this.roleId,
         content,
         context_type: contextType,
-        metadata,
+        metadata: toJsonMetadata(metadata),
         importance_score: 1.0
       };
 
@@ -46,7 +57,7 @@ export class MemoryManager {
     }
   }
 
-  async retrieveMemories(limit: number = 10): Promise<Database['public']['Tables']['role_memories']['Row'][]> {
+  async retrieveMemories(limit: number = 10): Promise<RoleMemoryRow[]> {
     try {
       const { data, error } = await supabase
         .from('role_memories')
