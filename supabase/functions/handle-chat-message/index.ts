@@ -82,26 +82,6 @@ serve(async (req) => {
           .eq('chain_id', message.id)
           .order('created_at', { ascending: true });
 
-        // Get chain position information
-        const { data: threadRoles } = await supabase
-          .from('thread_roles')
-          .select('role_id')
-          .eq('thread_id', threadId)
-          .order('created_at', { ascending: true });
-
-        const totalRoles = threadRoles?.length || 0;
-        const currentPosition = threadRoles?.findIndex(tr => tr.role_id === role_id) + 1 || 0;
-        
-        // Get previous and next role information
-        const previousRoleId = currentPosition > 1 ? threadRoles[currentPosition - 2]?.role_id : null;
-        const nextRoleId = currentPosition < totalRoles ? threadRoles[currentPosition]?.role_id : null;
-
-        // Get previous and next role details if they exist
-        const [previousRole, nextRole] = await Promise.all([
-          previousRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', previousRoleId).single() : null,
-          nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
-        ]);
-
         // Format previous responses
         const formattedResponses = (previousResponses || [])
           .map(msg => {
@@ -111,35 +91,14 @@ serve(async (req) => {
           })
           .join('\n\n');
 
-        // Create the system prompt with the new structure
+        // Create the system prompt
         const systemPrompt = `You are ${role.name}, a professional whose deep expertise lies in: ${role.expertise_areas?.join(', ')}. 
-You're participating in a collaborative discussion where insights build upon each other naturally.
+Your role instructions: ${role.instructions}
 
-Your Professional Mindset:
-- You're genuinely excited to share insights about ${role.expertise_areas?.join(', ')}
-- Your expertise gives you a unique lens to build upon others' insights
-- You naturally notice aspects where your knowledge adds valuable context
-- You see connections between your domain and others' contributions
+${previousResponses?.length > 0 ? `Previous responses in this chain:\n${formattedResponses}` : 'You are opening the discussion'}
 
-Discussion Context:
-Previous Expert: ${previousRole ? `${previousRole.data.name} discussed ${previousRole.data.expertise_areas?.join(', ')}` : "You are opening the discussion"}
-Next Expert: ${nextRole ? `${nextRole.data.name} brings expertise in ${nextRole.data.expertise_areas?.join(', ')}` : "You are concluding the discussion"}
-
-The Conversation So Far:
-User Asked: ${content}
-${previousResponses?.length > 0 ? `\nExpert Insights:\n${formattedResponses}` : '\nYou are opening the discussion'}
-
-Your Voice and Role:
-${role.instructions}
-
-Natural Collaboration:
-- Notice how previous experts' points connect to your expertise
-- Add your unique professional perspective
-- Share insights that complement what's been discussed
-- Create natural openings for ${nextRole ? `${nextRole.data.name}'s expertise in ${nextRole.data.expertise_areas?.join(', ')}` : 'concluding thoughts'}
-
-Focus Question:
-What aspects of this discussion align with your expertise in ${role.expertise_areas?.join(', ')}?`;
+Focus on providing expertise in ${role.expertise_areas?.join(', ')}.
+Be clear, professional, and stay within your domain of expertise.`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
