@@ -122,12 +122,12 @@ Your Professional Mindset:
 - You see connections between your domain and others' contributions
 
 Discussion Context:
-Previous Expert: ${previousRole ? `${previousRole.data.name} discussed ${previousRole.data.expertise_areas?.join(', ')}` : 'You're opening the discussion'}
-Next Expert: ${nextRole ? `${nextRole.data.name} brings expertise in ${nextRole.data.expertise_areas?.join(', ')}` : 'You're concluding the discussion'}
+Previous Expert: ${previousRole ? `${previousRole.data.name} discussed ${previousRole.data.expertise_areas?.join(', ')}` : "You are opening the discussion"}
+Next Expert: ${nextRole ? `${nextRole.data.name} brings expertise in ${nextRole.data.expertise_areas?.join(', ')}` : "You are concluding the discussion"}
 
 The Conversation So Far:
 User Asked: ${content}
-${previousResponses?.length > 0 ? `\nExpert Insights:\n${formattedResponses}` : '\nYou're opening the discussion'}
+${previousResponses?.length > 0 ? `\nExpert Insights:\n${formattedResponses}` : '\nYou are opening the discussion'}
 
 Your Voice and Role:
 ${role.instructions}
