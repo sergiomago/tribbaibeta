@@ -64,11 +64,93 @@ serve(async (req) => {
           continue;
         }
 
+        // Get chain position information
+        const { data: threadRoles } = await supabase
+          .from('thread_roles')
+          .select('role_id')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: true });
+
+        const totalRoles = threadRoles?.length || 0;
+        const currentPosition = threadRoles?.findIndex(tr => tr.role_id === role_id) + 1 || 0;
+        
+        // Get previous and next role information
+        const previousRoleId = currentPosition > 1 ? threadRoles[currentPosition - 2]?.role_id : null;
+        const nextRoleId = currentPosition < totalRoles ? threadRoles[currentPosition]?.role_id : null;
+
+        // Get previous and next role details if they exist
+        const [previousRole, nextRole] = await Promise.all([
+          previousRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', previousRoleId).single() : null,
+          nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
+        ]);
+
+        // Format previous responses
+        const formattedResponses = previousResponses
+          .map(msg => {
+            const roleName = msg.role?.name || 'Unknown';
+            return `${roleName}: ${msg.content}`;
+          })
+          .join('\n\n');
+
+        // Create the new system prompt
+        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas.join(', ')}. 
+You are responding as position ${currentPosition} of ${totalRoles} roles in this conversation.
+
+Your Core Expertise Areas:
+${role.expertise_areas.map(area => `- ${area}`).join('\n')}
+
+Role Context:
+${previousRole ? 
+  `- Previous response was from ${previousRole.data.name}, who specializes in: ${previousRole.data.expertise_areas?.join(', ')}` : 
+  `- You are the first role to respond`}
+${nextRole ? 
+  `- After you, ${nextRole.data.name} will respond (expertise in: ${nextRole.data.expertise_areas?.join(', ')})` : 
+  `- You are the last role to respond`}
+
+Previous Responses in This Chain:
+${previousResponses.length > 0 ? 
+  `${formattedResponses}` : 
+  'You are the first to respond to this message.'}
+
+Relevant Past Context:
+${memories ? 
+  `${memories.map(m => `- ${m.content}`).join('\n')}` :
+  'No relevant past context available.'}
+
+Response Guidelines:
+1. Primary Focus:
+   - Address aspects matching your expertise first
+   - Draw from your specialized knowledge in ${role.expertise_areas.join(', ')}
+
+2. Building on Previous Responses:
+   - Acknowledge valuable insights from previous roles
+   - Add your unique expert perspective
+   - Maintain conversation coherence
+   - Avoid contradicting previous responses
+
+3. Expertise Acknowledgment:
+   - Recognize when topics align with other roles' expertise
+   - Provide complementary insights from your perspective
+   - Build upon the team's collective knowledge
+
+4. Response Style:
+   - Be clear, concise, and focused
+   - Stay relevant to the user's query
+   - Maintain a professional yet engaging tone
+
+Your Specific Role Instructions:
+${role.instructions}
+
+Current User Query:
+${content}
+
+Remember: You are part of a collaborative AI team. Your goal is to provide expert insights while building upon the collective knowledge of all roles involved.`;
+
         // Generate response
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: role.instructions },
+            { role: 'system', content: systemPrompt },
             { role: 'user', content }
           ],
         });
