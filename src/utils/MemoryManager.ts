@@ -1,29 +1,26 @@
 import { supabase } from "@/integrations/supabase/client";
 
-// Define a simplified type for role memories to avoid deep recursion
-type RoleMemoryMetadata = {
+// Define a base metadata type without recursive references
+interface BaseMetadata {
   thread_id?: string;
   timestamp?: string;
   memory_type?: string;
-  [key: string]: any;
-};
+  source?: string;
+  importance?: number;
+}
 
-type RoleMemoryData = {
+// Define a simplified type for role memories
+interface RoleMemoryData {
   id: string;
   role_id: string | null;
   content: string;
   context_type: string;
-  metadata: RoleMemoryMetadata;
+  metadata: BaseMetadata;
   created_at: string;
   relevance_score?: number | null;
   last_accessed?: string | null;
   access_count?: number | null;
-  context_chain?: any;
-  context_effectiveness?: number | null;
-  context_relevance?: number | null;
-  context_source?: string | null;
-  verification_status?: string | null;
-};
+}
 
 export class MemoryManager {
   private roleId: string;
