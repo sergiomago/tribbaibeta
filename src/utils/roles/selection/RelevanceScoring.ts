@@ -1,3 +1,4 @@
+
 import { Role } from "../types/roles";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -9,15 +10,33 @@ export class RelevanceScorer {
       this.calculateCapabilityMatch(role, content)
     ]);
 
-    // Weighted scoring
+    console.log('Scores for role', role.name, ':', {
+      contextScore,
+      interactionScore,
+      capabilityScore,
+      content
+    });
+
+    // Adjusted weights to prioritize context and capability matching
     return (
-      contextScore * 0.4 +
-      interactionScore * 0.3 +
-      capabilityScore * 0.3
+      contextScore * 0.5 +          // Increased weight for context relevance
+      interactionScore * 0.2 +      // Reduced weight for interaction history
+      capabilityScore * 0.3         // Maintained weight for capability matching
     );
   }
 
   private async calculateContextRelevance(role: Role, content: string): Promise<number> {
+    // Check expertise areas match
+    const expertiseMatch = role.expertise_areas?.some(area => 
+      content.toLowerCase().includes(area.toLowerCase())
+    ) ? 0.7 : 0;
+
+    // Check primary topics match
+    const topicMatch = role.primary_topics?.some(topic =>
+      content.toLowerCase().includes(topic.toLowerCase())
+    ) ? 0.3 : 0;
+
+    // Get similar memories for additional context
     const { data: memories } = await supabase
       .rpc('get_similar_memories', {
         p_embedding: content,
@@ -26,8 +45,11 @@ export class RelevanceScorer {
         p_role_id: role.id
       });
 
-    if (!memories?.length) return 0;
-    return memories.reduce((acc, mem) => acc + mem.similarity, 0) / memories.length;
+    const memoryScore = memories?.length 
+      ? memories.reduce((acc, mem) => acc + mem.similarity, 0) / memories.length
+      : 0;
+
+    return Math.max(expertiseMatch + topicMatch, memoryScore);
   }
 
   private async calculateInteractionHistory(roleId: string, threadId: string): Promise<number> {
@@ -43,13 +65,15 @@ export class RelevanceScorer {
   private async calculateCapabilityMatch(role: Role, content: string): Promise<number> {
     if (!role.special_capabilities?.length) return 0;
 
-    // Simple keyword matching for capabilities
+    // Enhanced keyword matching for capabilities
     const keywords = {
-      'web_search': ['search', 'find', 'lookup', 'research'],
-      'doc_analysis': ['analyze', 'document', 'read', 'extract']
+      'web_search': ['search', 'find', 'lookup', 'research', 'google', 'look up', 'tell me about'],
+      'doc_analysis': ['analyze', 'document', 'read', 'extract', 'understand', 'explain', 'breakdown']
     };
 
     let matches = 0;
+    let totalWeight = role.special_capabilities.length;
+
     role.special_capabilities.forEach(cap => {
       if (keywords[cap]?.some(keyword => 
         content.toLowerCase().includes(keyword.toLowerCase())
@@ -58,6 +82,6 @@ export class RelevanceScorer {
       }
     });
 
-    return matches / role.special_capabilities.length;
+    return matches / totalWeight;
   }
 }
