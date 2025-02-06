@@ -47,21 +47,6 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get previous messages in this thread
-    const { data: previousMessages, error: previousMessagesError } = await supabase
-      .from('messages')
-      .select(`
-        *,
-        role:roles(name, expertise_areas)
-      `)
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: true });
-
-    if (previousMessagesError) {
-      console.error('Error fetching previous messages:', previousMessagesError);
-      throw previousMessagesError;
-    }
-
     // Process responses one at a time
     for (const { role_id } of chain) {
       try {
@@ -79,68 +64,11 @@ serve(async (req) => {
           continue;
         }
 
-        // Get current position in chain
-        const currentPosition = chain.findIndex(r => r.role_id === role_id) + 1;
-        const totalRoles = chain.length;
-
-        // Get previous and next roles
-        const previousRole = currentPosition > 1 ? 
-          await supabase.from('roles').select('name, expertise_areas').eq('id', chain[currentPosition - 2].role_id).single() : 
-          null;
-        
-        const nextRole = currentPosition < totalRoles ? 
-          await supabase.from('roles').select('name, expertise_areas').eq('id', chain[currentPosition].role_id).single() : 
-          null;
-
-        // Format previous responses
-        const formattedResponses = previousMessages
-          .filter(msg => msg.role_id !== null) // Filter out user messages
-          .map(msg => {
-            const roleName = msg.role?.name || 'Unknown';
-            return `${roleName}: ${msg.content}`;
-          })
-          .join('\n\n');
-
-        // Create the enhanced system prompt
-        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}. 
-You are responding as position ${currentPosition} of ${totalRoles} roles in this conversation.
-
-Role Context:
-${previousRole ? 
-  `- Previous response was from ${previousRole.data.name}, who specializes in: ${previousRole.data.expertise_areas?.join(', ')}` : 
-  `- You are the first role to respond`}
-${nextRole ? 
-  `- After you, ${nextRole.data.name} will respond (expertise in: ${nextRole.data.expertise_areas?.join(', ')})` : 
-  `- You are the last role to respond`}
-
-Previous Responses:
-${previousMessages.length > 0 ? 
-  `${formattedResponses}` : 
-  'You are the first to respond to this message.'}
-
-Response Guidelines:
-1. Focus first on aspects that match your primary expertise areas
-2. When building upon previous responses:
-   - Acknowledge valuable points made by previous roles
-   - Add your unique expertise and perspective
-   - Avoid contradicting previous responses
-3. If a topic aligns with another role's expertise:
-   - Acknowledge their expertise in that area
-   - Provide your complementary perspective
-4. Keep responses clear, focused, and relevant to the user's query
-5. Maintain a consistent tone and conversation flow
-
-Your Specific Role Instructions:
-${role.instructions}
-
-Current User Query:
-${content}`;
-
         // Generate response
         const completion = await openai.chat.completions.create({
           model: role.model || 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: systemPrompt },
+            { role: 'system', content: role.instructions },
             { role: 'user', content }
           ],
         });
