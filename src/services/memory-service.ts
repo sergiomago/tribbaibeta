@@ -6,8 +6,8 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        // Initialize Llongterm with proper instantiation
-        const llongtermInstance = new Llongterm({
+        // Initialize Llongterm without using 'new'
+        const llongtermInstance = Llongterm({
           keys: {
             llongterm: import.meta.env.VITE_LLONGTERM_KEY,
             openai: import.meta.env.VITE_OPENAI_KEY
