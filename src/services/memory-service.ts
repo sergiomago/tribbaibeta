@@ -6,14 +6,15 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        const llongterm = new Llongterm({
+        // Import Llongterm as a default import and use it directly
+        const client = Llongterm({
           keys: {
             llongterm: import.meta.env.VITE_LLONGTERM_KEY,
             openai: import.meta.env.VITE_OPENAI_KEY
           }
         });
         
-        this.llongtermClient = await llongterm.create({ 
+        this.llongtermClient = await client.create({ 
           specialism: 'Tribbai' 
         });
         
