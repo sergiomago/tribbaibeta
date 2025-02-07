@@ -2,7 +2,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import OpenAI from "https://esm.sh/openai@4.26.0";
+import OpenAI from "https://esm.sh/openai";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
 import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
@@ -50,7 +50,7 @@ serve(async (req) => {
 
     // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const openai = new OpenAI({ apiKey: openAIApiKey });
+    const openai = new OpenAI(openAIApiKey);
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     // Validate request body
@@ -228,3 +228,4 @@ Guidelines:
     );
   }
 });
+
