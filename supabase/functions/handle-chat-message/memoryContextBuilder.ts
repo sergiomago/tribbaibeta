@@ -47,7 +47,10 @@ export async function buildMemoryContext(
       .from('messages')
       .select(`
         content,
-        role:roles(name, expertise_areas),
+        role:roles!messages_role_id_fkey (
+          name,
+          expertise_areas
+        ),
         created_at,
         depth_level,
         conversation_context

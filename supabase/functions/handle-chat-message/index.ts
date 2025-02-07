@@ -46,7 +46,7 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
       })
-      .select()
+      .select('*, role:roles!messages_role_id_fkey(*)')
       .single();
 
     if (messageError) {
@@ -56,11 +56,17 @@ serve(async (req) => {
 
     // Get all roles in the chain with their details
     const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
-      const { data: role } = await supabase
+      const { data: role, error: roleError } = await supabase
         .from('roles')
         .select('*')
         .eq('id', role_id)
         .single();
+      
+      if (roleError) {
+        console.error(`Error fetching role ${role_id}:`, roleError);
+        throw roleError;
+      }
+      
       return { ...role, position: index + 1 };
     }));
 
