@@ -51,70 +51,6 @@ export type Database = {
         }
         Relationships: []
       }
-      conversation_points: {
-        Row: {
-          addressed_by: string[] | null
-          content: string
-          created_at: string | null
-          id: string
-          message_id: string | null
-          metadata: Json | null
-          point_type: string
-          relevance_score: number | null
-          requires_expertise: string[] | null
-          role_id: string | null
-          thread_id: string | null
-        }
-        Insert: {
-          addressed_by?: string[] | null
-          content: string
-          created_at?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          point_type: string
-          relevance_score?: number | null
-          requires_expertise?: string[] | null
-          role_id?: string | null
-          thread_id?: string | null
-        }
-        Update: {
-          addressed_by?: string[] | null
-          content?: string
-          created_at?: string | null
-          id?: string
-          message_id?: string | null
-          metadata?: Json | null
-          point_type?: string
-          relevance_score?: number | null
-          requires_expertise?: string[] | null
-          role_id?: string | null
-          thread_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "conversation_points_message_id_fkey"
-            columns: ["message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_points_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversation_points_thread_id_fkey"
-            columns: ["thread_id"]
-            isOneToOne: false
-            referencedRelation: "threads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       conversation_states: {
         Row: {
           active_roles: string[] | null
@@ -237,7 +173,6 @@ export type Database = {
       }
       messages: {
         Row: {
-          analyzed_points: Json | null
           chain_id: string | null
           chain_position: number | null
           content: string
@@ -245,15 +180,12 @@ export type Database = {
           created_at: string
           depth_level: number | null
           id: string
-          interaction_context: Json | null
           response_to_id: string | null
           role_id: string | null
           tagged_role_id: string | null
           thread_id: string
-          topic_map: Json | null
         }
         Insert: {
-          analyzed_points?: Json | null
           chain_id?: string | null
           chain_position?: number | null
           content: string
@@ -261,15 +193,12 @@ export type Database = {
           created_at?: string
           depth_level?: number | null
           id?: string
-          interaction_context?: Json | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id: string
-          topic_map?: Json | null
         }
         Update: {
-          analyzed_points?: Json | null
           chain_id?: string | null
           chain_position?: number | null
           content?: string
@@ -277,12 +206,10 @@ export type Database = {
           created_at?: string
           depth_level?: number | null
           id?: string
-          interaction_context?: Json | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id?: string
-          topic_map?: Json | null
         }
         Relationships: [
           {
