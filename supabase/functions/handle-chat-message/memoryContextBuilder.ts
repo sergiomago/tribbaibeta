@@ -1,11 +1,10 @@
-
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 
 interface MemoryContext {
-  relevantMemories: any[];
-  conversationHistory: any[];
-  contextRelevance: number;
+  systemContext: string;
+  enrichedMessage: string;
+  relevance: number;
   conversationDepth: number;
 }
 
@@ -19,30 +18,19 @@ export async function buildMemoryContext(
   console.log('Building memory context for:', { threadId, roleId });
 
   try {
-    // Generate embedding for the content
-    const embeddingResponse = await openai.embeddings.create({
-      model: "text-embedding-ada-002",
-      input: content,
-    });
-    
-    const embedding = embeddingResponse.data[0].embedding;
-    console.log('Generated embedding for content');
+    // Get role's mind
+    const { data: mindData, error: mindError } = await supabase
+      .from('role_minds')
+      .select('*')
+      .eq('role_id', roleId)
+      .eq('status', 'active')
+      .single();
 
-    // Get relevant memories using similarity search
-    const { data: memories, error: memoryError } = await supabase.rpc(
-      'get_similar_memories',
-      {
-        p_embedding: embedding,
-        p_match_threshold: 0.7,
-        p_match_count: 5,
-        p_role_id: roleId
-      }
-    );
+    if (mindError || !mindData) {
+      throw new Error(`No active mind found for role ${roleId}`);
+    }
 
-    if (memoryError) throw memoryError;
-    console.log('Retrieved relevant memories:', memories?.length || 0);
-
-    // Get conversation history with depth information
+    // Get conversation history
     const { data: history, error: historyError } = await supabase
       .from('messages')
       .select(`
@@ -60,32 +48,34 @@ export async function buildMemoryContext(
       .limit(10);
 
     if (historyError) throw historyError;
-    console.log('Retrieved conversation history:', history?.length || 0);
+
+    // Format conversation history for mind
+    const conversationThread = history?.map(msg => ({
+      role: msg.role ? 'assistant' : 'user',
+      content: msg.content,
+      name: msg.role?.name,
+      expertise: msg.role?.expertise_areas
+    })) || [];
+
+    // Use mind to enrich context
+    const enrichedContext = await mindData.remember({
+      thread: conversationThread,
+      content
+    });
 
     // Calculate conversation depth
     const maxDepth = history?.reduce((max, msg) => 
       Math.max(max, msg.depth_level || 1), 1
     );
 
-    // Calculate context relevance
-    const contextRelevance = calculateContextRelevance(memories || [], content);
-
     return {
-      relevantMemories: memories || [],
-      conversationHistory: history || [],
-      contextRelevance,
+      systemContext: enrichedContext.systemContext || '',
+      enrichedMessage: enrichedContext.enrichedMessage || content,
+      relevance: enrichedContext.relevance || 0,
       conversationDepth: maxDepth
     };
   } catch (error) {
     console.error('Error building memory context:', error);
     throw error;
   }
-}
-
-function calculateContextRelevance(memories: any[], content: string): number {
-  if (!memories.length) return 0;
-  
-  // Average similarity scores from memories
-  const totalSimilarity = memories.reduce((sum, memory) => sum + (memory.similarity || 0), 0);
-  return totalSimilarity / memories.length;
 }
