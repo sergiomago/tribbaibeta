@@ -2,7 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { buildMemoryContext } from "./memoryContextBuilder.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -37,33 +36,9 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Get all roles in the chain with their details
-    const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
-      const { data: role, error: roleError } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', role_id)
-        .single();
-      
-      if (roleError) {
-        console.error(`Error fetching role ${role_id}:`, roleError);
-        throw roleError;
-      }
-      
-      return { ...role, position: index + 1 };
-    }));
-
-    console.log('Chain roles:', chainRoles);
-
     // Process responses sequentially
     for (const [index, { role_id }] of chain.entries()) {
       try {
-        const currentRole = chainRoles[index];
-        if (!currentRole) {
-          console.error(`Role ${role_id} not found in chain roles`);
-          continue;
-        }
-
         // Get role's mind
         const { data: mindData, error: mindError } = await supabase
           .from('role_minds')
@@ -76,6 +51,15 @@ serve(async (req) => {
           console.error(`Error fetching mind for role ${role_id}:`, mindError);
           throw new Error(`No active mind found for role ${role_id}`);
         }
+
+        // Get role details
+        const { data: role, error: roleError } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', role_id)
+          .single();
+
+        if (roleError) throw roleError;
 
         // Get conversation history
         const { data: history, error: historyError } = await supabase
@@ -102,28 +86,30 @@ serve(async (req) => {
           expertise: msg.role?.expertise_areas
         })) || [];
 
-        // Use mind to enrich context
+        // Use mind to enrich context and store memory
         const enrichedContext = await mindData.remember({
           thread: conversationThread,
           content,
           metadata: {
-            role_name: currentRole.name,
-            expertise_areas: currentRole.expertise_areas,
-            thread_id: threadId
+            role_name: role.name,
+            expertise_areas: role.expertise_areas,
+            thread_id: threadId,
+            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
+            chain_position: index + 1
           }
         });
 
         // Generate response using enriched context
         const completion = await openai.chat.completions.create({
-          model: currentRole.model || 'gpt-4o-mini',
+          model: role.model || 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
-              content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
-                ${enrichedContext.systemContext}
+              content: `You are ${role.name}, an expert in ${role.expertise_areas?.join(', ')}.
+                ${enrichedContext.systemContext || ''}
                 
                 Your role instructions:
-                ${currentRole.instructions}
+                ${role.instructions}
                 
                 Guidelines:
                 1. Use the provided context to maintain conversation continuity
@@ -149,7 +135,7 @@ serve(async (req) => {
             chain_position: index + 1,
             conversation_context: {
               enriched_context: enrichedContext,
-              role_expertise: currentRole.expertise_areas,
+              role_expertise: role.expertise_areas,
               chain_position: index + 1
             }
           })
@@ -160,19 +146,6 @@ serve(async (req) => {
           console.error(`Error saving response for role ${role_id}:`, responseError);
           throw responseError;
         }
-
-        // Store interaction in mind
-        await mindData.remember({
-          thread: [
-            { role: 'user', content },
-            { role: 'assistant', content: responseContent }
-          ],
-          metadata: {
-            thread_id: threadId,
-            chain_position: index + 1,
-            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response'
-          }
-        });
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
