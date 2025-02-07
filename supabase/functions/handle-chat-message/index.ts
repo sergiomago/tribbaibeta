@@ -27,11 +27,19 @@ serve(async (req) => {
   }
 
   try {
-    // Validate all required API keys
-    if (!openAIApiKey) {
-      console.error('OpenAI API key is missing or empty');
-      throw new Error('OpenAI API key is not configured properly');
+    console.log('Starting handle-chat-message function...');
+    
+    // Validate OpenAI API key first since that's our current error
+    if (!openAIApiKey || typeof openAIApiKey !== 'string' || openAIApiKey.length < 10) {
+      console.error('OpenAI API key validation failed:', {
+        exists: !!openAIApiKey,
+        type: typeof openAIApiKey,
+        length: openAIApiKey?.length
+      });
+      throw new Error('Invalid OpenAI API key configuration');
     }
+
+    // Validate other required keys
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('Supabase configuration is missing or empty');
       throw new Error('Supabase configuration is not complete');
@@ -42,6 +50,7 @@ serve(async (req) => {
     }
 
     console.log('API Keys validation:', { 
+      openAIKeyValid: openAIApiKey.length > 0,
       openAIKeyLength: openAIApiKey.length,
       hasSupabaseUrl: !!supabaseUrl,
       hasSupabaseKey: !!supabaseServiceKey,
@@ -50,10 +59,26 @@ serve(async (req) => {
 
     // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const openai = new OpenAI({
-      apiKey: openAIApiKey,
-      dangerouslyAllowBrowser: true
-    });
+    
+    // Initialize OpenAI with additional error handling
+    let openai;
+    try {
+      openai = new OpenAI({
+        apiKey: openAIApiKey,
+        dangerouslyAllowBrowser: true
+      });
+      // Test the client
+      await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'system', content: 'test' }],
+        max_tokens: 1
+      });
+      console.log('OpenAI client initialized and tested successfully');
+    } catch (openaiError) {
+      console.error('OpenAI client initialization or test failed:', openaiError);
+      throw new Error(`OpenAI client error: ${openaiError.message}`);
+    }
+
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     // Validate request body
