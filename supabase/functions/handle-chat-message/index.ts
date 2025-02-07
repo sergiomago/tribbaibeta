@@ -78,6 +78,7 @@ serve(async (req) => {
         // Build memory context for the current role
         const memoryContext = await buildMemoryContext(
           supabase,
+          openai,
           threadId,
           role_id,
           content

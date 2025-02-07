@@ -1,5 +1,6 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import OpenAI from "https://esm.sh/openai@4.26.0";
 
 interface MemoryContext {
   relevantMemories: any[];
@@ -10,6 +11,7 @@ interface MemoryContext {
 
 export async function buildMemoryContext(
   supabase: SupabaseClient,
+  openai: OpenAI,
   threadId: string,
   roleId: string,
   content: string
@@ -17,11 +19,20 @@ export async function buildMemoryContext(
   console.log('Building memory context for:', { threadId, roleId });
 
   try {
+    // Generate embedding for the content
+    const embeddingResponse = await openai.embeddings.create({
+      model: "text-embedding-ada-002",
+      input: content,
+    });
+    
+    const embedding = embeddingResponse.data[0].embedding;
+    console.log('Generated embedding for content');
+
     // Get relevant memories using similarity search
     const { data: memories, error: memoryError } = await supabase.rpc(
       'get_similar_memories',
       {
-        p_embedding: content,
+        p_embedding: embedding,
         p_match_threshold: 0.7,
         p_match_count: 5,
         p_role_id: roleId
