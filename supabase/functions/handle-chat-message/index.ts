@@ -4,10 +4,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
+import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const llongtermKey = Deno.env.get('LLONGTERM_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,9 +29,11 @@ serve(async (req) => {
   try {
     if (!openAIApiKey) throw new Error('OpenAI API key is not configured');
     if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
+    if (!llongtermKey) throw new Error('Llongterm API key is not configured');
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
+    const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     const { threadId, content, chain, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, chain, taggedRoleId });
@@ -81,38 +85,48 @@ serve(async (req) => {
           continue;
         }
 
-        // Build memory context for the current role
-        const memoryContext = await buildMemoryContext(
-          supabase,
-          openai,
-          threadId,
-          role_id,
-          content
-        );
+        // Get role's mind
+        const { data: mindData, error: mindError } = await supabase
+          .from('role_minds')
+          .select('*')
+          .eq('role_id', role_id)
+          .single();
 
-        console.log('Built memory context with relevance:', memoryContext.contextRelevance);
+        if (mindError) {
+          console.error(`Error fetching mind for role ${role_id}:`, mindError);
+          throw mindError;
+        }
 
-        // Format memory context in a conversational way
-        const memoryPrompt = memoryContext.relevantMemories
-          .map(memory => `Related memory: ${memory.content}`)
-          .join('\n');
+        // Get or create mind
+        const mind = mindData.mind_id ? 
+          await llongterm.get(mindData.mind_id) :
+          await llongterm.create({
+            specialism: currentRole.expertise_areas?.join(', '),
+            metadata: {
+              role_id: role_id,
+              role_name: currentRole.name
+            }
+          });
 
-        const conversationContext = memoryContext.conversationHistory
-          .map(msg => {
-            const roleName = msg.role?.name || 'Unknown';
-            const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
-            return `${roleName} (expert in ${expertise}): ${msg.content}`;
-          })
-          .join('\n\n');
+        // Store conversation in mind
+        const enrichedMessage = await mind.remember({
+          thread: [
+            {
+              author: 'user',
+              message: content,
+              timestamp: Date.now(),
+              metadata: {
+                thread_id: threadId,
+                role_id: role_id
+              }
+            }
+          ]
+        });
 
-        // Create an enhanced system prompt
+        // Create enhanced system prompt
         const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
 
-Previous conversation context:
-${conversationContext}
-
-Relevant memories and past discussions:
-${memoryPrompt}
+${enrichedMessage.systemMessage}
 
 Your role instructions:
 ${currentRole.instructions}
@@ -123,9 +137,7 @@ Guidelines:
 3. Stay within your expertise areas
 4. Maintain conversation continuity
 5. Be natural and conversational
-6. Acknowledge and build upon others' contributions
-
-Focus on making the conversation flow naturally while providing valuable expertise-based insights.`;
+6. Acknowledge and build upon others' contributions`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
@@ -138,6 +150,21 @@ Focus on making the conversation flow naturally while providing valuable experti
 
         const responseContent = completion.choices[0].message.content;
         console.log('Generated response:', responseContent.substring(0, 100) + '...');
+
+        // Store response in mind
+        await mind.remember({
+          thread: [
+            {
+              author: 'assistant',
+              message: responseContent,
+              timestamp: Date.now(),
+              metadata: {
+                thread_id: threadId,
+                role_id: role_id
+              }
+            }
+          ]
+        });
 
         // Save response
         const { error: responseError } = await supabase
