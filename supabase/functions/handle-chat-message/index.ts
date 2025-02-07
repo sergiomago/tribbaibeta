@@ -6,10 +6,10 @@ import OpenAI from "https://esm.sh/openai@4.26.0";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
 import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const llongtermKey = Deno.env.get('LLONGTERM_API_KEY');
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY')?.trim();
+const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
+const llongtermKey = Deno.env.get('LLONGTERM_API_KEY')?.trim();
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,26 +27,36 @@ serve(async (req) => {
   }
 
   try {
+    // Validate all required API keys
     if (!openAIApiKey) {
-      console.error('OpenAI API key is missing');
-      throw new Error('OpenAI API key is not configured');
+      console.error('OpenAI API key is missing or empty');
+      throw new Error('OpenAI API key is not configured properly');
     }
-    if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
-    if (!llongtermKey) throw new Error('Llongterm API key is not configured');
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Supabase configuration is missing or empty');
+      throw new Error('Supabase configuration is not complete');
+    }
+    if (!llongtermKey) {
+      console.error('Llongterm API key is missing or empty');
+      throw new Error('Llongterm API key is not configured');
+    }
 
-    console.log('API Keys present:', { 
-      hasOpenAI: !!openAIApiKey,
-      hasSupabase: !!supabaseUrl && !!supabaseServiceKey,
+    console.log('API Keys validation:', { 
+      openAIKeyLength: openAIApiKey.length,
+      hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseKey: !!supabaseServiceKey,
       hasLlongterm: !!llongtermKey
     });
 
+    // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({
       apiKey: openAIApiKey,
-      dangerouslyAllowBrowser: true // Required for edge function environment
+      dangerouslyAllowBrowser: true
     });
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
+    // Validate request body
     const { threadId, content, chain, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, chain, taggedRoleId });
 
