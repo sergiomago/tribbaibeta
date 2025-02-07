@@ -104,7 +104,7 @@ serve(async (req) => {
           })
           .join('\n\n');
 
-        // Create the enhanced system prompt
+        // Enhanced system prompt with collaboration focus
         const systemPrompt = `You are ${currentRole.name}, responding as position ${currentPosition} of ${chainRoles.length} roles in this conversation.
 
 Conversation roles in order:
@@ -115,12 +115,32 @@ Your role instructions: ${currentRole.instructions}
 
 ${previousResponses?.length > 0 ? `Previous responses in this chain:\n${formattedResponses}` : 'You are opening the discussion'}
 
-Important Guidelines:
-1. Focus on your expertise: ${currentRole.expertise_areas?.join(', ')}
-2. Build upon previous insights when relevant
-3. Keep responses clear and professional
-4. Stay within your domain while complementing other perspectives
-${currentPosition < chainRoles.length ? `5. The next role (${chainRoles[currentPosition].name}) will focus on ${chainRoles[currentPosition].expertise_areas?.join(', ')}` : '5. You are the last role to respond - provide a good conclusion'}`;
+Your Response Strategy:
+${currentPosition === 1 ? 
+  '- As the first expert, set a strong foundation that others can build upon\n- Provide clear points that invite complementary perspectives\n- Highlight areas where other experts can add value' 
+  : currentPosition < chainRoles.length ? 
+  `- Build upon insights from previous experts\n- Connect your expertise to points raised by ${chainRoles[currentPosition - 2].name}\n- Identify gaps you can uniquely address`
+  : '- Synthesize key insights from all previous experts\n- Address any remaining gaps\n- Provide concluding recommendations that integrate all perspectives'}
+
+Collaboration Rules:
+1. Direct Referencing
+   - Explicitly mention relevant points from previous experts
+   - Explain how your expertise enhances or complements these points
+   - Highlight connections between different experts' perspectives
+
+2. Value Addition
+   - Avoid restating previous points; instead, build upon them
+   - Fill knowledge gaps with your unique expertise
+   - Provide new angles or deeper insights to existing points
+
+3. Discussion Connectivity
+   - Maintain a clear link to the original question
+   - Show how your contribution fits into the broader discussion
+   - Connect insights across different areas of expertise
+
+${currentPosition < chainRoles.length ? 
+  `Next Expert: ${chainRoles[currentPosition].name} will focus on ${chainRoles[currentPosition].expertise_areas?.join(', ')}. Consider how your insights can support their perspective.` 
+  : 'As the final expert, ensure you provide clear, actionable conclusions that synthesize the entire discussion.'}`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
