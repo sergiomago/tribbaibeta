@@ -39,37 +39,40 @@ serve(async (req) => {
     // Process responses sequentially
     for (const [index, { role_id }] of chain.entries()) {
       try {
-        // Get role's mind
-        const { data: mindData, error: mindError } = await supabase
-          .from('role_minds')
-          .select('*')
-          .eq('role_id', role_id)
-          .eq('status', 'active')
-          .single();
+        // Get role's mind and details
+        const [mindResult, roleResult] = await Promise.all([
+          supabase
+            .from('role_minds')
+            .select('*')
+            .eq('role_id', role_id)
+            .eq('status', 'active')
+            .single(),
+          supabase
+            .from('roles')
+            .select('*')
+            .eq('id', role_id)
+            .single()
+        ]);
 
-        if (mindError || !mindData) {
-          console.error(`Error fetching mind for role ${role_id}:`, mindError);
+        if (mindResult.error || !mindResult.data) {
+          console.error(`Error fetching mind for role ${role_id}:`, mindResult.error);
           throw new Error(`No active mind found for role ${role_id}`);
         }
 
-        // Get role details
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', role_id)
-          .single();
+        if (roleResult.error) throw roleResult.error;
+        const role = roleResult.data;
 
-        if (roleError) throw roleError;
-
-        // Get conversation history
+        // Get conversation history with enhanced context
         const { data: history, error: historyError } = await supabase
           .from('messages')
           .select(`
             content,
             role:roles!messages_role_id_fkey (
               name,
-              expertise_areas
+              expertise_areas,
+              special_capabilities
             ),
+            conversation_context,
             created_at
           `)
           .eq('thread_id', threadId)
@@ -78,16 +81,18 @@ serve(async (req) => {
 
         if (historyError) throw historyError;
 
-        // Format conversation history for mind
+        // Format conversation history for mind with enhanced context
         const conversationThread = history?.map(msg => ({
           role: msg.role ? 'assistant' : 'user',
           content: msg.content,
           name: msg.role?.name,
-          expertise: msg.role?.expertise_areas
+          expertise: msg.role?.expertise_areas,
+          context: msg.conversation_context || {},
+          capabilities: msg.role?.special_capabilities || []
         })) || [];
 
-        // Use mind to enrich context and store memory
-        const enrichedContext = await mindData.remember({
+        // Use mind to enrich context and store memory with enhanced metadata
+        const enrichedContext = await mindResult.data.remember({
           thread: conversationThread,
           content,
           metadata: {
@@ -95,9 +100,14 @@ serve(async (req) => {
             expertise_areas: role.expertise_areas,
             thread_id: threadId,
             interaction_type: taggedRoleId ? 'direct_response' : 'chain_response',
-            chain_position: index + 1
+            chain_position: index + 1,
+            special_capabilities: role.special_capabilities || [],
+            conversation_depth: conversationThread.length,
+            topic_context: history?.[0]?.conversation_context?.topic_context || {}
           }
         });
+
+        console.log('Generated enriched context:', enrichedContext);
 
         // Generate response using enriched context
         const completion = await openai.chat.completions.create({
@@ -115,7 +125,8 @@ serve(async (req) => {
                 1. Use the provided context to maintain conversation continuity
                 2. Stay within your expertise areas
                 3. Be natural and conversational
-                4. Acknowledge and build upon previous points`
+                4. Acknowledge and build upon previous points
+                ${role.special_capabilities?.length ? `5. Utilize your special capabilities: ${role.special_capabilities.join(', ')}` : ''}`
             },
             { role: 'user', content: enrichedContext.enrichedMessage || content }
           ],
@@ -124,7 +135,7 @@ serve(async (req) => {
         const responseContent = completion.choices[0].message.content;
         console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-        // Store response
+        // Store response with enhanced context
         const { data: savedMessage, error: responseError } = await supabase
           .from('messages')
           .insert({
@@ -136,7 +147,13 @@ serve(async (req) => {
             conversation_context: {
               enriched_context: enrichedContext,
               role_expertise: role.expertise_areas,
-              chain_position: index + 1
+              chain_position: index + 1,
+              topic_context: enrichedContext.topicContext || {},
+              effectiveness_metrics: {
+                context_relevance: enrichedContext.contextRelevance || 0,
+                expertise_match: enrichedContext.expertiseMatch || 0,
+                response_quality: enrichedContext.responseQuality || 0
+              }
             }
           })
           .select()
