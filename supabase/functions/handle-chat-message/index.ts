@@ -1,7 +1,8 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import OpenAI from "https://esm.sh/openai";
+import OpenAI from "https://esm.sh/openai@4.26.0";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
 import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
@@ -42,14 +43,17 @@ serve(async (req) => {
       throw new Error('Llongterm API key is required');
     }
 
-    // Validate OpenAI key format (basic check)
+    // More strict OpenAI key validation
     if (!openAIApiKey.startsWith('sk-') || openAIApiKey.length < 20) {
       throw new Error('Invalid OpenAI API key format');
     }
 
     // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const openai = new OpenAI({ apiKey: openAIApiKey });
+    const openai = new OpenAI({
+      apiKey: openAIApiKey,
+      dangerouslyAllowBrowser: true
+    });
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     // Validate request body
