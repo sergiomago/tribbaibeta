@@ -16,7 +16,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders,
@@ -72,19 +71,18 @@ serve(async (req) => {
         const currentPosition = index + 1;
         console.log(`Processing response for role ${role_id} at position ${currentPosition}`);
         
-        // Get current role details
         const currentRole = chainRoles[index];
         if (!currentRole) {
           console.error(`Role ${role_id} not found in chain roles`);
           continue;
         }
 
-        // Format chain roles information
+        // Format chain roles information with clear expertise areas
         const chainRolesInfo = chainRoles
           .map(role => `${role.position}. ${role.name} (Expert in: ${role.expertise_areas?.join(', ')})`)
           .join('\n');
 
-        // Get previous responses in this chain
+        // Get previous responses in this chain with enhanced formatting
         const { data: previousResponses } = await supabase
           .from('messages')
           .select(`
@@ -95,52 +93,72 @@ serve(async (req) => {
           .eq('chain_id', message.id)
           .order('created_at', { ascending: true });
 
-        // Format previous responses
+        // Enhanced formatting for previous responses
         const formattedResponses = (previousResponses || [])
-          .map(msg => {
+          .map((msg, idx) => {
             const roleName = msg.role?.name || 'Unknown';
             const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
-            return `${roleName} (${expertise}): ${msg.content}`;
+            return `Response #${idx + 1} - ${roleName} (${expertise}):\n${msg.content}`;
           })
           .join('\n\n');
 
-        // Enhanced system prompt with collaboration focus
+        // Enhanced system prompt with new collaboration rules
         const systemPrompt = `You are ${currentRole.name}, responding as position ${currentPosition} of ${chainRoles.length} roles in this conversation.
 
-Conversation roles in order:
+Role Chain Information:
 ${chainRolesInfo}
 
-Your expertise: ${currentRole.expertise_areas?.join(', ')}
-Your role instructions: ${currentRole.instructions}
+Your Expertise Areas: ${currentRole.expertise_areas?.join(', ')}
+Your Role Instructions: ${currentRole.instructions}
 
-${previousResponses?.length > 0 ? `Previous responses in this chain:\n${formattedResponses}` : 'You are opening the discussion'}
+${previousResponses?.length > 0 ? `Previous Responses:\n${formattedResponses}` : 'You are opening the discussion'}
 
-Your Response Strategy:
-${currentPosition === 1 ? 
-  '- As the first expert, set a strong foundation that others can build upon\n- Provide clear points that invite complementary perspectives\n- Highlight areas where other experts can add value' 
-  : currentPosition < chainRoles.length ? 
-  `- Build upon insights from previous experts\n- Connect your expertise to points raised by ${chainRoles[currentPosition - 2].name}\n- Identify gaps you can uniquely address`
-  : '- Synthesize key insights from all previous experts\n- Address any remaining gaps\n- Provide concluding recommendations that integrate all perspectives'}
+Response Format Requirements:
+1. Opening:
+   - Acknowledge previous responses using "@[Role Name]"
+   - Summarize key relevant points from previous experts
+   - State how your expertise relates to the question
+
+2. Main Contribution:
+   - Build upon previous insights
+   - Add new, expertise-based perspectives
+   - Make clear connections to the overall question
+
+3. Closing:
+   ${currentPosition < chainRoles.length ? 
+     `- Identify areas where @${chainRoles[currentPosition].name} can expand
+   - Bridge to their expertise in ${chainRoles[currentPosition].expertise_areas?.join(', ')}`
+     : 
+     '- Provide final synthesis and recommendations\n   - Ensure all key points are addressed'}
 
 Collaboration Rules:
 1. Direct Referencing
-   - Explicitly mention relevant points from previous experts
-   - Explain how your expertise enhances or complements these points
-   - Highlight connections between different experts' perspectives
+   - Use "@[Role Name]" when referring to other experts
+   - Explicitly connect to previous points
+   - Show how insights build on each other
 
 2. Value Addition
-   - Avoid restating previous points; instead, build upon them
-   - Fill knowledge gaps with your unique expertise
-   - Provide new angles or deeper insights to existing points
+   - Only add insights within your expertise
+   - Build upon, don't repeat, previous points
+   - Fill identified knowledge gaps
 
 3. Discussion Connectivity
-   - Maintain a clear link to the original question
-   - Show how your contribution fits into the broader discussion
-   - Connect insights across different areas of expertise
+   - Maintain clear link to original question
+   - Connect insights across different experts
+   - Create bridges between different perspectives
 
-${currentPosition < chainRoles.length ? 
-  `Next Expert: ${chainRoles[currentPosition].name} will focus on ${chainRoles[currentPosition].expertise_areas?.join(', ')}. Consider how your insights can support their perspective.` 
-  : 'As the final expert, ensure you provide clear, actionable conclusions that synthesize the entire discussion.'}`;
+4. Expertise Boundaries
+   - If the topic is outside your expertise, state this clearly
+   - Only contribute meaningful, expertise-based insights
+   - If previous experts have fully covered your domain, acknowledge this
+   - Defer to other experts when appropriate, using "This aspect would be better addressed by @[Role Name]..."
+
+Position-Specific Guidelines:
+${currentPosition === 1 ? 
+  '- Set a strong foundation\n- Identify key areas for other experts\n- Frame the scope of discussion' 
+  : currentPosition < chainRoles.length ? 
+  `- Build upon insights from @${chainRoles[currentPosition - 2].name}\n- Add your unique perspective\n- Bridge to @${chainRoles[currentPosition].name}'s expertise`
+  : '- Synthesize key insights\n- Add final expert perspective\n- Provide concluding recommendations'}`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
