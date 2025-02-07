@@ -54,22 +54,35 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Process responses one at a time
-    for (const { role_id } of chain) {
-      try {
-        console.log(`Processing response for role ${role_id}`);
-        
-        // Get role details
-        const { data: role } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', role_id)
-          .single();
+    // Get all roles in the chain with their details upfront
+    const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
+      const { data: role } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', role_id)
+        .single();
+      return { ...role, position: index + 1 };
+    }));
 
-        if (!role) {
-          console.error(`Role ${role_id} not found`);
+    console.log('Chain roles:', chainRoles);
+
+    // Process responses one at a time
+    for (const [index, { role_id }] of chain.entries()) {
+      try {
+        const currentPosition = index + 1;
+        console.log(`Processing response for role ${role_id} at position ${currentPosition}`);
+        
+        // Get current role details
+        const currentRole = chainRoles[index];
+        if (!currentRole) {
+          console.error(`Role ${role_id} not found in chain roles`);
           continue;
         }
+
+        // Format chain roles information
+        const chainRolesInfo = chainRoles
+          .map(role => `${role.position}. ${role.name} (Expert in: ${role.expertise_areas?.join(', ')})`)
+          .join('\n');
 
         // Get previous responses in this chain
         const { data: previousResponses } = await supabase
@@ -91,18 +104,27 @@ serve(async (req) => {
           })
           .join('\n\n');
 
-        // Create the system prompt
-        const systemPrompt = `You are ${role.name}, a professional whose deep expertise lies in: ${role.expertise_areas?.join(', ')}. 
-Your role instructions: ${role.instructions}
+        // Create the enhanced system prompt
+        const systemPrompt = `You are ${currentRole.name}, responding as position ${currentPosition} of ${chainRoles.length} roles in this conversation.
+
+Conversation roles in order:
+${chainRolesInfo}
+
+Your expertise: ${currentRole.expertise_areas?.join(', ')}
+Your role instructions: ${currentRole.instructions}
 
 ${previousResponses?.length > 0 ? `Previous responses in this chain:\n${formattedResponses}` : 'You are opening the discussion'}
 
-Focus on providing expertise in ${role.expertise_areas?.join(', ')}.
-Be clear, professional, and stay within your domain of expertise.`;
+Important Guidelines:
+1. Focus on your expertise: ${currentRole.expertise_areas?.join(', ')}
+2. Build upon previous insights when relevant
+3. Keep responses clear and professional
+4. Stay within your domain while complementing other perspectives
+${currentPosition < chainRoles.length ? `5. The next role (${chainRoles[currentPosition].name}) will focus on ${chainRoles[currentPosition].expertise_areas?.join(', ')}` : '5. You are the last role to respond - provide a good conclusion'}`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
+          model: currentRole.model || 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content }
@@ -152,3 +174,4 @@ Be clear, professional, and stay within your domain of expertise.`;
     );
   }
 });
+
