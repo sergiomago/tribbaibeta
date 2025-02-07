@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -28,56 +29,15 @@ serve(async (req) => {
   try {
     console.log('Starting handle-chat-message function...');
     
-    // Validate OpenAI API key first since that's our current error
-    if (!openAIApiKey || typeof openAIApiKey !== 'string' || openAIApiKey.length < 10) {
-      console.error('OpenAI API key validation failed:', {
-        exists: !!openAIApiKey,
-        type: typeof openAIApiKey,
-        length: openAIApiKey?.length
-      });
-      throw new Error('Invalid OpenAI API key configuration');
+    // Validate required configuration
+    if (!supabaseUrl || !supabaseServiceKey || !openAIApiKey || !llongtermKey) {
+      console.error('Missing required configuration');
+      throw new Error('Missing required configuration');
     }
-
-    // Validate other required keys
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('Supabase configuration is missing or empty');
-      throw new Error('Supabase configuration is not complete');
-    }
-    if (!llongtermKey) {
-      console.error('Llongterm API key is missing or empty');
-      throw new Error('Llongterm API key is not configured');
-    }
-
-    console.log('API Keys validation:', { 
-      openAIKeyValid: openAIApiKey.length > 0,
-      openAIKeyLength: openAIApiKey.length,
-      hasSupabaseUrl: !!supabaseUrl,
-      hasSupabaseKey: !!supabaseServiceKey,
-      hasLlongterm: !!llongtermKey
-    });
 
     // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    // Initialize OpenAI with additional error handling
-    let openai;
-    try {
-      openai = new OpenAI({
-        apiKey: openAIApiKey,
-        dangerouslyAllowBrowser: true
-      });
-      // Test the client
-      await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'system', content: 'test' }],
-        max_tokens: 1
-      });
-      console.log('OpenAI client initialized and tested successfully');
-    } catch (openaiError) {
-      console.error('OpenAI client initialization or test failed:', openaiError);
-      throw new Error(`OpenAI client error: ${openaiError.message}`);
-    }
-
+    const openai = new OpenAI({ apiKey: openAIApiKey });
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     // Validate request body
@@ -187,7 +147,7 @@ Guidelines:
 
         console.log('Generating response with system prompt:', systemPrompt.substring(0, 200) + '...');
 
-        // Generate response
+        // Generate response using the model specified in the role or default
         const completion = await openai.chat.completions.create({
           model: currentRole.model || 'gpt-4o-mini',
           messages: [
