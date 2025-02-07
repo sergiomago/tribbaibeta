@@ -1,15 +1,11 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { buildMemoryContext } from "./memoryContextBuilder.ts";
-import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-const llongtermKey = Deno.env.get('LLONGTERM_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +15,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders,
@@ -27,36 +24,12 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting handle-chat-message function...');
-    
-    // Validate required configuration with specific error messages
-    if (!supabaseUrl) {
-      throw new Error('Supabase URL is required');
-    }
-    if (!supabaseServiceKey) {
-      throw new Error('Supabase service key is required');
-    }
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key is required');
-    }
-    if (!llongtermKey) {
-      throw new Error('Llongterm API key is required');
-    }
+    if (!openAIApiKey) throw new Error('OpenAI API key is not configured');
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
 
-    // Thorough OpenAI key validation
-    if (!openAIApiKey.startsWith('sk-') || openAIApiKey.length < 20) {
-      throw new Error('Invalid OpenAI API key format');
-    }
-
-    // Initialize clients
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const openai = new OpenAI({
-      apiKey: openAIApiKey,
-      dangerouslyAllowBrowser: true
-    });
-    const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
+    const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    // Validate request body
     const { threadId, content, chain, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, chain, taggedRoleId });
 
@@ -64,7 +37,7 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Save user message
+    // Save user message first
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -72,7 +45,7 @@ serve(async (req) => {
         content,
         tagged_role_id: taggedRoleId || null,
       })
-      .select('*, role:roles!messages_role_id_fkey(*)')
+      .select()
       .single();
 
     if (messageError) {
@@ -80,92 +53,103 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get all roles in the chain with their details
-    const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
-      const { data: role, error: roleError } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', role_id)
-        .single();
-      
-      if (roleError) {
-        console.error(`Error fetching role ${role_id}:`, roleError);
-        throw roleError;
-      }
-      
-      return { ...role, position: index + 1 };
-    }));
-
-    console.log('Chain roles:', chainRoles);
-
-    // Process responses sequentially
-    for (const [index, { role_id }] of chain.entries()) {
+    // Process responses one at a time
+    for (const { role_id } of chain) {
       try {
-        const currentRole = chainRoles[index];
-        if (!currentRole) {
-          console.error(`Role ${role_id} not found in chain roles`);
+        console.log(`Processing response for role ${role_id}`);
+        
+        // Get role details
+        const { data: role } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', role_id)
+          .single();
+
+        if (!role) {
+          console.error(`Role ${role_id} not found`);
           continue;
         }
 
-        // Get role's mind
-        const { data: mindData, error: mindError } = await supabase
-          .from('role_minds')
-          .select('*')
-          .eq('role_id', role_id)
-          .single();
+        // Get previous responses in this chain
+        const { data: previousResponses } = await supabase
+          .from('messages')
+          .select(`
+            content,
+            role:roles(name, expertise_areas)
+          `)
+          .eq('thread_id', threadId)
+          .eq('chain_id', message.id)
+          .order('created_at', { ascending: true });
 
-        if (mindError) {
-          console.error(`Error fetching mind for role ${role_id}:`, mindError);
-          throw mindError;
-        }
+        // Get chain position information
+        const { data: threadRoles } = await supabase
+          .from('thread_roles')
+          .select('role_id')
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: true });
 
-        // Get or create mind
-        const mind = mindData.mind_id ? 
-          await llongterm.get(mindData.mind_id) :
-          await llongterm.create({
-            specialism: currentRole.expertise_areas?.join(', '),
-            metadata: {
-              role_id: role_id,
-              role_name: currentRole.name
-            }
-          });
+        const totalRoles = threadRoles?.length || 0;
+        const currentPosition = threadRoles?.findIndex(tr => tr.role_id === role_id) + 1 || 0;
+        
+        // Get previous and next role information
+        const previousRoleId = currentPosition > 1 ? threadRoles[currentPosition - 2]?.role_id : null;
+        const nextRoleId = currentPosition < totalRoles ? threadRoles[currentPosition]?.role_id : null;
 
-        // Store conversation in mind
-        const enrichedMessage = await mind.remember({
-          thread: [
-            {
-              author: 'user',
-              message: content,
-              timestamp: Date.now(),
-              metadata: {
-                thread_id: threadId,
-                role_id: role_id
-              }
-            }
-          ]
-        });
+        // Get previous and next role details if they exist
+        const [previousRole, nextRole] = await Promise.all([
+          previousRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', previousRoleId).single() : null,
+          nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
+        ]);
 
-        // Create enhanced system prompt
-        const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
+        // Format previous responses
+        const formattedResponses = (previousResponses || [])
+          .map(msg => {
+            const roleName = msg.role?.name || 'Unknown';
+            const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
+            return `${roleName} (${expertise}): ${msg.content}`;
+          })
+          .join('\n\n');
 
-${enrichedMessage.systemMessage}
+        // Create the system prompt with the new structure
+        const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}. 
+Position: ${currentPosition} of ${totalRoles}
 
-Your role instructions:
-${currentRole.instructions}
+CONVERSATION CONTEXT:
+Previous Expert: ${previousRole ? `${previousRole.data.name} (expertise: ${previousRole.data.expertise_areas?.join(', ')})` : 'You are first to respond'}
+Next Expert: ${nextRole ? `${nextRole.data.name} (expertise: ${nextRole.data.expertise_areas?.join(', ')})` : 'You are last to respond'}
 
-Guidelines:
-1. Reference relevant past discussions when appropriate
-2. Build upon previous points made in the conversation
-3. Stay within your expertise areas
-4. Maintain conversation continuity
-5. Be natural and conversational
-6. Acknowledge and build upon others' contributions`;
+Previous Responses in Chain:
+${previousResponses?.length > 0 ? formattedResponses : 'You are first to respond'}
 
-        console.log('Generating response with system prompt:', systemPrompt.substring(0, 200) + '...');
+COLLABORATION GUIDELINES:
 
-        // Generate response using the model specified in the role or default
+1. Expertise Focus
+   - Analyze the conversation through the lens of your specific expertise: ${role.expertise_areas?.join(', ')}
+   - Provide insights that only someone with your background would offer
+   - Stay within your domain of expertise
+
+2. Progressive Building
+   - Reference valuable points from previous experts
+   - Add new insights based on your specific expertise
+   - Don't repeat analysis that's already been covered
+   - Identify gaps that align with the next expert's expertise
+
+3. Knowledge Integration
+   - Show how your expertise connects to or challenges previous points
+   - Highlight aspects where your expertise reveals new considerations
+   - Tag other roles when identifying areas that need their expertise
+
+Your Specific Instructions:
+${role.instructions}
+
+Current Discussion:
+${content}
+
+Remember: Focus on what makes your expertise unique while building upon the collective insights of the team.`;
+
+        // Generate response
         const completion = await openai.chat.completions.create({
-          model: currentRole.model || 'gpt-4o-mini',
+          model: role.model || 'gpt-4o-mini',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content }
@@ -174,21 +158,6 @@ Guidelines:
 
         const responseContent = completion.choices[0].message.content;
         console.log('Generated response:', responseContent.substring(0, 100) + '...');
-
-        // Store response in mind
-        await mind.remember({
-          thread: [
-            {
-              author: 'assistant',
-              message: responseContent,
-              timestamp: Date.now(),
-              metadata: {
-                thread_id: threadId,
-                role_id: role_id
-              }
-            }
-          ]
-        });
 
         // Save response
         const { error: responseError } = await supabase
@@ -218,10 +187,9 @@ Guidelines:
 
   } catch (error) {
     console.error('Error in handle-chat-message:', error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return new Response(
       JSON.stringify({ 
-        error: errorMessage,
+        error: error.message || 'An error occurred while processing your request.',
         details: error.toString()
       }),
       { 
