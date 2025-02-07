@@ -3,6 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
+import { buildMemoryContext } from "./memoryContextBuilder.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -74,55 +75,48 @@ serve(async (req) => {
           continue;
         }
 
-        // Format roles information in a conversational way
-        const otherRoles = chainRoles
-          .filter(r => r.id !== role_id)
-          .map(r => `${r.name} (expert in ${r.expertise_areas?.join(', ')})`)
+        // Build memory context for the current role
+        const memoryContext = await buildMemoryContext(
+          supabase,
+          threadId,
+          role_id,
+          content
+        );
+
+        console.log('Built memory context with relevance:', memoryContext.contextRelevance);
+
+        // Format memory context in a conversational way
+        const memoryPrompt = memoryContext.relevantMemories
+          .map(memory => `Related memory: ${memory.content}`)
           .join('\n');
 
-        // Get previous responses in this chain
-        const { data: previousResponses } = await supabase
-          .from('messages')
-          .select(`
-            content,
-            role:roles(name, expertise_areas)
-          `)
-          .eq('thread_id', threadId)
-          .eq('chain_id', message.id)
-          .order('created_at', { ascending: true });
-
-        // Format previous responses in a more conversational way
-        const discussionContext = (previousResponses || [])
-          .map((msg, idx) => {
+        const conversationContext = memoryContext.conversationHistory
+          .map(msg => {
             const roleName = msg.role?.name || 'Unknown';
             const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
-            return `${roleName} (expert in ${expertise}) shared:\n${msg.content}`;
+            return `${roleName} (expert in ${expertise}): ${msg.content}`;
           })
           .join('\n\n');
 
-        // Simplified conversational prompt
-        const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}. 
-You're participating in a group discussion with other experts:
-${otherRoles}
+        // Create an enhanced system prompt
+        const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
 
-${previousResponses?.length > 0 ? 
-  `The discussion so far:
-${discussionContext}
+Previous conversation context:
+${conversationContext}
 
-Listen carefully to what others have said. Build upon their relevant points using your expertise. If you can't add meaningful value to the discussion, it's okay to acknowledge that.` 
-: 
-`You're starting the discussion. Share your expertise perspective while leaving room for others to contribute. Focus on aspects where your expertise is most relevant.`}
+Relevant memories and past discussions:
+${memoryPrompt}
 
-Your role:
+Your role instructions:
 ${currentRole.instructions}
 
 Guidelines:
-1. Be conversational and natural
-2. Build upon others' points when relevant
+1. Reference relevant past discussions when appropriate
+2. Build upon previous points made in the conversation
 3. Stay within your expertise areas
-4. Add new insights that complement existing ones
-5. Acknowledge others' contributions naturally
-6. It's okay to defer to others when appropriate
+4. Maintain conversation continuity
+5. Be natural and conversational
+6. Acknowledge and build upon others' contributions
 
 Focus on making the conversation flow naturally while providing valuable expertise-based insights.`;
 

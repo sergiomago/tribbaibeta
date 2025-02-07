@@ -1,3 +1,4 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -17,8 +18,11 @@ export async function generateRoleResponse(
 
   if (!role) throw new Error(`Role ${roleId} not found`);
 
+  // Format memories for context
   const memoryContext = memories?.length 
-    ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+    ? `Relevant context from your memory:\n${memories.map(m => 
+        `[Memory from ${new Date(m.created_at).toLocaleDateString()}]: ${m.content}`
+      ).join('\n\n')}`
     : '';
 
   console.log('Generating response with role:', role.name);
