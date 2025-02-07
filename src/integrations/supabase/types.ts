@@ -176,8 +176,11 @@ export type Database = {
           chain_id: string | null
           chain_position: number | null
           content: string
+          conversation_context: Json | null
           created_at: string
+          depth_level: number | null
           id: string
+          response_to_id: string | null
           role_id: string | null
           tagged_role_id: string | null
           thread_id: string
@@ -186,8 +189,11 @@ export type Database = {
           chain_id?: string | null
           chain_position?: number | null
           content: string
+          conversation_context?: Json | null
           created_at?: string
+          depth_level?: number | null
           id?: string
+          response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id: string
@@ -196,8 +202,11 @@ export type Database = {
           chain_id?: string | null
           chain_position?: number | null
           content?: string
+          conversation_context?: Json | null
           created_at?: string
+          depth_level?: number | null
           id?: string
+          response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id?: string
@@ -206,6 +215,13 @@ export type Database = {
           {
             foreignKeyName: "messages_chain_id_fkey"
             columns: ["chain_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_response_to_id_fkey"
+            columns: ["response_to_id"]
             isOneToOne: false
             referencedRelation: "messages"
             referencedColumns: ["id"]
@@ -932,13 +948,20 @@ export type Database = {
           chain_order: number
         }[]
       }
-      get_conversation_depth: {
-        Args: {
-          p_thread_id: string
-          p_role_id: string
-        }
-        Returns: number
-      }
+      get_conversation_depth:
+        | {
+            Args: {
+              message_id: string
+            }
+            Returns: number
+          }
+        | {
+            Args: {
+              p_thread_id: string
+              p_role_id: string
+            }
+            Returns: number
+          }
       get_conversation_history: {
         Args: {
           p_thread_id: string

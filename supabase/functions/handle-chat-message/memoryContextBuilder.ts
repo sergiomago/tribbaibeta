@@ -5,6 +5,7 @@ interface MemoryContext {
   relevantMemories: any[];
   conversationHistory: any[];
   contextRelevance: number;
+  conversationDepth: number;
 }
 
 export async function buildMemoryContext(
@@ -30,13 +31,15 @@ export async function buildMemoryContext(
     if (memoryError) throw memoryError;
     console.log('Retrieved relevant memories:', memories?.length || 0);
 
-    // Get recent conversation history
+    // Get conversation history with depth information
     const { data: history, error: historyError } = await supabase
       .from('messages')
       .select(`
         content,
         role:roles(name, expertise_areas),
-        created_at
+        created_at,
+        depth_level,
+        conversation_context
       `)
       .eq('thread_id', threadId)
       .order('created_at', { ascending: false })
@@ -45,13 +48,19 @@ export async function buildMemoryContext(
     if (historyError) throw historyError;
     console.log('Retrieved conversation history:', history?.length || 0);
 
+    // Calculate conversation depth
+    const maxDepth = history?.reduce((max, msg) => 
+      Math.max(max, msg.depth_level || 1), 1
+    );
+
     // Calculate context relevance
     const contextRelevance = calculateContextRelevance(memories || [], content);
 
     return {
       relevantMemories: memories || [],
       conversationHistory: history || [],
-      contextRelevance
+      contextRelevance,
+      conversationDepth: maxDepth
     };
   } catch (error) {
     console.error('Error building memory context:', error);
