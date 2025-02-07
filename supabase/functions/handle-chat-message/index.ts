@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -38,22 +37,6 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Save user message
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        content,
-        tagged_role_id: taggedRoleId || null,
-      })
-      .select('*, role:roles!messages_role_id_fkey(*)')
-      .single();
-
-    if (messageError) {
-      console.error('Error saving user message:', messageError);
-      throw messageError;
-    }
-
     // Get all roles in the chain with their details
     const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
       const { data: role, error: roleError } = await supabase
@@ -81,78 +64,115 @@ serve(async (req) => {
           continue;
         }
 
-        // Build memory context for the current role
-        const memoryContext = await buildMemoryContext(
-          supabase,
-          openai,
-          threadId,
-          role_id,
-          content
-        );
+        // Get role's mind
+        const { data: mindData, error: mindError } = await supabase
+          .from('role_minds')
+          .select('*')
+          .eq('role_id', role_id)
+          .eq('status', 'active')
+          .single();
 
-        console.log('Built memory context with relevance:', memoryContext.contextRelevance);
+        if (mindError || !mindData) {
+          console.error(`Error fetching mind for role ${role_id}:`, mindError);
+          throw new Error(`No active mind found for role ${role_id}`);
+        }
 
-        // Format memory context in a conversational way
-        const memoryPrompt = memoryContext.relevantMemories
-          .map(memory => `Related memory: ${memory.content}`)
-          .join('\n');
+        // Get conversation history
+        const { data: history, error: historyError } = await supabase
+          .from('messages')
+          .select(`
+            content,
+            role:roles!messages_role_id_fkey (
+              name,
+              expertise_areas
+            ),
+            created_at
+          `)
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: false })
+          .limit(10);
 
-        const conversationContext = memoryContext.conversationHistory
-          .map(msg => {
-            const roleName = msg.role?.name || 'Unknown';
-            const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
-            return `${roleName} (expert in ${expertise}): ${msg.content}`;
-          })
-          .join('\n\n');
+        if (historyError) throw historyError;
 
-        // Create an enhanced system prompt
-        const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
+        // Format conversation history for mind
+        const conversationThread = history?.map(msg => ({
+          role: msg.role ? 'assistant' : 'user',
+          content: msg.content,
+          name: msg.role?.name,
+          expertise: msg.role?.expertise_areas
+        })) || [];
 
-Previous conversation context:
-${conversationContext}
+        // Use mind to enrich context
+        const enrichedContext = await mindData.remember({
+          thread: conversationThread,
+          content,
+          metadata: {
+            role_name: currentRole.name,
+            expertise_areas: currentRole.expertise_areas,
+            thread_id: threadId
+          }
+        });
 
-Relevant memories and past discussions:
-${memoryPrompt}
-
-Your role instructions:
-${currentRole.instructions}
-
-Guidelines:
-1. Reference relevant past discussions when appropriate
-2. Build upon previous points made in the conversation
-3. Stay within your expertise areas
-4. Maintain conversation continuity
-5. Be natural and conversational
-6. Acknowledge and build upon others' contributions
-
-Focus on making the conversation flow naturally while providing valuable expertise-based insights.`;
-
-        // Generate response
+        // Generate response using enriched context
         const completion = await openai.chat.completions.create({
           model: currentRole.model || 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content }
+            { 
+              role: 'system', 
+              content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
+                ${enrichedContext.systemContext}
+                
+                Your role instructions:
+                ${currentRole.instructions}
+                
+                Guidelines:
+                1. Use the provided context to maintain conversation continuity
+                2. Stay within your expertise areas
+                3. Be natural and conversational
+                4. Acknowledge and build upon previous points`
+            },
+            { role: 'user', content: enrichedContext.enrichedMessage || content }
           ],
         });
 
         const responseContent = completion.choices[0].message.content;
         console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-        // Save response
-        const { error: responseError } = await supabase
+        // Store response
+        const { data: savedMessage, error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: role_id,
             content: responseContent,
-            chain_id: message.id
-          });
+            chain_id: chain[0].role_id,
+            chain_position: index + 1,
+            conversation_context: {
+              enriched_context: enrichedContext,
+              role_expertise: currentRole.expertise_areas,
+              chain_position: index + 1
+            }
+          })
+          .select()
+          .single();
 
         if (responseError) {
           console.error(`Error saving response for role ${role_id}:`, responseError);
           throw responseError;
         }
+
+        // Store interaction in mind
+        await mindData.remember({
+          thread: [
+            { role: 'user', content },
+            { role: 'assistant', content: responseContent }
+          ],
+          metadata: {
+            thread_id: threadId,
+            chain_position: index + 1,
+            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response'
+          }
+        });
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
