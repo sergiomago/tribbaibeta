@@ -37,7 +37,7 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Save user message first
+    // Save user message
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
@@ -53,7 +53,7 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get all roles in the chain with their details upfront
+    // Get all roles in the chain with their details
     const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
       const { data: role } = await supabase
         .from('roles')
@@ -65,24 +65,22 @@ serve(async (req) => {
 
     console.log('Chain roles:', chainRoles);
 
-    // Process responses one at a time
+    // Process responses sequentially
     for (const [index, { role_id }] of chain.entries()) {
       try {
-        const currentPosition = index + 1;
-        console.log(`Processing response for role ${role_id} at position ${currentPosition}`);
-        
         const currentRole = chainRoles[index];
         if (!currentRole) {
           console.error(`Role ${role_id} not found in chain roles`);
           continue;
         }
 
-        // Format chain roles information with clear expertise areas
-        const chainRolesInfo = chainRoles
-          .map(role => `${role.position}. ${role.name} (Expert in: ${role.expertise_areas?.join(', ')})`)
+        // Format roles information in a conversational way
+        const otherRoles = chainRoles
+          .filter(r => r.id !== role_id)
+          .map(r => `${r.name} (expert in ${r.expertise_areas?.join(', ')})`)
           .join('\n');
 
-        // Get previous responses in this chain with enhanced formatting
+        // Get previous responses in this chain
         const { data: previousResponses } = await supabase
           .from('messages')
           .select(`
@@ -93,72 +91,40 @@ serve(async (req) => {
           .eq('chain_id', message.id)
           .order('created_at', { ascending: true });
 
-        // Enhanced formatting for previous responses
-        const formattedResponses = (previousResponses || [])
+        // Format previous responses in a more conversational way
+        const discussionContext = (previousResponses || [])
           .map((msg, idx) => {
             const roleName = msg.role?.name || 'Unknown';
             const expertise = msg.role?.expertise_areas?.join(', ') || 'General';
-            return `Response #${idx + 1} - ${roleName} (${expertise}):\n${msg.content}`;
+            return `${roleName} (expert in ${expertise}) shared:\n${msg.content}`;
           })
           .join('\n\n');
 
-        // Enhanced system prompt with new collaboration rules
-        const systemPrompt = `You are ${currentRole.name}, responding as position ${currentPosition} of ${chainRoles.length} roles in this conversation.
+        // Simplified conversational prompt
+        const systemPrompt = `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}. 
+You're participating in a group discussion with other experts:
+${otherRoles}
 
-Role Chain Information:
-${chainRolesInfo}
+${previousResponses?.length > 0 ? 
+  `The discussion so far:
+${discussionContext}
 
-Your Expertise Areas: ${currentRole.expertise_areas?.join(', ')}
-Your Role Instructions: ${currentRole.instructions}
+Listen carefully to what others have said. Build upon their relevant points using your expertise. If you can't add meaningful value to the discussion, it's okay to acknowledge that.` 
+: 
+`You're starting the discussion. Share your expertise perspective while leaving room for others to contribute. Focus on aspects where your expertise is most relevant.`}
 
-${previousResponses?.length > 0 ? `Previous Responses:\n${formattedResponses}` : 'You are opening the discussion'}
+Your role:
+${currentRole.instructions}
 
-Response Format Requirements:
-1. Opening:
-   - Acknowledge previous responses using "@[Role Name]"
-   - Summarize key relevant points from previous experts
-   - State how your expertise relates to the question
+Guidelines:
+1. Be conversational and natural
+2. Build upon others' points when relevant
+3. Stay within your expertise areas
+4. Add new insights that complement existing ones
+5. Acknowledge others' contributions naturally
+6. It's okay to defer to others when appropriate
 
-2. Main Contribution:
-   - Build upon previous insights
-   - Add new, expertise-based perspectives
-   - Make clear connections to the overall question
-
-3. Closing:
-   ${currentPosition < chainRoles.length ? 
-     `- Identify areas where @${chainRoles[currentPosition].name} can expand
-   - Bridge to their expertise in ${chainRoles[currentPosition].expertise_areas?.join(', ')}`
-     : 
-     '- Provide final synthesis and recommendations\n   - Ensure all key points are addressed'}
-
-Collaboration Rules:
-1. Direct Referencing
-   - Use "@[Role Name]" when referring to other experts
-   - Explicitly connect to previous points
-   - Show how insights build on each other
-
-2. Value Addition
-   - Only add insights within your expertise
-   - Build upon, don't repeat, previous points
-   - Fill identified knowledge gaps
-
-3. Discussion Connectivity
-   - Maintain clear link to original question
-   - Connect insights across different experts
-   - Create bridges between different perspectives
-
-4. Expertise Boundaries
-   - If the topic is outside your expertise, state this clearly
-   - Only contribute meaningful, expertise-based insights
-   - If previous experts have fully covered your domain, acknowledge this
-   - Defer to other experts when appropriate, using "This aspect would be better addressed by @[Role Name]..."
-
-Position-Specific Guidelines:
-${currentPosition === 1 ? 
-  '- Set a strong foundation\n- Identify key areas for other experts\n- Frame the scope of discussion' 
-  : currentPosition < chainRoles.length ? 
-  `- Build upon insights from @${chainRoles[currentPosition - 2].name}\n- Add your unique perspective\n- Bridge to @${chainRoles[currentPosition].name}'s expertise`
-  : '- Synthesize key insights\n- Add final expert perspective\n- Provide concluding recommendations'}`;
+Focus on making the conversation flow naturally while providing valuable expertise-based insights.`;
 
         // Generate response
         const completion = await openai.chat.completions.create({
@@ -212,4 +178,3 @@ ${currentPosition === 1 ?
     );
   }
 });
-
