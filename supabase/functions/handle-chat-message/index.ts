@@ -6,10 +6,10 @@ import OpenAI from "https://esm.sh/openai@4.26.0";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
 import Llongterm from "https://esm.sh/llongterm@1.0.0";
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY')?.trim();
-const supabaseUrl = Deno.env.get('SUPABASE_URL')?.trim();
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')?.trim();
-const llongtermKey = Deno.env.get('LLONGTERM_API_KEY')?.trim();
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const llongtermKey = Deno.env.get('LLONGTERM_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -214,3 +214,4 @@ Guidelines:
     );
   }
 });
+
