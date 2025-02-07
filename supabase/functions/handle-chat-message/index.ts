@@ -27,12 +27,24 @@ serve(async (req) => {
   }
 
   try {
-    if (!openAIApiKey) throw new Error('OpenAI API key is not configured');
+    if (!openAIApiKey) {
+      console.error('OpenAI API key is missing');
+      throw new Error('OpenAI API key is not configured');
+    }
     if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
     if (!llongtermKey) throw new Error('Llongterm API key is not configured');
 
+    console.log('API Keys present:', { 
+      hasOpenAI: !!openAIApiKey,
+      hasSupabase: !!supabaseUrl && !!supabaseServiceKey,
+      hasLlongterm: !!llongtermKey
+    });
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const openai = new OpenAI({ apiKey: openAIApiKey });
+    const openai = new OpenAI({
+      apiKey: openAIApiKey,
+      dangerouslyAllowBrowser: true // Required for edge function environment
+    });
     const llongterm = new Llongterm({ keys: { llongterm: llongtermKey }});
     
     const { threadId, content, chain, taggedRoleId } = await req.json();
@@ -138,6 +150,8 @@ Guidelines:
 4. Maintain conversation continuity
 5. Be natural and conversational
 6. Acknowledge and build upon others' contributions`;
+
+        console.log('Generating response with system prompt:', systemPrompt.substring(0, 200) + '...');
 
         // Generate response
         const completion = await openai.chat.completions.create({
