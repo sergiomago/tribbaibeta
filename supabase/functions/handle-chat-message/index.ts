@@ -43,7 +43,7 @@ serve(async (req) => {
       throw new Error('Llongterm API key is required');
     }
 
-    // More strict OpenAI key validation
+    // Thorough OpenAI key validation
     if (!openAIApiKey.startsWith('sk-') || openAIApiKey.length < 20) {
       throw new Error('Invalid OpenAI API key format');
     }
