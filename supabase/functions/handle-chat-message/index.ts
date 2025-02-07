@@ -29,10 +29,23 @@ serve(async (req) => {
   try {
     console.log('Starting handle-chat-message function...');
     
-    // Validate required configuration
-    if (!supabaseUrl || !supabaseServiceKey || !openAIApiKey || !llongtermKey) {
-      console.error('Missing required configuration');
-      throw new Error('Missing required configuration');
+    // Validate required configuration with specific error messages
+    if (!supabaseUrl) {
+      throw new Error('Supabase URL is required');
+    }
+    if (!supabaseServiceKey) {
+      throw new Error('Supabase service key is required');
+    }
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key is required');
+    }
+    if (!llongtermKey) {
+      throw new Error('Llongterm API key is required');
+    }
+
+    // Validate OpenAI key format (basic check)
+    if (!openAIApiKey.startsWith('sk-') || openAIApiKey.length < 20) {
+      throw new Error('Invalid OpenAI API key format');
     }
 
     // Initialize clients
@@ -202,9 +215,10 @@ Guidelines:
 
   } catch (error) {
     console.error('Error in handle-chat-message:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return new Response(
       JSON.stringify({ 
-        error: error.message || 'An error occurred while processing your request.',
+        error: errorMessage,
         details: error.toString()
       }),
       { 
@@ -214,4 +228,3 @@ Guidelines:
     );
   }
 });
-
