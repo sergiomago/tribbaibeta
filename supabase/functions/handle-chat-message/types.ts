@@ -1,4 +1,3 @@
-
 export interface MemorySection {
   content: string;
   timestamp: number;
@@ -61,11 +60,16 @@ export interface ResponseChain {
   chainOrder: number;
 }
 
+export interface DomainAnalysis {
+  name: string;
+  confidence: number;
+  requiredExpertise: string[];
+}
+
 export interface AnalysisResult {
   intent: string;
-  context: string;
-  specialRequirements?: string[];
-  suggestedRoles?: string[];
+  domains: DomainAnalysis[];
+  urgency: number;
 }
 
 export interface MessageContext {

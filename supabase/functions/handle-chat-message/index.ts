@@ -1,9 +1,9 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { processMessage } from "./messageProcessor.ts";
+import { analyzeMessage } from "./messageAnalyzer.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -20,57 +20,55 @@ async function determineResponseOrder(
   supabase: any,
   threadId: string,
   content: string,
-  roleIds: string[]
+  roleIds: string[],
+  openai: OpenAI
 ): Promise<{ roleId: string; score: number }[]> {
   try {
+    // Get message analysis first
+    const analysis = await analyzeMessage(content, openai);
+    console.log('Message analysis:', analysis);
+
     // Get roles data
     const { data: roles, error: rolesError } = await supabase
       .from('roles')
-      .select('id, expertise_areas')
+      .select('id, expertise_areas, special_capabilities')
       .in('id', roleIds);
 
     if (rolesError) throw rolesError;
     if (!roles?.length) return [];
 
-    // Classify the question domain
-    const { data: domain, error: domainError } = await supabase
-      .rpc('classify_question_domain', {
-        content: content,
-        expertise_areas: roles[0].expertise_areas
-      });
+    // Score each role based on analysis
+    const scoredRoles = roles.map(role => {
+      let score = 0;
+      
+      // Score based on expertise match
+      const expertiseScore = analysis.domains.reduce((sum, domain) => {
+        const expertiseMatch = role.expertise_areas.some(area =>
+          domain.requiredExpertise.includes(area.toLowerCase()) ||
+          area.toLowerCase().includes(domain.name)
+        );
+        return sum + (expertiseMatch ? domain.confidence : 0);
+      }, 0);
 
-    if (domainError) {
-      console.error('Error classifying domain:', domainError);
-      throw domainError;
-    }
+      // Score based on capabilities match
+      const capabilityScore = role.special_capabilities?.length
+        ? role.special_capabilities.reduce((sum, cap) => {
+            const isRelevant = analysis.domains.some(d => 
+              d.requiredExpertise.some(exp => exp.includes(cap))
+            );
+            return sum + (isRelevant ? 0.3 : 0);
+          }, 0)
+        : 0;
 
-    console.log('Classified domain:', domain);
+      score = (expertiseScore * 0.7) + (capabilityScore * 0.3);
 
-    // Calculate relevance scores for each role
-    const scoredRoles = await Promise.all(
-      roleIds.map(async (roleId) => {
-        const { data: score, error: scoreError } = await supabase
-          .rpc('calculate_role_relevance', {
-            p_role_id: roleId,
-            p_question_content: content,
-            p_domain: domain
-          });
-
-        if (scoreError) {
-          console.error('Error calculating role relevance:', scoreError);
-          return { roleId, score: 0 };
-        }
-
-        return {
-          roleId,
-          score: score || 0
-        };
-      })
-    );
+      return {
+        roleId: role.id,
+        score: Math.min(score, 1) // Normalize to 0-1
+      };
+    });
 
     console.log('Scored roles:', scoredRoles);
-
-    // Sort by score in descending order
     return scoredRoles.sort((a, b) => b.score - a.score);
   } catch (error) {
     console.error('Error in determineResponseOrder:', error);
@@ -136,7 +134,8 @@ serve(async (req) => {
         supabase,
         threadId,
         content,
-        threadRoles.map(tr => tr.role_id)
+        threadRoles.map(tr => tr.role_id),
+        openai
       );
     }
 
