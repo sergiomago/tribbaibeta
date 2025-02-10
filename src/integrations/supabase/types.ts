@@ -173,52 +173,45 @@ export type Database = {
       }
       messages: {
         Row: {
-          chain_id: string | null
-          chain_position: number | null
+          analyzed_intent: Json | null
           content: string
           conversation_context: Json | null
           created_at: string
           depth_level: number | null
           id: string
+          response_order: number | null
           response_to_id: string | null
           role_id: string | null
           tagged_role_id: string | null
           thread_id: string
         }
         Insert: {
-          chain_id?: string | null
-          chain_position?: number | null
+          analyzed_intent?: Json | null
           content: string
           conversation_context?: Json | null
           created_at?: string
           depth_level?: number | null
           id?: string
+          response_order?: number | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id: string
         }
         Update: {
-          chain_id?: string | null
-          chain_position?: number | null
+          analyzed_intent?: Json | null
           content?: string
           conversation_context?: Json | null
           created_at?: string
           depth_level?: number | null
           id?: string
+          response_order?: number | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
           thread_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "messages_chain_id_fkey"
-            columns: ["chain_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "messages_response_to_id_fkey"
             columns: ["response_to_id"]
@@ -976,24 +969,6 @@ export type Database = {
         }
         Returns: number
       }
-      get_chain_depth: {
-        Args: {
-          p_thread_id: string
-          p_chain_id: string
-        }
-        Returns: number
-      }
-      get_chain_responses: {
-        Args: {
-          p_thread_id: string
-          p_chain_id: string
-        }
-        Returns: {
-          content: string
-          role_name: string
-          role_expertise: string
-        }[]
-      }
       get_conversation_chain: {
         Args: {
           p_thread_id: string
@@ -1097,6 +1072,20 @@ export type Database = {
         }
         Returns: {
           role_id: string
+        }[]
+      }
+      get_thread_context: {
+        Args: {
+          p_thread_id: string
+          p_limit?: number
+        }
+        Returns: {
+          id: string
+          content: string
+          role_id: string
+          response_order: number
+          created_at: string
+          analyzed_intent: Json
         }[]
       }
       gtrgm_compress: {

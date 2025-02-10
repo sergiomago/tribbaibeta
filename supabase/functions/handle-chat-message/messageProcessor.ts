@@ -1,3 +1,4 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
@@ -206,3 +207,4 @@ Remember:
     throw error;
   }
 }
+
