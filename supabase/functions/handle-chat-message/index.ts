@@ -16,6 +16,69 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+async function determineResponseOrder(
+  supabase: any,
+  threadId: string,
+  content: string,
+  roleIds: string[]
+): Promise<{ roleId: string; score: number }[]> {
+  try {
+    // Get roles data
+    const { data: roles, error: rolesError } = await supabase
+      .from('roles')
+      .select('id, expertise_areas')
+      .in('id', roleIds);
+
+    if (rolesError) throw rolesError;
+    if (!roles?.length) return [];
+
+    // Classify the question domain
+    const { data: domain, error: domainError } = await supabase
+      .rpc('classify_question_domain', {
+        content: content,
+        expertise_areas: roles[0].expertise_areas
+      });
+
+    if (domainError) {
+      console.error('Error classifying domain:', domainError);
+      throw domainError;
+    }
+
+    console.log('Classified domain:', domain);
+
+    // Calculate relevance scores for each role
+    const scoredRoles = await Promise.all(
+      roleIds.map(async (roleId) => {
+        const { data: score, error: scoreError } = await supabase
+          .rpc('calculate_role_relevance', {
+            p_role_id: roleId,
+            p_question_content: content,
+            p_domain: domain
+          });
+
+        if (scoreError) {
+          console.error('Error calculating role relevance:', scoreError);
+          return { roleId, score: 0 };
+        }
+
+        return {
+          roleId,
+          score: score || 0
+        };
+      })
+    );
+
+    console.log('Scored roles:', scoredRoles);
+
+    // Sort by score in descending order
+    return scoredRoles.sort((a, b) => b.score - a.score);
+  } catch (error) {
+    console.error('Error in determineResponseOrder:', error);
+    // Return default ordering if something fails
+    return roleIds.map(roleId => ({ roleId, score: 1 }));
+  }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
