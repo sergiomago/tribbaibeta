@@ -53,6 +53,13 @@ export async function processMessage(
   console.log('Processing message for role:', roleId);
 
   try {
+    // Check message depth before processing
+    const currentDepth = userMessage.depth_level || 0;
+    if (currentDepth >= 9) {
+      console.log('Maximum conversation depth reached');
+      return null;
+    }
+
     // Get role details
     const { data: role, error: roleError } = await supabase
       .from('roles')
@@ -160,7 +167,7 @@ ${userMessage.content}`;
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-    // Save response with metadata field (not interaction_metadata)
+    // Save response with updated fields
     const { data: savedMessage, error: saveError } = await supabase
       .from('messages')
       .insert({
@@ -170,6 +177,8 @@ ${userMessage.content}`;
         content: responseContent,
         is_bot: true,
         parent_message_id: userMessage.id,
+        depth_level: (userMessage.depth_level || 0) + 1,
+        chain_position: responseOrder,
         metadata: {
           response_quality: 1.0,
           response_time: Date.now() - new Date(userMessage.created_at).getTime(),
@@ -186,4 +195,17 @@ ${userMessage.content}`;
     console.error('Error in processMessage:', error);
     throw error;
   }
+}
+
+// Helper functions (these can be moved to a separate file if needed)
+function extractExpertiseAreas(description: string): string[] {
+  const areas = description.match(/expertise in ([^.]+)/i);
+  return areas ? areas[1].split(',').map(area => area.trim()) : [];
+}
+
+function extractInteractionPreferences(instructions: string): Record<string, unknown> {
+  return {
+    style: instructions.includes('formal') ? 'formal' : 'conversational',
+    depth: instructions.includes('detailed') ? 'detailed' : 'concise'
+  };
 }

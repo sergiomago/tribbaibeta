@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -25,11 +24,9 @@ async function determineResponseOrder(
   openai: OpenAI
 ): Promise<{ roleId: string; score: number }[]> {
   try {
-    // Get message analysis first
     const analysis = await analyzeMessage(content, openai);
     console.log('Message analysis:', analysis);
 
-    // Get roles data
     const { data: roles, error: rolesError } = await supabase
       .from('roles')
       .select('id, expertise_areas, special_capabilities')
@@ -38,11 +35,9 @@ async function determineResponseOrder(
     if (rolesError) throw rolesError;
     if (!roles?.length) return [];
 
-    // Score each role based on analysis
     const scoredRoles = roles.map(role => {
       let score = 0;
       
-      // Score based on expertise match
       const expertiseScore = analysis.domains.reduce((sum, domain) => {
         const expertiseMatch = role.expertise_areas.some(area =>
           domain.requiredExpertise.includes(area.toLowerCase()) ||
@@ -51,7 +46,6 @@ async function determineResponseOrder(
         return sum + (expertiseMatch ? domain.confidence : 0);
       }, 0);
 
-      // Score based on capabilities match
       const capabilityScore = role.special_capabilities?.length
         ? role.special_capabilities.reduce((sum, cap) => {
             const isRelevant = analysis.domains.some(d => 
@@ -65,7 +59,7 @@ async function determineResponseOrder(
 
       return {
         roleId: role.id,
-        score: Math.min(score, 1) // Normalize to 0-1
+        score: Math.min(score, 1)
       };
     });
 
@@ -73,7 +67,6 @@ async function determineResponseOrder(
     return scoredRoles.sort((a, b) => b.score - a.score);
   } catch (error) {
     console.error('Error in determineResponseOrder:', error);
-    // Return default ordering if something fails
     return roleIds.map(roleId => ({ roleId, score: 1 }));
   }
 }
@@ -100,14 +93,15 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Save user message first
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
-        metadata: {}, // Changed from interaction_metadata to metadata
+        depth_level: 0,
+        chain_position: 0,
+        metadata: {},
       })
       .select()
       .single();
@@ -117,7 +111,6 @@ serve(async (req) => {
       throw messageError;
     }
 
-    // Get thread roles
     const { data: threadRoles, error: rolesError } = await supabase
       .from('thread_roles')
       .select('role_id')
@@ -128,10 +121,8 @@ serve(async (req) => {
 
     let orderedRoles;
     if (taggedRoleId) {
-      // If a role is tagged, it responds first
       orderedRoles = [{ roleId: taggedRoleId, score: 1 }];
     } else {
-      // Use our new domain classification and scoring system
       orderedRoles = await determineResponseOrder(
         supabase,
         threadId,
@@ -143,24 +134,23 @@ serve(async (req) => {
 
     console.log('Processing with ordered roles:', orderedRoles);
 
-    // Process responses one at a time based on the calculated order
-    for (const { roleId } of orderedRoles) {
+    for (const { roleId, score } of orderedRoles) {
       try {
         console.log(`Processing response for role ${roleId}`);
         
-        // Get previous responses in this thread
         const { data: previousResponses } = await supabase
           .from('messages')
           .select(`
             content,
             role:roles(name, expertise_areas),
             role_id,
-            created_at
+            created_at,
+            depth_level,
+            chain_position
           `)
           .eq('thread_id', threadId)
           .order('created_at', { ascending: true });
 
-        // Generate response using enhanced message processor
         const responseContent = await processMessage(
           openai,
           supabase,
@@ -170,19 +160,9 @@ serve(async (req) => {
           previousResponses || []
         );
 
-        // Save response with metadata instead of interaction_metadata
-        const { error: responseError } = await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            role_id: roleId,
-            content: responseContent,
-            metadata: {}, // Changed from interaction_metadata to metadata
-          });
-
-        if (responseError) {
-          console.error(`Error saving response for role ${roleId}:`, responseError);
-          throw responseError;
+        if (!responseContent) {
+          console.log(`Skipping response for role ${roleId} due to depth limit`);
+          continue;
         }
 
       } catch (error) {

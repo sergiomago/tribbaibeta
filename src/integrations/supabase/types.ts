@@ -213,6 +213,7 @@ export type Database = {
       messages: {
         Row: {
           analyzed_intent: Json | null
+          chain_position: number | null
           content: string
           conversation_context: Json | null
           created_at: string
@@ -231,6 +232,7 @@ export type Database = {
         }
         Insert: {
           analyzed_intent?: Json | null
+          chain_position?: number | null
           content: string
           conversation_context?: Json | null
           created_at?: string
@@ -249,6 +251,7 @@ export type Database = {
         }
         Update: {
           analyzed_intent?: Json | null
+          chain_position?: number | null
           content?: string
           conversation_context?: Json | null
           created_at?: string
