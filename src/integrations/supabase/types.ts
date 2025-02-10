@@ -179,10 +179,15 @@ export type Database = {
           created_at: string
           depth_level: number | null
           id: string
+          is_bot: boolean | null
+          metadata: Json | null
+          parent_message_id: string | null
+          responding_role_id: string | null
           response_order: number | null
           response_to_id: string | null
           role_id: string | null
           tagged_role_id: string | null
+          thread_depth: number | null
           thread_id: string
         }
         Insert: {
@@ -192,10 +197,15 @@ export type Database = {
           created_at?: string
           depth_level?: number | null
           id?: string
+          is_bot?: boolean | null
+          metadata?: Json | null
+          parent_message_id?: string | null
+          responding_role_id?: string | null
           response_order?: number | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
+          thread_depth?: number | null
           thread_id: string
         }
         Update: {
@@ -205,13 +215,32 @@ export type Database = {
           created_at?: string
           depth_level?: number | null
           id?: string
+          is_bot?: boolean | null
+          metadata?: Json | null
+          parent_message_id?: string | null
+          responding_role_id?: string | null
           response_order?: number | null
           response_to_id?: string | null
           role_id?: string | null
           tagged_role_id?: string | null
+          thread_depth?: number | null
           thread_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_parent_message_id_fkey"
+            columns: ["parent_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_responding_role_id_fkey"
+            columns: ["responding_role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_response_to_id_fkey"
             columns: ["response_to_id"]

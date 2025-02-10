@@ -46,10 +46,11 @@ export function useMessages(threadId: string | null) {
         parent_message_id: msg.parent_message_id,
         thread_depth: msg.thread_depth || 0,
         tagged_role_id: msg.tagged_role_id,
-        metadata: msg.metadata,
+        metadata: msg.metadata || {},
         role: msg.role ? {
           name: msg.role.name,
-          tag: msg.role.tag
+          tag: msg.role.tag,
+          special_capabilities: msg.role.special_capabilities
         } : undefined
       })) as Message[];
 
