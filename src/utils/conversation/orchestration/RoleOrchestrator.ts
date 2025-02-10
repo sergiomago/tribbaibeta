@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
+import { createRoleSelector } from "../../roles/selection/RoleSelector";
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -12,24 +13,25 @@ export class RoleOrchestrator {
     console.log('Orchestrator handling message:', { content, taggedRoleId });
 
     try {
-      // Simple message handling - either use tagged role or get chain
-      const chain = taggedRoleId 
-        ? [{ role_id: taggedRoleId }]
-        : await this.getSimpleChain();
+      // If a role is tagged, use just that role
+      if (taggedRoleId) {
+        console.log('Using tagged role:', taggedRoleId);
+        const chain = [{ role_id: taggedRoleId }];
+        await this.processMessageWithChain(content, chain);
+        return;
+      }
 
-      console.log('Processing with chain:', chain);
+      // Otherwise use RoleSelector to get scored and ordered roles
+      const roleSelector = createRoleSelector(this.threadId);
+      const scoredRoles = await roleSelector.selectResponders(content);
+      
+      console.log('Scored and ordered roles:', scoredRoles);
+      
+      const chain = scoredRoles.map(role => ({
+        role_id: role.id
+      }));
 
-      // Process message through edge function
-      const { error } = await supabase.functions.invoke("handle-chat-message", {
-        body: {
-          threadId: this.threadId,
-          content,
-          chain,
-          taggedRoleId
-        },
-      });
-
-      if (error) throw error;
+      await this.processMessageWithChain(content, chain);
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
@@ -37,14 +39,18 @@ export class RoleOrchestrator {
     }
   }
 
-  private async getSimpleChain() {
-    const { data: threadRoles } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', this.threadId)
-      .order('created_at', { ascending: true });
+  private async processMessageWithChain(content: string, chain: { role_id: string }[]) {
+    console.log('Processing with chain:', chain);
 
-    return threadRoles || [];
+    const { error } = await supabase.functions.invoke("handle-chat-message", {
+      body: {
+        threadId: this.threadId,
+        content,
+        chain
+      },
+    });
+
+    if (error) throw error;
   }
 }
 
