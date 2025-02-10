@@ -1,8 +1,20 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
 import { llongtermClient } from "./llongtermClient.ts";
 import { LlongtermError } from "./errors.ts";
+
+async function formatConversationHistory(
+  messages: Message[],
+  role: any
+): Promise<string> {
+  if (!messages.length) return '';
+  
+  return messages
+    .map(msg => `${msg.role_id ? msg.role?.name || 'Assistant' : 'User'}: ${msg.content}`)
+    .join('\n');
+}
 
 function formatResponseStyle(style: any) {
   if (!style) return '';
@@ -81,13 +93,16 @@ export async function processMessage(
     let knowledgeResponse = null;
 
     try {
-      // Try to get existing mind or create new one
+      // Get or create mind
       mind = await llongtermClient.getMind(roleId);
       if (!mind) {
-        console.log('No existing mind found, creating new one for role:', roleId);
+        console.log('Creating new mind for role:', roleId);
         
-        const expertiseAreas = extractExpertiseAreas(role.description || '');
-        const interactionPrefs = extractInteractionPreferences(role.instructions || '');
+        const expertiseAreas = role.expertise_areas || [];
+        const interactionPrefs = {
+          style: role.response_style || {},
+          preferences: role.interaction_preferences || {}
+        };
         
         mind = await llongtermClient.createMind({
           specialism: role.name,
@@ -99,54 +114,64 @@ export async function processMessage(
             created: new Date().toISOString()
           }
         });
-        console.log('Created new mind:', mind);
       }
 
+      // Format conversation history
+      const conversationHistory = previousResponses.map(msg => ({
+        author: msg.role_id ? 'assistant' : 'user',
+        message: msg.content,
+        timestamp: new Date(msg.created_at).getTime(),
+        metadata: {
+          role_id: msg.role_id,
+          role_name: msg.role?.name,
+          expertise: msg.role?.expertise_areas
+        }
+      }));
+
+      // Add current message
+      conversationHistory.push({
+        author: 'user',
+        message: userMessage.content,
+        timestamp: Date.now(),
+        metadata: { thread_id: threadId }
+      });
+
       if (mind) {
-        // Format previous responses for memory
-        const conversationHistory = previousResponses.map(msg => ({
-          author: msg.role_id ? 'assistant' : 'user',
-          message: msg.content,
-          timestamp: new Date(msg.created_at).getTime(),
-          metadata: {
-            role_id: msg.role_id,
-            role_name: msg.role?.name,
-            expertise: msg.role?.expertise_areas
-          }
-        }));
-
-        // Add current message to history
-        conversationHistory.push({
-          author: 'user',
-          message: userMessage.content,
-          timestamp: Date.now(),
-          metadata: { thread_id: threadId }
-        });
-
-        console.log('Storing conversation in mind');
+        // Store conversation in memory
         memoryResponse = await mind.remember(conversationHistory);
         console.log('Memory response:', memoryResponse);
 
-        // Get relevant context from mind
+        // Get relevant context
         knowledgeResponse = await mind.ask(userMessage.content);
         console.log('Knowledge response:', knowledgeResponse);
       }
     } catch (error) {
-      console.error('Error with Llongterm operations:', error);
-      // Continue without memory features if Llongterm fails
+      console.error('Error with memory operations:', error);
+      // Continue without memory if it fails
     }
 
-    // Create enhanced system prompt
+    // Create enhanced system prompt with context
+    const conversationContext = await formatConversationHistory(previousResponses, role);
+    const memoryContext = knowledgeResponse?.relevantMemories?.join('\n') || '';
+    
     const systemPrompt = `You are ${role.name}, a specialized AI role in a collaborative team discussion.
+
+ROLE CONTEXT AND EXPERTISE:
+${role.description || ''}
+${role.instructions || ''}
+
+CONVERSATION HISTORY:
+${conversationContext}
+
+${memoryContext ? `RELEVANT CONTEXT FROM MEMORY:
+${memoryContext}` : ''}
 
 RESPONSE POSITION AND RELEVANCE:
 - You are responding in position ${responseOrder} of ${totalResponders}
 - Next responding role: ${nextRole ? 'Another role will respond after you' : 'You are the last responder'}
-- Your role: ${responseOrder === 1 ? 'Lead the discussion in your domain' : 'Build upon and complement previous insights'}
+- Your relevance score for this topic: ${relevanceScore}
+- Matching domains: ${matchingDomains.join(', ')}
 
-${role.instructions}
-
-CURRENT CONVERSATION CONTEXT:
 ${formatResponseStyle(role.response_style)}
 
 USER MESSAGE:
@@ -181,7 +206,12 @@ ${userMessage.content}`;
         metadata: {
           response_quality: 1.0,
           response_time: Date.now() - new Date(userMessage.created_at).getTime(),
-          role_performance: relevanceScore
+          role_performance: relevanceScore,
+          memory_context: {
+            used_memories: knowledgeResponse?.relevantMemories || [],
+            memory_id: memoryResponse?.memoryId,
+            context_summary: memoryResponse?.summary
+          }
         }
       })
       .select()
@@ -189,22 +219,28 @@ ${userMessage.content}`;
 
     if (saveError) throw saveError;
 
+    // Store the response in memory
+    if (mind) {
+      try {
+        await mind.remember([{
+          author: 'assistant',
+          message: responseContent,
+          timestamp: Date.now(),
+          metadata: {
+            role_id: roleId,
+            thread_id: threadId,
+            parent_message_id: userMessage.id,
+            response_order: responseOrder
+          }
+        }]);
+      } catch (error) {
+        console.error('Error storing response in memory:', error);
+      }
+    }
+
     return responseContent;
   } catch (error) {
     console.error('Error in processMessage:', error);
     throw error;
   }
-}
-
-// Helper functions
-function extractExpertiseAreas(description: string): string[] {
-  const areas = description.match(/expertise in ([^.]+)/i);
-  return areas ? areas[1].split(',').map(area => area.trim()) : [];
-}
-
-function extractInteractionPreferences(instructions: string): Record<string, unknown> {
-  return {
-    style: instructions.includes('formal') ? 'formal' : 'conversational',
-    depth: instructions.includes('detailed') ? 'detailed' : 'concise'
-  };
 }

@@ -1,4 +1,3 @@
-
 export interface MemorySection {
   content: string;
   timestamp: number;
@@ -80,5 +79,36 @@ export interface MessageContext {
   chainContext: {
     lastUpdated: string;
     contextType: string;
+  };
+}
+
+export interface MessageMemoryContext {
+  used_memories?: string[];
+  memory_id?: string;
+  context_summary?: string;
+}
+
+export interface MessageMetadata {
+  response_quality?: number;
+  response_time?: number;
+  role_performance?: number;
+  memory_context?: MessageMemoryContext;
+  [key: string]: any;
+}
+
+export interface Message {
+  id: string;
+  thread_id: string;
+  role_id?: string | null;
+  content: string;
+  created_at: string;
+  is_bot?: boolean;
+  parent_message_id?: string | null;
+  depth_level?: number;
+  chain_position?: number;
+  metadata?: MessageMetadata;
+  role?: {
+    name: string;
+    expertise_areas?: string[];
   };
 }
