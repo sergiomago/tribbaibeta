@@ -1,5 +1,7 @@
+
 import { Role } from "../types/roles";
 import { supabase } from "@/integrations/supabase/client";
+import { generateEmbedding } from "@/services/embedding-generator";
 
 export class RelevanceScorer {
   async calculateScore(role: Role, content: string, threadId: string): Promise<number> {
@@ -18,16 +20,28 @@ export class RelevanceScorer {
   }
 
   private async calculateContextRelevance(role: Role, content: string): Promise<number> {
-    const { data: memories } = await supabase
-      .rpc('get_similar_memories', {
-        p_embedding: content,
-        p_match_threshold: 0.7,
-        p_match_count: 5,
-        p_role_id: role.id
-      });
+    try {
+      // Generate embedding for the content
+      const embedding = await generateEmbedding(content);
+      if (!embedding || embedding.length === 0) {
+        console.warn('Failed to generate embedding for content');
+        return 0;
+      }
 
-    if (!memories?.length) return 0;
-    return memories.reduce((acc, mem) => acc + mem.similarity, 0) / memories.length;
+      const { data: memories } = await supabase
+        .rpc('get_similar_memories', {
+          p_embedding: embedding,
+          p_match_threshold: 0.7,
+          p_match_count: 5,
+          p_role_id: role.id
+        });
+
+      if (!memories?.length) return 0;
+      return memories.reduce((acc, mem) => acc + mem.similarity, 0) / memories.length;
+    } catch (error) {
+      console.error('Error calculating context relevance:', error);
+      return 0;
+    }
   }
 
   private async calculateInteractionHistory(roleId: string, threadId: string): Promise<number> {
