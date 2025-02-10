@@ -107,6 +107,7 @@ serve(async (req) => {
         thread_id: threadId,
         content,
         tagged_role_id: taggedRoleId || null,
+        metadata: {}, // Changed from interaction_metadata to metadata
       })
       .select()
       .single();
@@ -169,13 +170,14 @@ serve(async (req) => {
           previousResponses || []
         );
 
-        // Save response
+        // Save response with metadata instead of interaction_metadata
         const { error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: roleId,
-            content: responseContent
+            content: responseContent,
+            metadata: {}, // Changed from interaction_metadata to metadata
           });
 
         if (responseError) {

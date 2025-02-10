@@ -1,3 +1,4 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
@@ -159,7 +160,7 @@ ${userMessage.content}`;
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-    // Save response with enhanced metadata
+    // Save response with metadata field (not interaction_metadata)
     const { data: savedMessage, error: saveError } = await supabase
       .from('messages')
       .insert({
@@ -169,7 +170,7 @@ ${userMessage.content}`;
         content: responseContent,
         is_bot: true,
         parent_message_id: userMessage.id,
-        interaction_metadata: {
+        metadata: {
           response_quality: 1.0,
           response_time: Date.now() - new Date(userMessage.created_at).getTime(),
           role_performance: relevanceScore
