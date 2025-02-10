@@ -6,6 +6,38 @@ import { llongtermClient } from "./llongtermClient.ts";
 import { LlongtermError } from "./errors.ts";
 import { extractExpertiseAreas, extractInteractionPreferences } from "./roleDataExtractor.ts";
 
+function formatResponseStyle(style: any) {
+  if (!style) return '';
+  
+  return `Communication Style:
+- Complexity: ${style.complexity || 'balanced'} (detailed/simple)
+- Tone: ${style.tone || 'professional'} (technical/conversational)
+- Format: ${style.format || 'flexible'} (structured/flexible)`;
+}
+
+function formatExpertiseBoundaries(role: any) {
+  return `Your Core Responsibilities:
+- Focus exclusively on your expertise areas: ${role.expertise_areas?.join(', ')}
+- For questions outside your expertise, acknowledge and defer to relevant roles
+- Maintain consistent depth of analysis in your domain
+- Only answer questions that align with your expertise`;
+}
+
+function formatPrimaryTopics(topics: string[] = []) {
+  if (!topics.length) return '';
+  
+  return `Primary Focus Areas:
+${topics.map(topic => `- ${topic}`).join('\n')}`;
+}
+
+function formatPreviousResponses(responses: Message[] = []) {
+  if (!responses.length) return 'You are first to respond';
+  
+  return responses
+    .map(msg => `${msg.role?.name || 'Unknown'}: ${msg.content}`)
+    .join('\n\n');
+}
+
 export async function processMessage(
   openai: OpenAI,
   supabase: SupabaseClient,
@@ -45,7 +77,7 @@ export async function processMessage(
         
         mind = await llongtermClient.createMind({
           specialism: role.name,
-          specialismDepth: 8, // Increased from 2 to 8 for better specialization
+          specialismDepth: 8,
           metadata: {
             roleId,
             expertise: expertiseAreas,
@@ -91,8 +123,14 @@ export async function processMessage(
       // Continue without memory features if Llongterm fails
     }
 
-    // Create enriched system prompt
-    const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}.
+    // Create enhanced system prompt
+    const systemPrompt = `You are ${role.name}, a specialized AI role with deep expertise in: ${role.expertise_areas?.join(', ')}.
+
+${formatPrimaryTopics(role.primary_topics)}
+
+${formatResponseStyle(role.response_style)}
+
+${formatExpertiseBoundaries(role)}
 
 Your Specific Instructions:
 ${role.instructions}
@@ -101,14 +139,18 @@ ${knowledgeResponse ? `Relevant Context from Your Memory:
 ${knowledgeResponse.relevantMemories.join('\n')}` : ''}
 
 Previous Responses in Chain:
-${previousResponses?.length > 0 
-  ? previousResponses.map(msg => `${msg.role?.name || 'Unknown'}: ${msg.content}`).join('\n\n')
-  : 'You are first to respond'}
-
-Remember: Focus on what makes your expertise unique while building upon the collective insights of the team.
+${formatPreviousResponses(previousResponses)}
 
 Current Discussion:
-${userMessage.content}`;
+${userMessage.content}
+
+Remember:
+1. Stay within your expertise boundaries
+2. If a question is outside your expertise, acknowledge this and defer to other roles
+3. Maintain consistent depth and style in your responses
+4. Build upon previous responses when relevant`;
+
+    console.log('Generated system prompt:', systemPrompt);
 
     // Generate response
     const completion = await openai.chat.completions.create({
