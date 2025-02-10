@@ -3,6 +3,7 @@ import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
 import { llongtermClient } from "./llongtermClient.ts";
+import { LlongtermError } from "./errors.ts";
 
 export async function processMessage(
   openai: OpenAI,
@@ -27,50 +28,61 @@ export async function processMessage(
 
     console.log('Retrieved role:', role);
 
-    // Try to get existing mind or create new one
-    let mind = await llongtermClient.getMind(roleId);
-    if (!mind) {
-      console.log('No existing mind found, creating new one for role:', roleId);
-      mind = await llongtermClient.createMind({
-        specialism: role.name,
-        specialismDepth: 2,
-        metadata: {
-          roleId,
-          expertise: role.expertise_areas,
-          created: new Date().toISOString()
-        }
-      });
-      console.log('Created new mind:', mind);
-    }
+    let mind = null;
+    let memoryResponse = null;
+    let knowledgeResponse = null;
 
-    // Format previous responses for memory
-    const conversationHistory = previousResponses.map(msg => ({
-      author: msg.role_id ? 'assistant' : 'user',
-      message: msg.content,
-      timestamp: new Date(msg.created_at).getTime(),
-      metadata: {
-        role_id: msg.role_id,
-        role_name: msg.role?.name,
-        expertise: msg.role?.expertise_areas
+    try {
+      // Try to get existing mind or create new one
+      mind = await llongtermClient.getMind(roleId);
+      if (!mind) {
+        console.log('No existing mind found, creating new one for role:', roleId);
+        mind = await llongtermClient.createMind({
+          specialism: role.name,
+          specialismDepth: 2,
+          metadata: {
+            roleId,
+            expertise: role.expertise_areas,
+            created: new Date().toISOString()
+          }
+        });
+        console.log('Created new mind:', mind);
       }
-    }));
 
-    // Add current message to history
-    conversationHistory.push({
-      author: 'user',
-      message: userMessage.content,
-      timestamp: Date.now(),
-      metadata: { thread_id: threadId }
-    });
+      if (mind) {
+        // Format previous responses for memory
+        const conversationHistory = previousResponses.map(msg => ({
+          author: msg.role_id ? 'assistant' : 'user',
+          message: msg.content,
+          timestamp: new Date(msg.created_at).getTime(),
+          metadata: {
+            role_id: msg.role_id,
+            role_name: msg.role?.name,
+            expertise: msg.role?.expertise_areas
+          }
+        }));
 
-    console.log('Storing conversation in mind');
-    // Store conversation in mind
-    const memoryResponse = await mind.remember(conversationHistory);
-    console.log('Memory response:', memoryResponse);
+        // Add current message to history
+        conversationHistory.push({
+          author: 'user',
+          message: userMessage.content,
+          timestamp: Date.now(),
+          metadata: { thread_id: threadId }
+        });
 
-    // Get relevant context from mind
-    const knowledgeResponse = await mind.ask(userMessage.content);
-    console.log('Knowledge response:', knowledgeResponse);
+        console.log('Storing conversation in mind');
+        // Store conversation in mind
+        memoryResponse = await mind.remember(conversationHistory);
+        console.log('Memory response:', memoryResponse);
+
+        // Get relevant context from mind
+        knowledgeResponse = await mind.ask(userMessage.content);
+        console.log('Knowledge response:', knowledgeResponse);
+      }
+    } catch (error) {
+      console.error('Error with Llongterm operations:', error);
+      // Continue without memory features if Llongterm fails
+    }
 
     // Create enriched system prompt
     const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}.
@@ -78,8 +90,8 @@ export async function processMessage(
 Your Specific Instructions:
 ${role.instructions}
 
-Relevant Context from Your Memory:
-${knowledgeResponse.relevantMemories.join('\n')}
+${knowledgeResponse ? `Relevant Context from Your Memory:
+${knowledgeResponse.relevantMemories.join('\n')}` : ''}
 
 Previous Responses in Chain:
 ${previousResponses?.length > 0 

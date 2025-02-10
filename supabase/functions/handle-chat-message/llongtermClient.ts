@@ -24,10 +24,15 @@ class LlongtermClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit): Promise<T> {
-    console.log(`Making request to ${this.baseUrl}${endpoint}`);
+    if (!this.apiKey) {
+      throw new LlongtermError('LLONGTERM_API_KEY is not set');
+    }
+
+    const url = `${this.baseUrl}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+    console.log(`Making request to ${url}`);
     
     try {
-      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      const response = await fetch(url, {
         ...options,
         headers: {
           'Content-Type': 'application/json',
@@ -41,8 +46,13 @@ class LlongtermClient {
         console.error('API request failed:', {
           status: response.status,
           statusText: response.statusText,
-          errorBody: errorText
+          errorBody: errorText,
+          url: url
         });
+        
+        if (response.status === 404) {
+          return null as T;
+        }
         
         throw new LlongtermError(
           `API request failed (${response.status} ${response.statusText}): ${errorText}`
@@ -50,7 +60,7 @@ class LlongtermClient {
       }
 
       const data = await response.json();
-      console.log(`Successfully received response from ${endpoint}`, { data });
+      console.log(`Successfully received response from ${endpoint}:`, data);
       return data;
     } catch (error) {
       console.error(`Request to ${endpoint} failed:`, error);
@@ -64,9 +74,16 @@ class LlongtermClient {
   async getMind(mindId: string): Promise<Mind | null> {
     try {
       console.log(`Attempting to get mind with ID: ${mindId}`);
-      return await this.request<Mind>(`/minds/${mindId}`, {
+      const response = await this.request<Mind>(`/minds/${mindId}`, {
         method: 'GET',
       });
+      
+      if (!response) {
+        console.log(`Mind ${mindId} not found, returning null`);
+        return null;
+      }
+      
+      return response;
     } catch (error) {
       if (error instanceof LlongtermError && error.message.includes('not found')) {
         console.log(`Mind ${mindId} not found, returning null`);
