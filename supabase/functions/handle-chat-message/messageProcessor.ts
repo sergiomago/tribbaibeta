@@ -1,4 +1,3 @@
-
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
@@ -197,7 +196,7 @@ ${userMessage.content}`;
   }
 }
 
-// Helper functions (these can be moved to a separate file if needed)
+// Helper functions
 function extractExpertiseAreas(description: string): string[] {
   const areas = description.match(/expertise in ([^.]+)/i);
   return areas ? areas[1].split(',').map(area => area.trim()) : [];
