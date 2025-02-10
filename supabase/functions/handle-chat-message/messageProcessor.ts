@@ -1,10 +1,8 @@
-
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
 import { llongtermClient } from "./llongtermClient.ts";
 import { LlongtermError } from "./errors.ts";
-import { extractExpertiseAreas, extractInteractionPreferences } from "./roleDataExtractor.ts";
 
 function formatResponseStyle(style: any) {
   if (!style) return '';
@@ -15,26 +13,28 @@ function formatResponseStyle(style: any) {
 - Format: ${style.format || 'flexible'} (structured/flexible)`;
 }
 
-function formatMemories(memories: string[] = []) {
-  if (!memories?.length) return 'No directly relevant past discussions found';
-  
-  return memories.map(memory => `- ${memory}`).join('\n');
-}
+async function getNextRespondingRole(
+  supabase: SupabaseClient,
+  threadId: string,
+  lastMessageRole: string | null
+): Promise<string | null> {
+  const { data: responseOrder } = await supabase
+    .from('thread_response_order')
+    .select('*')
+    .eq('thread_id', threadId)
+    .order('response_position', { ascending: true });
 
-function formatCollaborations(collaborations: any = {}) {
-  if (!Object.keys(collaborations || {}).length) return 'No previous collaboration data';
-  
-  return Object.entries(collaborations)
-    .map(([roleId, score]) => `- Role ${roleId}: Success score ${score}`)
-    .join('\n');
-}
+  if (!responseOrder?.length) return null;
 
-function formatPreviousResponses(responses: Message[] = []) {
-  if (!responses.length) return 'You are first to respond';
-  
-  return responses
-    .map(msg => `${msg.role?.name || 'Unknown'}: ${msg.content}`)
-    .join('\n\n');
+  if (!lastMessageRole) {
+    return responseOrder[0].role_id;
+  }
+
+  const currentIndex = responseOrder.findIndex(r => r.role_id === lastMessageRole);
+  if (currentIndex === -1) return responseOrder[0].role_id;
+
+  const nextIndex = (currentIndex + 1) % responseOrder.length;
+  return responseOrder[nextIndex].role_id;
 }
 
 export async function processMessage(
@@ -62,7 +62,12 @@ export async function processMessage(
     if (roleError) throw roleError;
     if (!role) throw new Error('Role not found');
 
-    console.log('Retrieved role:', role);
+    // Get next responding role
+    const nextRole = await getNextRespondingRole(
+      supabase,
+      threadId,
+      previousResponses[previousResponses.length - 1]?.role_id || null
+    );
 
     let mind = null;
     let memoryResponse = null;
@@ -129,59 +134,16 @@ export async function processMessage(
 
 RESPONSE POSITION AND RELEVANCE:
 - You are responding in position ${responseOrder} of ${totalResponders}
-- Relevance score for this discussion: ${relevanceScore}/10
-- Primary matching domains: ${matchingDomains.join(', ')}
+- Next responding role: ${nextRole ? 'Another role will respond after you' : 'You are the last responder'}
 - Your role: ${responseOrder === 1 ? 'Lead the discussion in your domain' : 'Build upon and complement previous insights'}
 
-YOUR CORE EXPERTISE:
-${role.expertise_areas?.join(', ')}
-
-MEMORY AND PAST INSIGHTS:
-Previous relevant discussions about this topic:
-${formatMemories(knowledgeResponse?.relevantMemories)}
-
-Successful past collaborations:
-${formatCollaborations(role.role_combinations?.successful_pairs)}
-
-CURRENT CONVERSATION CONTEXT:
-Thread Progress:
-${formatPreviousResponses(previousResponses)}
-
-YOUR COLLABORATIVE ROLE:
-1. If Leading (First Response):
-   - Establish the foundation in your expert domain
-   - Highlight key areas where other experts should expand
-   - Set clear connection points for others to build upon
-   - Signal specific expertise needed for follow-up
-
-2. If Following Previous Experts:
-   - Acknowledge: "Building on [Expert]'s analysis of [point]..."
-   - Add NEW insights from your domain
-   - Avoid repeating previous points
-   - Connect your expertise to established context
-
-RESPONSE GUIDELINES:
-- Focus on unique contributions from your expertise
-- Make explicit connections to previous points
-- Stay within your domain of expertise
-- Bridge insights between different expert perspectives
-- Reference relevant past discussions when applicable
-
-COMMUNICATION STYLE:
-${formatResponseStyle(role.response_style)}
-
-SPECIFIC ROLE INSTRUCTIONS:
 ${role.instructions}
 
-CURRENT DISCUSSION:
-User Question: ${userMessage.content}
+CURRENT CONVERSATION CONTEXT:
+${formatResponseStyle(role.response_style)}
 
-APPROACH YOUR RESPONSE:
-1. Review previous responses and relevant memories
-2. Identify gaps in your specific domain
-3. Connect to and build upon existing insights
-4. Add unique value from your expertise
-5. Set up connections for other experts to follow`;
+USER MESSAGE:
+${userMessage.content}`;
 
     console.log('Generated system prompt:', systemPrompt);
 
@@ -197,10 +159,30 @@ APPROACH YOUR RESPONSE:
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
+    // Save response with enhanced metadata
+    const { data: savedMessage, error: saveError } = await supabase
+      .from('messages')
+      .insert({
+        thread_id: threadId,
+        role_id: roleId,
+        responding_role_id: nextRole,
+        content: responseContent,
+        is_bot: true,
+        parent_message_id: userMessage.id,
+        interaction_metadata: {
+          response_quality: 1.0,
+          response_time: Date.now() - new Date(userMessage.created_at).getTime(),
+          role_performance: relevanceScore
+        }
+      })
+      .select()
+      .single();
+
+    if (saveError) throw saveError;
+
     return responseContent;
   } catch (error) {
     console.error('Error in processMessage:', error);
     throw error;
   }
 }
-
