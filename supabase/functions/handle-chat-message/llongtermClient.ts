@@ -1,6 +1,6 @@
 
-import { LlongtermError } from "../../../src/lib/llongterm/errors.ts";
-import type { CreateOptions, Mind, Message, RememberResponse, KnowledgeResponse } from '../../../src/types/llongterm.d.ts';
+import { LlongtermError } from "./errors.ts";
+import type { CreateOptions, Mind, Message, RememberResponse, KnowledgeResponse } from './types.ts';
 
 class LlongtermClient {
   private apiKey: string;
