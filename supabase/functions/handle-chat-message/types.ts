@@ -1,3 +1,4 @@
+
 export interface MemorySection {
   content: string;
   timestamp: number;
@@ -81,3 +82,4 @@ export interface MessageContext {
     contextType: string;
   };
 }
+
