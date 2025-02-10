@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -146,7 +147,7 @@ serve(async (req) => {
       try {
         console.log(`Processing response for role ${roleId}`);
         
-        // Get previous responses in this chain
+        // Get previous responses in this thread
         const { data: previousResponses } = await supabase
           .from('messages')
           .select(`
@@ -156,7 +157,6 @@ serve(async (req) => {
             created_at
           `)
           .eq('thread_id', threadId)
-          .eq('chain_id', message.id)
           .order('created_at', { ascending: true });
 
         // Generate response using enhanced message processor
@@ -175,8 +175,7 @@ serve(async (req) => {
           .insert({
             thread_id: threadId,
             role_id: roleId,
-            content: responseContent,
-            chain_id: message.id
+            content: responseContent
           });
 
         if (responseError) {

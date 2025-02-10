@@ -38,45 +38,6 @@ function formatPreviousResponses(responses: Message[] = []) {
     .join('\n\n');
 }
 
-async function determineResponseOrder(
-  supabase: SupabaseClient,
-  threadId: string,
-  messageContent: string,
-  roleIds: string[]
-): Promise<{ roleId: string; score: number }[]> {
-  const { data: roles } = await supabase
-    .from('roles')
-    .select('id, expertise_areas')
-    .in('id', roleIds);
-
-  const firstRole = roles?.[0];
-  if (!firstRole) return [];
-
-  const { data: domain } = await supabase
-    .rpc('classify_question_domain', {
-      content: messageContent,
-      expertise_areas: firstRole.expertise_areas
-    });
-
-  const scoredRoles = await Promise.all(
-    roleIds.map(async (roleId) => {
-      const { data: score } = await supabase
-        .rpc('calculate_role_relevance', {
-          p_role_id: roleId,
-          p_question_content: messageContent,
-          p_domain: domain
-        });
-
-      return {
-        roleId,
-        score: score || 0
-      };
-    })
-  );
-
-  return scoredRoles.sort((a, b) => b.score - a.score);
-}
-
 export async function processMessage(
   openai: OpenAI,
   supabase: SupabaseClient,
@@ -207,4 +168,3 @@ Remember:
     throw error;
   }
 }
-
