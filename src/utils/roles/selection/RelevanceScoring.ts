@@ -28,9 +28,12 @@ export class RelevanceScorer {
         return 0;
       }
 
+      // Convert the number[] embedding to a string format expected by Supabase
+      const embeddingString = JSON.stringify(embedding);
+
       const { data: memories } = await supabase
         .rpc('get_similar_memories', {
-          p_embedding: embedding,
+          p_embedding: embeddingString,
           p_match_threshold: 0.7,
           p_match_count: 5,
           p_role_id: role.id
