@@ -10,6 +10,10 @@ class LlongtermClient {
   private constructor() {
     this.apiKey = Deno.env.get('LLONGTERM_API_KEY') || '';
     this.baseUrl = 'https://api.llongterm.com/v1';
+    
+    if (!this.apiKey) {
+      console.error('LLONGTERM_API_KEY is not set in environment variables');
+    }
   }
 
   public static getInstance(): LlongtermClient {
@@ -20,36 +24,61 @@ class LlongtermClient {
   }
 
   private async request<T>(endpoint: string, options: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-        ...options.headers,
-      },
-    });
+    console.log(`Making request to ${this.baseUrl}${endpoint}`);
+    
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+          ...options.headers,
+        },
+      });
 
-    if (!response.ok) {
-      throw new LlongtermError(`API request failed: ${response.statusText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorText
+        });
+        
+        throw new LlongtermError(
+          `API request failed (${response.status} ${response.statusText}): ${errorText}`
+        );
+      }
+
+      const data = await response.json();
+      console.log(`Successfully received response from ${endpoint}`, { data });
+      return data;
+    } catch (error) {
+      console.error(`Request to ${endpoint} failed:`, error);
+      if (error instanceof LlongtermError) {
+        throw error;
+      }
+      throw new LlongtermError(`API request failed: ${error.message}`);
     }
-
-    return response.json();
   }
 
   async getMind(mindId: string): Promise<Mind | null> {
     try {
+      console.log(`Attempting to get mind with ID: ${mindId}`);
       return await this.request<Mind>(`/minds/${mindId}`, {
         method: 'GET',
       });
     } catch (error) {
       if (error instanceof LlongtermError && error.message.includes('not found')) {
+        console.log(`Mind ${mindId} not found, returning null`);
         return null;
       }
+      console.error(`Error getting mind ${mindId}:`, error);
       throw error;
     }
   }
 
   async createMind(options: CreateOptions): Promise<Mind> {
+    console.log('Creating new mind with options:', options);
     return this.request<Mind>('/minds', {
       method: 'POST',
       body: JSON.stringify(options),

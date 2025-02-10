@@ -16,19 +16,22 @@ export async function processMessage(
 
   try {
     // Get role details
-    const { data: role } = await supabase
+    const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
       .eq('id', roleId)
       .single();
 
+    if (roleError) throw roleError;
     if (!role) throw new Error('Role not found');
 
-    // Get or create mind for role
-    const mind = await llongtermClient.getMind(roleId);
+    console.log('Retrieved role:', role);
+
+    // Try to get existing mind or create new one
+    let mind = await llongtermClient.getMind(roleId);
     if (!mind) {
-      console.log('Creating new mind for role:', roleId);
-      const mind = await llongtermClient.createMind({
+      console.log('No existing mind found, creating new one for role:', roleId);
+      mind = await llongtermClient.createMind({
         specialism: role.name,
         specialismDepth: 2,
         metadata: {
@@ -37,6 +40,7 @@ export async function processMessage(
           created: new Date().toISOString()
         }
       });
+      console.log('Created new mind:', mind);
     }
 
     // Format previous responses for memory
