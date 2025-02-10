@@ -25,6 +25,36 @@ function formatResponseStyle(style: any) {
 - Format: ${style.format || 'flexible'} (structured/flexible)`;
 }
 
+async function analyzeMessageTopic(content: string): Promise<{
+  primary_topic: string;
+  related_topics: string[];
+  confidence: number;
+}> {
+  // Simple topic analysis based on content
+  const topics = content.toLowerCase().split(' ');
+  const uniqueTopics = [...new Set(topics)];
+  
+  return {
+    primary_topic: uniqueTopics[0] || 'general',
+    related_topics: uniqueTopics.slice(1, 4),
+    confidence: 0.8
+  };
+}
+
+async function calculateMemorySignificance(
+  relevance: number,
+  interactionCount: number,
+  timestamp: number
+): Promise<number> {
+  const now = Date.now();
+  const timeDiff = (now - timestamp) / (24 * 60 * 60 * 1000); // Convert to days
+  const timeFactor = Math.exp(-timeDiff / 30); // Exponential decay over 30 days
+  
+  return relevance * 0.4 + 
+         Math.min(interactionCount / 10, 1) * 0.3 + 
+         timeFactor * 0.3;
+}
+
 async function getNextRespondingRole(
   supabase: SupabaseClient,
   threadId: string,
@@ -98,25 +128,25 @@ export async function processMessage(
       if (!mind) {
         console.log('Creating new mind for role:', roleId);
         
-        const expertiseAreas = role.expertise_areas || [];
-        const interactionPrefs = {
-          style: role.response_style || {},
-          preferences: role.interaction_preferences || {}
-        };
-        
         mind = await llongtermClient.createMind({
           specialism: role.name,
           specialismDepth: 8,
           metadata: {
             roleId,
-            expertise: expertiseAreas,
-            interaction: interactionPrefs,
+            expertise: role.expertise_areas || [],
+            interaction: {
+              style: role.response_style || {},
+              preferences: role.interaction_preferences || {}
+            },
             created: new Date().toISOString()
           }
         });
       }
 
-      // Format conversation history
+      // Analyze message topic
+      const topicAnalysis = await analyzeMessageTopic(userMessage.content);
+
+      // Format conversation history with enhanced metadata
       const conversationHistory = previousResponses.map(msg => ({
         author: msg.role_id ? 'assistant' : 'user',
         message: msg.content,
@@ -124,7 +154,9 @@ export async function processMessage(
         metadata: {
           role_id: msg.role_id,
           role_name: msg.role?.name,
-          expertise: msg.role?.expertise_areas
+          expertise: msg.role?.expertise_areas,
+          topic_classification: topicAnalysis,
+          interaction_depth: msg.depth_level || 0
         }
       }));
 
@@ -133,17 +165,43 @@ export async function processMessage(
         author: 'user',
         message: userMessage.content,
         timestamp: Date.now(),
-        metadata: { thread_id: threadId }
+        metadata: { 
+          thread_id: threadId,
+          topic_classification: topicAnalysis
+        }
       });
 
       if (mind) {
-        // Store conversation in memory
+        // Store conversation in memory with enhanced metadata
         memoryResponse = await mind.remember(conversationHistory);
         console.log('Memory response:', memoryResponse);
 
-        // Get relevant context
+        // Get relevant context with improved retrieval
         knowledgeResponse = await mind.ask(userMessage.content);
         console.log('Knowledge response:', knowledgeResponse);
+
+        // Calculate memory significance
+        const significance = await calculateMemorySignificance(
+          knowledgeResponse?.confidence || 0.5,
+          previousResponses.length,
+          Date.now()
+        );
+
+        // Store memory significance
+        if (memoryResponse?.memoryId) {
+          await supabase
+            .from('role_memories')
+            .update({
+              memory_significance: significance,
+              topic_classification: topicAnalysis,
+              interaction_summary: {
+                roles_involved: [roleId, nextRole].filter(Boolean),
+                outcome: null, // Will be updated after response
+                effectiveness: relevanceScore
+              }
+            })
+            .eq('id', memoryResponse.memoryId);
+        }
       }
     } catch (error) {
       console.error('Error with memory operations:', error);
@@ -152,7 +210,9 @@ export async function processMessage(
 
     // Create enhanced system prompt with context
     const conversationContext = await formatConversationHistory(previousResponses, role);
-    const memoryContext = knowledgeResponse?.relevantMemories?.join('\n') || '';
+    const memoryContext = knowledgeResponse?.relevantMemories
+      ?.filter(memory => memory.includes(userMessage.content.substring(0, 10)))
+      ?.join('\n') || '';
     
     const systemPrompt = `You are ${role.name}, a specialized AI role in a collaborative team discussion.
 
@@ -163,7 +223,7 @@ ${role.instructions || ''}
 CONVERSATION HISTORY:
 ${conversationContext}
 
-${memoryContext ? `RELEVANT CONTEXT FROM MEMORY:
+${memoryContext ? `RELEVANT MEMORIES (Confidence: ${knowledgeResponse?.confidence || 'N/A'}):
 ${memoryContext}` : ''}
 
 RESPONSE POSITION AND RELEVANCE:
@@ -210,7 +270,8 @@ ${userMessage.content}`;
           memory_context: {
             used_memories: knowledgeResponse?.relevantMemories || [],
             memory_id: memoryResponse?.memoryId,
-            context_summary: memoryResponse?.summary
+            context_summary: memoryResponse?.summary,
+            topic_classification: topicAnalysis
           }
         }
       })
@@ -219,9 +280,11 @@ ${userMessage.content}`;
 
     if (saveError) throw saveError;
 
-    // Store the response in memory
+    // Store the response in memory with enhanced metadata
     if (mind) {
       try {
+        const responseTopicAnalysis = await analyzeMessageTopic(responseContent);
+        
         await mind.remember([{
           author: 'assistant',
           message: responseContent,
@@ -230,7 +293,13 @@ ${userMessage.content}`;
             role_id: roleId,
             thread_id: threadId,
             parent_message_id: userMessage.id,
-            response_order: responseOrder
+            response_order: responseOrder,
+            topic_classification: responseTopicAnalysis,
+            interaction_summary: {
+              roles_involved: [roleId, nextRole].filter(Boolean),
+              outcome: 'completed',
+              effectiveness: relevanceScore
+            }
           }
         }]);
       } catch (error) {

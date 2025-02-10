@@ -549,12 +549,14 @@ export type Database = {
           id: string
           importance_score: number | null
           interaction_id: string | null
+          interaction_summary: Json | null
           last_accessed: string | null
           last_reinforced: string | null
           last_retrieved: string | null
           last_verified: string | null
           memory_category: string | null
           memory_chain_position: number | null
+          memory_significance: number | null
           memory_type: string | null
           metadata: Json | null
           previous_context_id: string | null
@@ -564,6 +566,7 @@ export type Database = {
           retrieval_count: number | null
           role_id: string | null
           source_type: string | null
+          topic_classification: Json | null
           topic_relevance: Json | null
           topic_vector: string | null
           verification_score: number | null
@@ -587,12 +590,14 @@ export type Database = {
           id?: string
           importance_score?: number | null
           interaction_id?: string | null
+          interaction_summary?: Json | null
           last_accessed?: string | null
           last_reinforced?: string | null
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
           memory_chain_position?: number | null
+          memory_significance?: number | null
           memory_type?: string | null
           metadata?: Json | null
           previous_context_id?: string | null
@@ -602,6 +607,7 @@ export type Database = {
           retrieval_count?: number | null
           role_id?: string | null
           source_type?: string | null
+          topic_classification?: Json | null
           topic_relevance?: Json | null
           topic_vector?: string | null
           verification_score?: number | null
@@ -625,12 +631,14 @@ export type Database = {
           id?: string
           importance_score?: number | null
           interaction_id?: string | null
+          interaction_summary?: Json | null
           last_accessed?: string | null
           last_reinforced?: string | null
           last_retrieved?: string | null
           last_verified?: string | null
           memory_category?: string | null
           memory_chain_position?: number | null
+          memory_significance?: number | null
           memory_type?: string | null
           metadata?: Json | null
           previous_context_id?: string | null
@@ -640,6 +648,7 @@ export type Database = {
           retrieval_count?: number | null
           role_id?: string | null
           source_type?: string | null
+          topic_classification?: Json | null
           topic_relevance?: Json | null
           topic_vector?: string | null
           verification_score?: number | null
@@ -987,6 +996,14 @@ export type Database = {
           p_verification_count: number
           p_contradiction_count: number
           p_context_matches: number
+        }
+        Returns: number
+      }
+      calculate_memory_significance: {
+        Args: {
+          p_relevance: number
+          p_interaction_count: number
+          p_time_factor: number
         }
         Returns: number
       }
