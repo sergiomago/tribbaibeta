@@ -46,15 +46,23 @@ serve(async (req) => {
       // If taggedRoleId is not a UUID, try to find the role by tag
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       if (!uuidRegex.test(taggedRoleId)) {
+        // Normalize tag - remove @ if present and try both with and without @
+        const normalizedTag = taggedRoleId.startsWith('@') ? taggedRoleId.substring(1) : taggedRoleId;
+        const possibleTags = [`@${normalizedTag}`, normalizedTag];
+        
+        console.log('Looking for role with possible tags:', possibleTags);
+        
         const { data: role, error: roleError } = await supabase
           .from('roles')
-          .select('id')
-          .eq('tag', taggedRoleId)
+          .select('id, name, tag')
+          .or(`tag.eq.${possibleTags[0]},tag.eq.${possibleTags[1]}`)
           .single();
 
-        if (roleError) {
-          throw new ChatError(`Role with tag "${taggedRoleId}" not found`, 404);
+        if (roleError || !role) {
+          console.error('Role lookup error:', roleError);
+          throw new ChatError(`Role with tag "${taggedRoleId}" not found. Available tags should start with @ symbol.`, 404);
         }
+        console.log('Found role:', role);
         resolvedRoleId = role.id;
       } else {
         resolvedRoleId = taggedRoleId;
