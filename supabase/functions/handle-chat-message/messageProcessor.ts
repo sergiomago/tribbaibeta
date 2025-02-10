@@ -1,6 +1,8 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
+import { llongtermClient } from "./llongtermClient.ts";
 
 export async function processMessage(
   openai: OpenAI,
@@ -12,142 +14,94 @@ export async function processMessage(
 ) {
   console.log('Processing message for role:', roleId);
 
-  // Get role details
-  const { data: role } = await supabase
-    .from('roles')
-    .select('*')
-    .eq('id', roleId)
-    .single();
+  try {
+    // Get role details
+    const { data: role } = await supabase
+      .from('roles')
+      .select('*')
+      .eq('id', roleId)
+      .single();
 
-  if (!role) throw new Error('Role not found');
+    if (!role) throw new Error('Role not found');
 
-  // Get chain position information
-  const { data: threadRoles } = await supabase
-    .from('thread_roles')
-    .select('role_id')
-    .eq('thread_id', threadId)
-    .order('created_at', { ascending: true });
+    // Get or create mind for role
+    const mind = await llongtermClient.getMind(roleId);
+    if (!mind) {
+      console.log('Creating new mind for role:', roleId);
+      const mind = await llongtermClient.createMind({
+        specialism: role.name,
+        specialismDepth: 2,
+        metadata: {
+          roleId,
+          expertise: role.expertise_areas,
+          created: new Date().toISOString()
+        }
+      });
+    }
 
-  const totalRoles = threadRoles?.length || 0;
-  const currentPosition = threadRoles?.findIndex(tr => tr.role_id === roleId) + 1 || 0;
-  
-  // Get previous and next role information
-  const previousRoleId = currentPosition > 1 ? threadRoles[currentPosition - 2]?.role_id : null;
-  const nextRoleId = currentPosition < totalRoles ? threadRoles[currentPosition]?.role_id : null;
+    // Format previous responses for memory
+    const conversationHistory = previousResponses.map(msg => ({
+      author: msg.role_id ? 'assistant' : 'user',
+      message: msg.content,
+      timestamp: new Date(msg.created_at).getTime(),
+      metadata: {
+        role_id: msg.role_id,
+        role_name: msg.role?.name,
+        expertise: msg.role?.expertise_areas
+      }
+    }));
 
-  // Get previous and next role details if they exist
-  const [previousRole, nextRole] = await Promise.all([
-    previousRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', previousRoleId).single() : null,
-    nextRoleId ? supabase.from('roles').select('name, expertise_areas').eq('id', nextRoleId).single() : null,
-  ]);
+    // Add current message to history
+    conversationHistory.push({
+      author: 'user',
+      message: userMessage.content,
+      timestamp: Date.now(),
+      metadata: { thread_id: threadId }
+    });
 
-  // Get recent memories
-  const { data: memories } = await supabase
-    .from('role_memories')
-    .select('content')
-    .eq('role_id', roleId)
-    .order('created_at', { ascending: false })
-    .limit(5);
+    console.log('Storing conversation in mind');
+    // Store conversation in mind
+    const memoryResponse = await mind.remember(conversationHistory);
+    console.log('Memory response:', memoryResponse);
 
-  console.log('Retrieved memories:', memories?.length || 0);
+    // Get relevant context from mind
+    const knowledgeResponse = await mind.ask(userMessage.content);
+    console.log('Knowledge response:', knowledgeResponse);
 
-  // Format previous responses
-  const formattedResponses = previousResponses
-    .map(msg => {
-      const roleName = msg.role?.name || 'Unknown';
-      return `${roleName}: ${msg.content}`;
-    })
-    .join('\n\n');
+    // Create enriched system prompt
+    const systemPrompt = `You are ${role.name}, a specialized AI role with expertise in: ${role.expertise_areas?.join(', ')}.
 
-  // Create memory context string
-  const memoryContext = memories?.length 
-    ? `Relevant memories:\n${memories.map(m => m.content).join('\n\n')}`
-    : '';
-
-  // Create the system prompt with the new structure
-  const systemPrompt = `You are ${role.name}, responding as position ${currentPosition} of ${totalRoles} roles in this conversation.
-
-Context about your turn:
-${previousRole ? `- Previous role: ${previousRole.data.name} (expertise: ${previousRole.data.expertise_areas?.join(', ')})` : '- You are the first role to respond'}
-${nextRole ? `- Next role: ${nextRole.data.name} (expertise: ${nextRole.data.expertise_areas?.join(', ')})` : '- You are the last role to respond'}
-
-${previousResponses.length > 0 ? `Previous responses in this chain:\n${formattedResponses}` : 'You are the first to respond to this message.'}
-
-Important Instructions:
-1. Build upon previous responses using your specific expertise
-2. Complement, don't contradict previous roles
-3. Focus on adding value from your unique perspective
-4. Keep your response focused and relevant to the user's query
-${nextRole ? `5. Tag the next role when you finish (@${nextRole.data.name})` : '5. Conclude the response chain effectively'}
-6. Be clear and concise
-7. Reference other roles when needed
-8. Maintain conversation context
-
-Current context:
-${memoryContext}
-
-Your role instructions:
+Your Specific Instructions:
 ${role.instructions}
 
-Recent conversation context:
+Relevant Context from Your Memory:
+${knowledgeResponse.relevantMemories.join('\n')}
+
+Previous Responses in Chain:
+${previousResponses?.length > 0 
+  ? previousResponses.map(msg => `${msg.role?.name || 'Unknown'}: ${msg.content}`).join('\n\n')
+  : 'You are first to respond'}
+
+Remember: Focus on what makes your expertise unique while building upon the collective insights of the team.
+
+Current Discussion:
 ${userMessage.content}`;
 
-  // Store message as memory
-  try {
-    await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: userMessage.content,
-        context_type: 'conversation',
-        metadata: {
-          message_id: userMessage.id,
-          thread_id: threadId,
-          timestamp: new Date().toISOString(),
-          memory_type: 'conversation'
-        },
-        importance_score: 1.0
-      });
+    // Generate response
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage.content }
+      ],
+    });
+
+    const responseContent = completion.choices[0].message.content;
+    console.log('Generated response:', responseContent.substring(0, 100) + '...');
+
+    return responseContent;
   } catch (error) {
-    console.error('Error storing memory:', error);
+    console.error('Error in processMessage:', error);
+    throw error;
   }
-
-  // Generate response
-  const completion = await openai.chat.completions.create({
-    model: role.model || 'gpt-4o-mini',
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage.content }
-    ],
-  });
-
-  if (!completion.choices || completion.choices.length === 0) {
-    console.error('No choices returned from OpenAI chat completion');
-    throw new Error('Failed to generate a response from the AI.');
-  }
-
-  const responseContent = completion.choices[0].message.content;
-
-  // Store response as memory
-  try {
-    await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: responseContent,
-        context_type: 'conversation',
-        metadata: {
-          is_response: true,
-          thread_id: threadId,
-          to_message_id: userMessage.id,
-          timestamp: new Date().toISOString(),
-          memory_type: 'conversation'
-        },
-        importance_score: 1.0
-      });
-  } catch (error) {
-    console.error('Error storing response memory:', error);
-  }
-
-  return responseContent;
 }
