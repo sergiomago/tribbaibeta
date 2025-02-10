@@ -4,6 +4,7 @@ import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
 import { llongtermClient } from "./llongtermClient.ts";
 import { LlongtermError } from "./errors.ts";
+import { extractExpertiseAreas, extractInteractionPreferences } from "./roleDataExtractor.ts";
 
 export async function processMessage(
   openai: OpenAI,
@@ -37,12 +38,18 @@ export async function processMessage(
       mind = await llongtermClient.getMind(roleId);
       if (!mind) {
         console.log('No existing mind found, creating new one for role:', roleId);
+        
+        // Extract expertise areas and interaction preferences
+        const expertiseAreas = extractExpertiseAreas(role.description || '');
+        const interactionPrefs = extractInteractionPreferences(role.instructions || '');
+        
         mind = await llongtermClient.createMind({
           specialism: role.name,
-          specialismDepth: 2,
+          specialismDepth: 8, // Increased from 2 to 8 for better specialization
           metadata: {
             roleId,
-            expertise: role.expertise_areas,
+            expertise: expertiseAreas,
+            interaction: interactionPrefs,
             created: new Date().toISOString()
           }
         });
