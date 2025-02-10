@@ -41,12 +41,32 @@ serve(async (req) => {
       throw new ChatError('Missing required fields: threadId and content are required', 400);
     }
 
+    let resolvedRoleId = null;
+    if (taggedRoleId) {
+      // If taggedRoleId is not a UUID, try to find the role by tag
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(taggedRoleId)) {
+        const { data: role, error: roleError } = await supabase
+          .from('roles')
+          .select('id')
+          .eq('tag', taggedRoleId)
+          .single();
+
+        if (roleError) {
+          throw new ChatError(`Role with tag "${taggedRoleId}" not found`, 404);
+        }
+        resolvedRoleId = role.id;
+      } else {
+        resolvedRoleId = taggedRoleId;
+      }
+    }
+
     const { data: message, error: messageError } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         content,
-        tagged_role_id: taggedRoleId || null,
+        tagged_role_id: resolvedRoleId,
         depth_level: 0,
         chain_position: 0,
         metadata: {},
@@ -68,8 +88,8 @@ serve(async (req) => {
     if (!threadRoles?.length) throw new ChatError('No roles found for thread', 404);
 
     let orderedRoles;
-    if (taggedRoleId) {
-      orderedRoles = [{ roleId: taggedRoleId, score: 1 }];
+    if (resolvedRoleId) {
+      orderedRoles = [{ roleId: resolvedRoleId, score: 1 }];
     } else {
       orderedRoles = await determineResponseOrder(
         supabase,
