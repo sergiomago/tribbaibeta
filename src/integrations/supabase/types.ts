@@ -171,6 +171,45 @@ export type Database = {
         }
         Relationships: []
       }
+      message_relationships: {
+        Row: {
+          child_message_id: string | null
+          created_at: string | null
+          id: string
+          parent_message_id: string | null
+          relationship_type: string
+        }
+        Insert: {
+          child_message_id?: string | null
+          created_at?: string | null
+          id?: string
+          parent_message_id?: string | null
+          relationship_type: string
+        }
+        Update: {
+          child_message_id?: string | null
+          created_at?: string | null
+          id?: string
+          parent_message_id?: string | null
+          relationship_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_relationships_child_message_id_fkey"
+            columns: ["child_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_relationships_parent_message_id_fkey"
+            columns: ["parent_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       messages: {
         Row: {
           analyzed_intent: Json | null
