@@ -11,7 +11,63 @@ const ANALYSIS_PROMPT = `Analyze the following message and provide:
 
 Respond in a structured format focused on identifying expertise requirements.`;
 
-export async function analyzeMessage(
+export async function determineResponseOrder(
+  supabase: SupabaseClient,
+  threadId: string,
+  content: string,
+  roleIds: string[],
+  openai: OpenAI
+): Promise<{ roleId: string; score: number }[]> {
+  // Analyze the message content
+  const analysis = await analyzeMessage(content, openai);
+  console.log('Message analysis:', analysis);
+
+  // Get roles information
+  const { data: roles } = await supabase
+    .from('roles')
+    .select('id, name, expertise_areas, instructions')
+    .in('id', roleIds);
+
+  if (!roles) {
+    console.log('No roles found for scoring');
+    return roleIds.map(id => ({ roleId: id, score: 1 }));
+  }
+
+  // Score each role based on analysis
+  const scoredRoles = roles.map(role => {
+    let score = 0;
+
+    // Match expertise areas with domains
+    const expertise = role.expertise_areas || [];
+    analysis.domains.forEach(domain => {
+      if (expertise.some(exp => 
+        domain.name.toLowerCase().includes(exp.toLowerCase()) ||
+        exp.toLowerCase().includes(domain.name.toLowerCase())
+      )) {
+        score += domain.confidence;
+      }
+    });
+
+    // Adjust score based on required expertise match
+    analysis.domains.forEach(domain => {
+      domain.requiredExpertise.forEach(req => {
+        if (expertise.some(exp => exp.toLowerCase().includes(req.toLowerCase()))) {
+          score += 0.5;
+        }
+      });
+    });
+
+    return {
+      roleId: role.id,
+      score: score / (analysis.domains.length * 1.5) // Normalize score
+    };
+  });
+
+  // Sort by score descending
+  return scoredRoles.sort((a, b) => b.score - a.score);
+}
+
+async function analyzeMessage(
   content: string,
   openai: OpenAI
 ): Promise<AnalysisResult> {
@@ -19,7 +75,7 @@ export async function analyzeMessage(
   
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
