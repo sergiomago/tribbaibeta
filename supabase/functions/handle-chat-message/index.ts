@@ -57,31 +57,32 @@ serve(async (req) => {
     // Get thread roles
     const { data: threadRoles, error: rolesError } = await supabase
       .from('thread_roles')
-      .select('role:roles(*)')
+      .select('role_id')
       .eq('thread_id', threadId);
 
     if (rolesError) throw rolesError;
+    if (!threadRoles?.length) throw new Error('No roles found for thread');
 
-    let chain;
+    let orderedRoles;
     if (taggedRoleId) {
-      chain = [{ role_id: taggedRoleId }];
+      // If a role is tagged, it responds first
+      orderedRoles = [{ roleId: taggedRoleId, score: 1 }];
     } else {
-      const scoredRoles = threadRoles.map(tr => ({
-        role_id: tr.role.id,
-        score: 1.0 // Simplified scoring for now
-      }));
-
-      chain = scoredRoles
-        .sort((a, b) => b.score - a.score)
-        .map(sr => ({ role_id: sr.role_id }));
+      // Use our new domain classification and scoring system
+      orderedRoles = await determineResponseOrder(
+        supabase,
+        threadId,
+        content,
+        threadRoles.map(tr => tr.role_id)
+      );
     }
 
-    console.log('Processing with chain:', chain);
+    console.log('Processing with ordered roles:', orderedRoles);
 
-    // Process responses one at a time
-    for (const { role_id } of chain) {
+    // Process responses one at a time based on the calculated order
+    for (const { roleId } of orderedRoles) {
       try {
-        console.log(`Processing response for role ${role_id}`);
+        console.log(`Processing response for role ${roleId}`);
         
         // Get previous responses in this chain
         const { data: previousResponses } = await supabase
@@ -101,7 +102,7 @@ serve(async (req) => {
           openai,
           supabase,
           threadId,
-          role_id,
+          roleId,
           message,
           previousResponses || []
         );
@@ -111,18 +112,18 @@ serve(async (req) => {
           .from('messages')
           .insert({
             thread_id: threadId,
-            role_id: role_id,
+            role_id: roleId,
             content: responseContent,
             chain_id: message.id
           });
 
         if (responseError) {
-          console.error(`Error saving response for role ${role_id}:`, responseError);
+          console.error(`Error saving response for role ${roleId}:`, responseError);
           throw responseError;
         }
 
       } catch (error) {
-        console.error(`Error processing response for role ${role_id}:`, error);
+        console.error(`Error processing response for role ${roleId}:`, error);
         throw error;
       }
     }

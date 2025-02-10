@@ -324,6 +324,41 @@ export type Database = {
         }
         Relationships: []
       }
+      role_domain_weights: {
+        Row: {
+          created_at: string
+          domain: Database["public"]["Enums"]["question_domain"]
+          id: string
+          role_id: string | null
+          updated_at: string
+          weight: number
+        }
+        Insert: {
+          created_at?: string
+          domain: Database["public"]["Enums"]["question_domain"]
+          id?: string
+          role_id?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Update: {
+          created_at?: string
+          domain?: Database["public"]["Enums"]["question_domain"]
+          id?: string
+          role_id?: string | null
+          updated_at?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_domain_weights_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_interactions: {
         Row: {
           chain_effectiveness: number | null
@@ -891,6 +926,14 @@ export type Database = {
         }
         Returns: number
       }
+      calculate_role_relevance: {
+        Args: {
+          p_role_id: string
+          p_question_content: string
+          p_domain: Database["public"]["Enums"]["question_domain"]
+        }
+        Returns: number
+      }
       calculate_text_similarity: {
         Args: {
           text1: string
@@ -915,6 +958,13 @@ export type Database = {
           user_id: string
         }
         Returns: boolean
+      }
+      classify_question_domain: {
+        Args: {
+          content: string
+          expertise_areas: string[]
+        }
+        Returns: Database["public"]["Enums"]["question_domain"]
       }
       consolidate_role_memories: {
         Args: Record<PropertyKey, never>
@@ -1286,6 +1336,13 @@ export type Database = {
         | "needs_improvement"
       message_type: "text" | "file" | "analysis"
       mind_status: "pending" | "creating" | "active" | "failed" | "deleted"
+      question_domain:
+        | "product_strategy"
+        | "market_intelligence"
+        | "user_experience"
+        | "technical"
+        | "business_strategy"
+        | "general"
     }
     CompositeTypes: {
       [_ in never]: never
