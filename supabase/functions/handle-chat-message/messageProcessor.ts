@@ -15,19 +15,18 @@ function formatResponseStyle(style: any) {
 - Format: ${style.format || 'flexible'} (structured/flexible)`;
 }
 
-function formatExpertiseBoundaries(role: any) {
-  return `Your Core Responsibilities:
-- Focus exclusively on your expertise areas: ${role.expertise_areas?.join(', ')}
-- For questions outside your expertise, acknowledge and defer to relevant roles
-- Maintain consistent depth of analysis in your domain
-- Only answer questions that align with your expertise`;
+function formatMemories(memories: string[] = []) {
+  if (!memories?.length) return 'No directly relevant past discussions found';
+  
+  return memories.map(memory => `- ${memory}`).join('\n');
 }
 
-function formatPrimaryTopics(topics: string[] = []) {
-  if (!topics.length) return '';
+function formatCollaborations(collaborations: any = {}) {
+  if (!Object.keys(collaborations || {}).length) return 'No previous collaboration data';
   
-  return `Primary Focus Areas:
-${topics.map(topic => `- ${topic}`).join('\n')}`;
+  return Object.entries(collaborations)
+    .map(([roleId, score]) => `- Role ${roleId}: Success score ${score}`)
+    .join('\n');
 }
 
 function formatPreviousResponses(responses: Message[] = []) {
@@ -44,7 +43,11 @@ export async function processMessage(
   threadId: string,
   roleId: string,
   userMessage: any,
-  previousResponses: Message[]
+  previousResponses: Message[],
+  responseOrder: number = 1,
+  totalResponders: number = 1,
+  relevanceScore: number = 1.0,
+  matchingDomains: string[] = []
 ) {
   console.log('Processing message for role:', roleId);
 
@@ -122,31 +125,63 @@ export async function processMessage(
     }
 
     // Create enhanced system prompt
-    const systemPrompt = `You are ${role.name}, a specialized AI role with deep expertise in: ${role.expertise_areas?.join(', ')}.
+    const systemPrompt = `You are ${role.name}, a specialized AI role in a collaborative team discussion.
 
-${formatPrimaryTopics(role.primary_topics)}
+RESPONSE POSITION AND RELEVANCE:
+- You are responding in position ${responseOrder} of ${totalResponders}
+- Relevance score for this discussion: ${relevanceScore}/10
+- Primary matching domains: ${matchingDomains.join(', ')}
+- Your role: ${responseOrder === 1 ? 'Lead the discussion in your domain' : 'Build upon and complement previous insights'}
 
-${formatResponseStyle(role.response_style)}
+YOUR CORE EXPERTISE:
+${role.expertise_areas?.join(', ')}
 
-${formatExpertiseBoundaries(role)}
+MEMORY AND PAST INSIGHTS:
+Previous relevant discussions about this topic:
+${formatMemories(knowledgeResponse?.relevantMemories)}
 
-Your Specific Instructions:
-${role.instructions}
+Successful past collaborations:
+${formatCollaborations(role.role_combinations?.successful_pairs)}
 
-${knowledgeResponse ? `Relevant Context from Your Memory:
-${knowledgeResponse.relevantMemories.join('\n')}` : ''}
-
-Previous Responses in Chain:
+CURRENT CONVERSATION CONTEXT:
+Thread Progress:
 ${formatPreviousResponses(previousResponses)}
 
-Current Discussion:
-${userMessage.content}
+YOUR COLLABORATIVE ROLE:
+1. If Leading (First Response):
+   - Establish the foundation in your expert domain
+   - Highlight key areas where other experts should expand
+   - Set clear connection points for others to build upon
+   - Signal specific expertise needed for follow-up
 
-Remember:
-1. Stay within your expertise boundaries
-2. If a question is outside your expertise, acknowledge this and defer to other roles
-3. Maintain consistent depth and style in your responses
-4. Build upon previous responses when relevant`;
+2. If Following Previous Experts:
+   - Acknowledge: "Building on [Expert]'s analysis of [point]..."
+   - Add NEW insights from your domain
+   - Avoid repeating previous points
+   - Connect your expertise to established context
+
+RESPONSE GUIDELINES:
+- Focus on unique contributions from your expertise
+- Make explicit connections to previous points
+- Stay within your domain of expertise
+- Bridge insights between different expert perspectives
+- Reference relevant past discussions when applicable
+
+COMMUNICATION STYLE:
+${formatResponseStyle(role.response_style)}
+
+SPECIFIC ROLE INSTRUCTIONS:
+${role.instructions}
+
+CURRENT DISCUSSION:
+User Question: ${userMessage.content}
+
+APPROACH YOUR RESPONSE:
+1. Review previous responses and relevant memories
+2. Identify gaps in your specific domain
+3. Connect to and build upon existing insights
+4. Add unique value from your expertise
+5. Set up connections for other experts to follow`;
 
     console.log('Generated system prompt:', systemPrompt);
 
@@ -168,3 +203,4 @@ Remember:
     throw error;
   }
 }
+
