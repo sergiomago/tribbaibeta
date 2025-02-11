@@ -1,6 +1,6 @@
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.7.1"
 import { extractExpertiseAreas, extractInteractionPreferences } from '../handle-chat-message/roleDataExtractor.ts'
 import { llongtermClient } from '../handle-chat-message/llongtermClient.ts'
 
@@ -19,6 +19,7 @@ serve(async (req) => {
   }
 
   try {
+    // Ensure only POST requests are allowed
     if (req.method !== 'POST') {
       throw new Error(`Method ${req.method} not allowed`)
     }
@@ -71,9 +72,9 @@ serve(async (req) => {
         expertise_areas: expertiseAreas,
         created_at: new Date().toISOString()
       }
-    });
+    })
 
-    console.log('Mind created successfully:', mind.id);
+    console.log('Mind created successfully:', mind.id)
 
     // Update role with extracted data
     const { error: updateError } = await supabase

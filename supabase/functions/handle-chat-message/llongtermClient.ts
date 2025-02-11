@@ -1,4 +1,3 @@
-
 const LLONGTERM_API_KEY = Deno.env.get('LLONGTERM_API_KEY') ?? '';
 const BASE_URL = 'https://api.llongterm.com/v1';
 
@@ -51,7 +50,7 @@ class LlongtermClient {
       'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'Tribbai/1.0' // Add user agent to help identify our requests
+      'User-Agent': 'Tribbai/1.0'
     };
 
     const options: RequestInit = {
@@ -208,4 +207,3 @@ class LlongtermClient {
 }
 
 export const llongtermClient = LlongtermClient.getInstance();
-
