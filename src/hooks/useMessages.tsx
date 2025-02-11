@@ -1,3 +1,4 @@
+
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
@@ -12,7 +13,7 @@ export function useMessages(threadId: string | null) {
         .from("messages")
         .select(`
           *,
-          role:roles!messages_role_id_fkey(
+          role:roles(
             name, 
             tag,
             special_capabilities
