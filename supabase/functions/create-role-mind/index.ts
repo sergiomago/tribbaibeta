@@ -42,9 +42,37 @@ serve(async (req) => {
       throw new Error(`Failed to fetch role: ${roleError?.message}`)
     }
 
+    // First create the role_minds record with status 'pending'
+    console.log('Creating initial role_minds record with pending status...')
+    const { error: initialError } = await supabase
+      .from('role_minds')
+      .insert({
+        role_id: roleId,
+        status: 'pending',
+        metadata: {
+          role_name: role.name,
+          created_at: new Date().toISOString()
+        }
+      })
+
+    if (initialError) {
+      throw new Error(`Failed to create initial role_minds record: ${initialError.message}`)
+    }
+
     // Extract expertise areas and interaction preferences
     const expertiseAreas = extractExpertiseAreas(role.description || '')
     const interactionPrefs = extractInteractionPreferences(role.instructions || '')
+
+    // Update status to 'creating'
+    console.log('Updating status to creating...')
+    const { error: statusError } = await supabase
+      .from('role_minds')
+      .update({ status: 'creating' })
+      .eq('role_id', roleId)
+
+    if (statusError) {
+      throw new Error(`Failed to update status to creating: ${statusError.message}`)
+    }
 
     // Create mind in Llongterm with proper settings
     console.log('Creating mind in Llongterm...', {
@@ -102,11 +130,10 @@ serve(async (req) => {
       throw new Error(`Failed to update role with extracted data: ${updateError.message}`)
     }
 
-    // Create new role_minds record
+    // Update role_minds record with mind_id and set status to active
     const { error: mindError } = await supabase
       .from('role_minds')
-      .insert({
-        role_id: roleId,
+      .update({
         mind_id: mind.id,
         status: 'active',
         metadata: {
@@ -119,9 +146,10 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
         last_sync: new Date().toISOString()
       })
+      .eq('role_id', roleId)
 
     if (mindError) {
-      throw new Error(`Failed to create role_minds record: ${mindError.message}`)
+      throw new Error(`Failed to update role_minds record: ${mindError.message}`)
     }
 
     return new Response(
@@ -136,6 +164,23 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error creating mind:', error)
+    
+    // Update role_minds status to failed if error occurs
+    if (error instanceof Error) {
+      try {
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        await supabase
+          .from('role_minds')
+          .update({ 
+            status: 'failed',
+            error_message: error.message,
+            updated_at: new Date().toISOString()
+          })
+          .eq('role_id', req.roleId)
+      } catch (updateError) {
+        console.error('Failed to update status to failed:', updateError)
+      }
+    }
     
     return new Response(
       JSON.stringify({ error: error.message }),
