@@ -71,11 +71,14 @@ class LlongtermClient {
       const data = await response.json();
       console.log('Mind retrieved successfully');
       
+      // Create a client instance for this mind
+      const client = this;
+      
       return {
         id: mindId,
         async remember(messages: Message[]): Promise<RememberResponse> {
           console.log('Storing messages in mind:', messages);
-          const rememberResponse = await this.makeRequest(`/minds/${mindId}/remember`, {
+          const rememberResponse = await client.makeRequest(`/minds/${mindId}/remember`, {
             method: 'POST',
             body: JSON.stringify({ messages })
           });
@@ -86,7 +89,7 @@ class LlongtermClient {
         },
         async ask(question: string): Promise<KnowledgeResponse> {
           console.log('Querying mind with question:', question);
-          const askResponse = await this.makeRequest(`/minds/${mindId}/ask`, {
+          const askResponse = await client.makeRequest(`/minds/${mindId}/ask`, {
             method: 'POST',
             body: JSON.stringify({ question })
           });
