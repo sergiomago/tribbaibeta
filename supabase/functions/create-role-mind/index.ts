@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { extractExpertiseAreas, extractInteractionPreferences } from '../handle-chat-message/roleDataExtractor.ts'
+import { llongtermClient } from '../handle-chat-message/llongtermClient.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +43,34 @@ serve(async (req) => {
     const expertiseAreas = extractExpertiseAreas(role.description || '')
     const interactionPrefs = extractInteractionPreferences(role.instructions || '')
 
+    // First, create the mind in Llongterm
+    console.log('Creating mind in Llongterm...')
+    const mind = await llongtermClient.createMind({
+      specialism: role.name,
+      specialismDepth: 2,
+      initialMemory: {
+        summary: role.description || '',
+        unstructured: {
+          instructions: role.instructions,
+          expertise: expertiseAreas,
+          preferences: interactionPrefs
+        },
+        structured: {
+          role_id: roleId,
+          created_at: new Date().toISOString(),
+          capabilities: role.special_capabilities || []
+        }
+      },
+      metadata: {
+        role_id: roleId,
+        role_name: role.name,
+        expertise_areas: expertiseAreas,
+        created_at: new Date().toISOString()
+      }
+    });
+
+    console.log('Mind created successfully:', mind.id);
+
     // Update role with extracted data
     const { error: updateError } = await supabase
       .from('roles')
@@ -60,12 +89,11 @@ serve(async (req) => {
       throw new Error(`Failed to update role with extracted data: ${updateError.message}`)
     }
 
-    // Create mind entry
-    const mindId = crypto.randomUUID()
+    // Update role_minds with the actual Llongterm mind ID
     const { error: mindError } = await supabase
       .from('role_minds')
       .update({
-        mind_id: mindId,
+        mind_id: mind.id,
         status: 'active',
         metadata: {
           role_name: role.name,
@@ -84,7 +112,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, mindId }),
+      JSON.stringify({ success: true, mindId: mind.id }),
       { 
         headers: { 
           ...corsHeaders,
@@ -108,3 +136,4 @@ serve(async (req) => {
     )
   }
 })
+
