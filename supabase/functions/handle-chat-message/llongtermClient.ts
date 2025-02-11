@@ -26,7 +26,7 @@ class LlongtermClient {
   
   private constructor() {
     if (!LLONGTERM_API_KEY) {
-      throw new Error('LLONGTERM_API_KEY is not set');
+      throw new Error('LLONGTERM_API_KEY environment variable is not set');
     }
   }
 
@@ -42,6 +42,7 @@ class LlongtermClient {
     
     try {
       const response = await fetch(`${BASE_URL}/minds/${mindId}`, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
           'Content-Type': 'application/json'
@@ -49,12 +50,15 @@ class LlongtermClient {
       });
 
       if (!response.ok) {
-        console.error('Failed to get mind:', response.statusText);
+        console.error('Failed to get mind:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error details:', errorText);
+        
         if (response.status === 404) {
           console.log('Mind not found, returning null');
           return null;
         }
-        throw new Error(`Failed to get mind: ${response.statusText}`);
+        throw new Error(`Failed to get mind: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -74,8 +78,9 @@ class LlongtermClient {
           });
 
           if (!rememberResponse.ok) {
-            console.error('Failed to store memory:', await rememberResponse.text());
-            throw new Error(`Failed to store memory: ${rememberResponse.statusText}`);
+            const errorText = await rememberResponse.text();
+            console.error('Failed to store memory:', rememberResponse.status, rememberResponse.statusText, errorText);
+            throw new Error(`Failed to store memory: ${rememberResponse.status} ${rememberResponse.statusText} - ${errorText}`);
           }
 
           const result = await rememberResponse.json();
@@ -94,8 +99,9 @@ class LlongtermClient {
           });
 
           if (!askResponse.ok) {
-            console.error('Failed to query mind:', await askResponse.text());
-            throw new Error(`Failed to query mind: ${askResponse.statusText}`);
+            const errorText = await askResponse.text();
+            console.error('Failed to query mind:', askResponse.status, askResponse.statusText, errorText);
+            throw new Error(`Failed to query mind: ${askResponse.status} ${askResponse.statusText} - ${errorText}`);
           }
 
           const result = await askResponse.json();
@@ -113,6 +119,10 @@ class LlongtermClient {
     console.log('Creating new mind with options:', options);
     
     try {
+      if (!LLONGTERM_API_KEY) {
+        throw new Error('LLONGTERM_API_KEY is not set');
+      }
+
       const response = await fetch(`${BASE_URL}/minds`, {
         method: 'POST',
         headers: {
@@ -123,8 +133,9 @@ class LlongtermClient {
       });
 
       if (!response.ok) {
-        console.error('Failed to create mind:', await response.text());
-        throw new Error(`Failed to create mind: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('Failed to create mind:', response.status, response.statusText, errorText);
+        throw new Error(`Failed to create mind: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
