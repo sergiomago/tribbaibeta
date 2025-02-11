@@ -1,6 +1,4 @@
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-
 const LLONGTERM_API_KEY = Deno.env.get('LLONGTERM_API_KEY') ?? '';
 const BASE_URL = 'https://api.llongterm.com/v1';
 
@@ -44,6 +42,31 @@ class LlongtermClient {
     return LlongtermClient.instance;
   }
 
+  private async makeRequest(endpoint: string, method: string, body?: any): Promise<Response> {
+    const url = `${BASE_URL}${endpoint}`;
+    console.log(`Making ${method} request to ${url}`);
+    
+    const headers = {
+      'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    };
+
+    const options: RequestInit = {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined
+    };
+
+    console.log('Request options:', {
+      method,
+      headers: { ...headers, Authorization: '[REDACTED]' },
+      bodyLength: body ? JSON.stringify(body).length : 0
+    });
+
+    return fetch(url, options);
+  }
+
   async createMind(options: CreateMindOptions): Promise<Mind> {
     try {
       if (!LLONGTERM_API_KEY) {
@@ -53,19 +76,13 @@ class LlongtermClient {
 
       console.log('Creating mind with options:', options);
 
-      const response = await fetch(`${BASE_URL}/minds`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(options)
-      });
+      const response = await this.makeRequest('/minds', 'POST', options);
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`Failed to create mind: ${response.status} - ${errorText}`);
-        throw new Error(`Failed to create mind: ${response.statusText}`);
+        console.error('Response headers:', response.headers);
+        throw new Error(`Failed to create mind: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json();
@@ -125,12 +142,7 @@ class LlongtermClient {
         return null;
       }
 
-      const response = await fetch(`${BASE_URL}/minds/${mindId}`, {
-        headers: {
-          'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
+      const response = await this.makeRequest(`/minds/${mindId}`, 'GET');
 
       if (!response.ok) {
         if (response.status === 404) {
