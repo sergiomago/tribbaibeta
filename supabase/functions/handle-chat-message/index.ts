@@ -44,17 +44,21 @@ serve(async (req) => {
         .from('roles')
         .select(`
           *,
-          mind:role_minds!inner(
+          mind:role_minds(
             mind_id,
             status
           )
         `)
         .eq('id', role_id)
-        .single();
+        .maybeSingle();
       
       if (roleError) {
         console.error(`Error fetching role ${role_id}:`, roleError);
         throw roleError;
+      }
+
+      if (!roleData) {
+        throw new Error(`Role ${role_id} not found`);
       }
       
       return { ...roleData, position: index + 1 };
@@ -66,8 +70,10 @@ serve(async (req) => {
     for (const [index, { role_id }] of chain.entries()) {
       try {
         const currentRole = chainRoles[index];
-        if (!currentRole?.mind?.mind_id) {
-          console.error(`No active mind found for role ${role_id}`);
+        
+        // Check if role exists and has valid data
+        if (!currentRole) {
+          console.error(`Role data not found for role ${role_id}`);
           continue;
         }
 
