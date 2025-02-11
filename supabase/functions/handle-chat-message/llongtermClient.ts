@@ -1,3 +1,4 @@
+
 const LLONGTERM_API_KEY = Deno.env.get('LLONGTERM_API_KEY') ?? '';
 const BASE_URL = 'https://api.llongterm.com/v1';
 
@@ -16,6 +17,11 @@ interface MemoryResponse {
 interface CreateMindOptions {
   specialism: string;
   specialismDepth?: number;
+  settings?: {
+    response_format?: string;
+    model?: string;
+    max_tokens?: number;
+  };
   initialMemory?: {
     summary: string;
     unstructured: Record<string, unknown>;
@@ -28,7 +34,6 @@ class LlongtermClient {
   private static instance: LlongtermClient;
   
   private constructor() {
-    // Validate API key on instantiation
     if (!LLONGTERM_API_KEY) {
       console.warn('Warning: LLONGTERM_API_KEY environment variable is not set');
     }
@@ -88,13 +93,8 @@ class LlongtermClient {
         metadata: options.metadata 
       });
 
-      const response = await this.makeRequest('/minds', 'POST', {
-        ...options,
-        settings: {
-          response_format: 'json',
-          model: 'gpt-4'
-        }
-      });
+      // Pass through the settings from options without overwriting
+      const response = await this.makeRequest('/minds', 'POST', options);
 
       const data = await response.json();
       console.log('Mind created successfully:', data);

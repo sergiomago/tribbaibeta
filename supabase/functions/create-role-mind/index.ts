@@ -13,13 +13,11 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    // Ensure only POST requests are allowed
     if (req.method !== 'POST') {
       throw new Error(`Method ${req.method} not allowed`)
     }
@@ -48,7 +46,7 @@ serve(async (req) => {
     const expertiseAreas = extractExpertiseAreas(role.description || '')
     const interactionPrefs = extractInteractionPreferences(role.instructions || '')
 
-    // First, create the mind in Llongterm with proper settings
+    // Create mind in Llongterm with proper settings
     console.log('Creating mind in Llongterm...', {
       role: role.name,
       expertiseAreas,
@@ -104,10 +102,11 @@ serve(async (req) => {
       throw new Error(`Failed to update role with extracted data: ${updateError.message}`)
     }
 
-    // Update role_minds with the actual Llongterm mind ID
+    // Create new role_minds record
     const { error: mindError } = await supabase
       .from('role_minds')
-      .update({
+      .insert({
+        role_id: roleId,
         mind_id: mind.id,
         status: 'active',
         metadata: {
@@ -120,10 +119,9 @@ serve(async (req) => {
         updated_at: new Date().toISOString(),
         last_sync: new Date().toISOString()
       })
-      .eq('role_id', roleId)
 
     if (mindError) {
-      throw new Error(`Failed to update role_minds: ${mindError.message}`)
+      throw new Error(`Failed to create role_minds record: ${mindError.message}`)
     }
 
     return new Response(
