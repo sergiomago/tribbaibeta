@@ -48,11 +48,21 @@ serve(async (req) => {
     const expertiseAreas = extractExpertiseAreas(role.description || '')
     const interactionPrefs = extractInteractionPreferences(role.instructions || '')
 
-    // First, create the mind in Llongterm
-    console.log('Creating mind in Llongterm...')
+    // First, create the mind in Llongterm with proper settings
+    console.log('Creating mind in Llongterm...', {
+      role: role.name,
+      expertiseAreas,
+      interactionPrefs
+    })
+
     const mind = await llongtermClient.createMind({
       specialism: role.name,
       specialismDepth: 2,
+      settings: {
+        response_format: 'json',
+        model: role.model === 'gpt-4o' ? 'gpt-4' : 'gpt-3.5-turbo',
+        max_tokens: 2048
+      },
       initialMemory: {
         summary: role.description || '',
         unstructured: {
