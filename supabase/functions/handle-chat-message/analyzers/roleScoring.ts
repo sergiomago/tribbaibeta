@@ -1,6 +1,6 @@
 
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { AnalysisResult, RoleScore } from './types';
+import { AnalysisResult, RoleScore } from './types.ts';
 
 export async function scoreRoles(
   supabase: SupabaseClient,

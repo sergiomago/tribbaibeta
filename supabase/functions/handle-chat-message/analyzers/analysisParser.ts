@@ -1,5 +1,5 @@
 
-import { AnalysisResult, DomainAnalysis } from './types';
+import { AnalysisResult, DomainAnalysis } from './types.ts';
 
 export function parseAnalysis(analysisText: string): AnalysisResult {
   try {
