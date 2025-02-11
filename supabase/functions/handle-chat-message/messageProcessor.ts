@@ -2,6 +2,7 @@
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { Message } from "./types.ts";
+import { llongtermClient } from "./llongtermClient.ts";
 import { 
   analyzeMessageTopic, 
   calculateMemorySignificance,
@@ -39,16 +40,10 @@ export async function processMessage(
 
     if (!roleMind?.mind_id) {
       console.log('No active mind found for role:', roleId);
-    } else {
-      console.log('Found mind for role:', roleMind.mind_id);
-    }
-
-    // Check message depth before processing
-    const currentDepth = userMessage.depth_level || 0;
-    if (currentDepth >= 9) {
-      console.log('Maximum conversation depth reached');
       return null;
     }
+
+    console.log('Found mind for role:', roleMind.mind_id);
 
     // Get role details
     const { data: role, error: roleError } = await supabase
@@ -67,8 +62,28 @@ export async function processMessage(
       previousResponses[previousResponses.length - 1]?.role_id || null
     );
 
-    // Analyze message topic
-    const topicAnalysis = await analyzeMessageTopic(userMessage.content);
+    // Initialize mind and store user message first
+    const mind = await llongtermClient.getMind(roleMind.mind_id);
+    if (!mind) {
+      throw new Error('Failed to initialize mind');
+    }
+
+    // Store user message immediately
+    console.log('Storing user message in mind');
+    await mind.remember([{
+      author: 'user',
+      message: userMessage.content,
+      timestamp: Date.now(),
+      metadata: {
+        thread_id: threadId,
+        message_id: userMessage.id
+      }
+    }]);
+
+    // Get relevant context from previous interactions
+    console.log('Retrieving context for:', userMessage.content);
+    const knowledgeResponse = await mind.ask(userMessage.content);
+    console.log('Retrieved knowledge response:', knowledgeResponse);
 
     // Format conversation history with enhanced metadata
     const conversationHistory = previousResponses.map(msg => ({
@@ -78,43 +93,29 @@ export async function processMessage(
       metadata: {
         role_id: msg.role_id,
         role_name: msg.role?.name,
-        expertise: msg.role?.expertise_areas,
-        topic_classification: topicAnalysis,
-        interaction_depth: msg.depth_level || 0
+        thread_id: threadId,
+        message_id: msg.id
       }
     }));
 
-    // Add current message
+    // Add current message to history
     conversationHistory.push({
       author: 'user',
       message: userMessage.content,
       timestamp: Date.now(),
       metadata: { 
         thread_id: threadId,
-        topic_classification: topicAnalysis
+        message_id: userMessage.id
       }
     });
-
-    // Get context from mind if available
-    let mindContext = '';
-    if (roleMind?.mind_id) {
-      try {
-        const mind = await llongtermClient.getMind(roleMind.mind_id);
-        const knowledgeResponse = await mind.ask(userMessage.content);
-        mindContext = knowledgeResponse.relevantMemories?.join('\n') || '';
-        console.log('Retrieved mind context:', mindContext ? 'Present' : 'None');
-      } catch (error) {
-        console.error('Error accessing mind:', error);
-      }
-    }
 
     // Create enhanced system prompt with context
     const conversationContext = await formatConversationHistory(previousResponses, role);
     const systemPrompt = generateSystemPrompt(
       role,
       conversationContext,
-      mindContext,
-      null,
+      knowledgeResponse.relevantMemories.join('\n'),
+      knowledgeResponse,
       responseOrder,
       totalResponders,
       nextRole,
@@ -123,7 +124,7 @@ export async function processMessage(
       userMessage.content
     );
 
-    console.log('Generated system prompt:', systemPrompt);
+    console.log('Generated system prompt with memory context');
 
     // Generate response
     const completion = await openai.chat.completions.create({
@@ -137,7 +138,7 @@ export async function processMessage(
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-    // Save response
+    // Save response to database
     const { data: savedMessage, error: saveError } = await supabase
       .from('messages')
       .insert({
@@ -150,13 +151,10 @@ export async function processMessage(
         depth_level: (userMessage.depth_level || 0) + 1,
         chain_position: responseOrder,
         metadata: {
-          response_quality: 1.0,
+          response_quality: knowledgeResponse.confidence,
           response_time: Date.now() - new Date(userMessage.created_at).getTime(),
           role_performance: relevanceScore,
-          memory_context: {
-            mind_id: roleMind?.mind_id,
-            topic_classification: topicAnalysis
-          }
+          memory_context: knowledgeResponse.relevantMemories
         }
       })
       .select()
@@ -164,32 +162,21 @@ export async function processMessage(
 
     if (saveError) throw saveError;
 
-    // Store response in mind if available
-    if (roleMind?.mind_id) {
-      try {
-        const mind = await llongtermClient.getMind(roleMind.mind_id);
-        await mind.remember([{
-          author: 'assistant',
-          message: responseContent,
-          timestamp: Date.now(),
-          metadata: {
-            role_id: roleId,
-            thread_id: threadId,
-            parent_message_id: userMessage.id,
-            response_order: responseOrder,
-            topic_classification: topicAnalysis,
-            interaction_summary: {
-              roles_involved: [roleId, nextRole].filter(Boolean),
-              outcome: 'completed',
-              effectiveness: relevanceScore
-            }
-          }
-        }]);
-        console.log('Stored response in mind');
-      } catch (error) {
-        console.error('Error storing in mind:', error);
+    // Store AI response in mind
+    console.log('Storing AI response in mind');
+    await mind.remember([{
+      author: 'assistant',
+      message: responseContent,
+      timestamp: Date.now(),
+      metadata: {
+        role_id: roleId,
+        thread_id: threadId,
+        message_id: savedMessage.id,
+        parent_message_id: userMessage.id,
+        response_order: responseOrder,
+        confidence: knowledgeResponse.confidence
       }
-    }
+    }]);
 
     return responseContent;
   } catch (error) {
@@ -197,4 +184,3 @@ export async function processMessage(
     throw error;
   }
 }
-
