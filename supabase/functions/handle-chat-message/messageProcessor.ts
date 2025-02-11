@@ -15,6 +15,38 @@ import {
 import { getNextRespondingRole } from "./processors/responseChainProcessor.ts";
 import { llongtermClient } from "./llongtermClient.ts";
 
+async function enrichMessageWithContext(mind: any, content: string, previousResponses: Message[]) {
+  try {
+    // First, get direct context for the current message
+    const knowledgeResponse = await mind.ask(content);
+    const directContext = knowledgeResponse?.relevantMemories || [];
+    
+    // Then, get context from previous message if this is a follow-up
+    let followUpContext: string[] = [];
+    if (previousResponses.length > 0) {
+      const lastMessage = previousResponses[previousResponses.length - 1];
+      const followUpResponse = await mind.ask(
+        `Context about: ${lastMessage.content}`
+      );
+      followUpContext = followUpResponse?.relevantMemories || [];
+    }
+
+    // Combine and deduplicate contexts
+    const allContext = [...new Set([...directContext, ...followUpContext])];
+    
+    console.log('Enriched message context:', {
+      directContextCount: directContext.length,
+      followUpContextCount: followUpContext.length,
+      totalUniqueContext: allContext.length
+    });
+
+    return allContext.join('\n');
+  } catch (error) {
+    console.error('Error enriching message context:', error);
+    return '';
+  }
+}
+
 export async function processMessage(
   openai: OpenAI,
   supabase: SupabaseClient,
@@ -96,15 +128,19 @@ export async function processMessage(
       }
     });
 
-    // Get context from mind if available
+    // Get enriched context from mind if available
     let mindContext = '';
     if (roleMind?.mind_id) {
       try {
         const mind = await llongtermClient.getMind(roleMind.mind_id);
         if (mind) {
-          const knowledgeResponse = await mind.ask(userMessage.content);
-          mindContext = knowledgeResponse?.relevantMemories?.join('\n') || '';
-          console.log('Retrieved mind context:', mindContext ? 'Present' : 'None');
+          // Use the new enrichMessage function
+          mindContext = await enrichMessageWithContext(
+            mind,
+            userMessage.content,
+            previousResponses
+          );
+          console.log('Retrieved enriched mind context:', mindContext ? 'Present' : 'None');
         }
       } catch (error) {
         console.error('Error accessing mind:', error);
@@ -202,3 +238,4 @@ export async function processMessage(
     throw error;
   }
 }
+
