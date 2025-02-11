@@ -38,62 +38,111 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Get roles data first
-    const { data: roles, error: rolesError } = await supabase
-      .from('roles')
-      .select('*')
-      .in('id', chain.map(c => c.role_id));
+    // If a role is tagged, only that role responds
+    if (taggedRoleId) {
+      const { data: role } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', taggedRoleId)
+        .single();
 
-    if (rolesError) throw rolesError;
-    if (!roles?.length) throw new Error('No roles found');
+      if (!role) throw new Error('Tagged role not found');
 
-    // Process responses sequentially
+      const { enrichedMessage, systemContext } = await buildMemoryContext(
+        supabase,
+        openai,
+        threadId,
+        taggedRoleId,
+        content
+      );
+
+      const completion = await openai.chat.completions.create({
+        model: role.model || 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: `${role.instructions}\n\n${systemContext}`
+          },
+          { role: 'user', content: enrichedMessage }
+        ],
+      });
+
+      const responseContent = completion.choices[0].message.content;
+
+      await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          role_id: taggedRoleId,
+          content: responseContent,
+          chain_position: 1
+        });
+
+      await supabase
+        .from('role_memories')
+        .insert({
+          role_id: taggedRoleId,
+          content: responseContent,
+          context_type: 'conversation',
+          metadata: {
+            thread_id: threadId,
+            timestamp: new Date().toISOString(),
+            chain_position: 1
+          }
+        });
+
+      return new Response(
+        JSON.stringify({ success: true }), 
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Process roles in order from the chain
+    let chainResponses = [];
     for (const [index, { role_id }] of chain.entries()) {
       try {
-        const currentRole = roles.find(r => r.id === role_id);
-        if (!currentRole) {
+        const { data: role } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', role_id)
+          .single();
+
+        if (!role) {
           console.error(`Role ${role_id} not found`);
           continue;
         }
 
-        // Get conversation history with a reasonable limit
-        const { data: history } = await supabase
-          .from('messages')
-          .select('content, created_at')
-          .eq('thread_id', threadId)
-          .order('created_at', { ascending: false })
-          .limit(5);
+        // Build context including previous responses in the chain
+        const { enrichedMessage, systemContext } = await buildMemoryContext(
+          supabase,
+          openai,
+          threadId,
+          role_id,
+          content
+        );
 
-        const conversationThread = history?.map(msg => ({
-          role: 'user',
-          content: msg.content
-        })) || [];
+        // Add previous responses from the chain to the context
+        const contextWithChainResponses = chainResponses.length > 0 
+          ? `${enrichedMessage}\n\nPrevious responses in this conversation:\n${chainResponses.map(r => 
+              `${r.roleName}: ${r.content}`
+            ).join('\n\n')}`
+          : enrichedMessage;
 
-        // Generate response
         const completion = await openai.chat.completions.create({
-          model: currentRole.model || 'gpt-4o-mini',
+          model: role.model || 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
-              content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
-                
-                Your role instructions:
-                ${currentRole.instructions}
-                
-                Guidelines:
-                1. Stay within your expertise areas
-                2. Be natural and conversational
-                3. Be concise but informative`
+              content: `${role.instructions}\n\n${systemContext}`
             },
-            ...conversationThread,
-            { role: 'user', content }
+            { role: 'user', content: contextWithChainResponses }
           ],
         });
 
         const responseContent = completion.choices[0].message.content;
 
         // Store response
-        const { error: responseError } = await supabase
+        await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
@@ -102,9 +151,7 @@ serve(async (req) => {
             chain_position: index + 1
           });
 
-        if (responseError) throw responseError;
-
-        // Store memory separately
+        // Store memory
         await supabase
           .from('role_memories')
           .insert({
@@ -117,6 +164,12 @@ serve(async (req) => {
               chain_position: index + 1
             }
           });
+
+        // Add this response to the chain for next roles
+        chainResponses.push({
+          roleName: role.name,
+          content: responseContent
+        });
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
