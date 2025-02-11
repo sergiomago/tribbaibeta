@@ -1,5 +1,7 @@
 
-const LLONGTERM_API_KEY = Deno.env.get('LLONGTERM_API_KEY');
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+
+const LLONGTERM_API_KEY = Deno.env.get('LLONGTERM_API_KEY') ?? '';
 const BASE_URL = 'https://api.llongterm.com/v1';
 
 interface Mind {
@@ -28,7 +30,12 @@ interface CreateMindOptions {
 class LlongtermClient {
   private static instance: LlongtermClient;
   
-  private constructor() {}
+  private constructor() {
+    // Validate API key on instantiation
+    if (!LLONGTERM_API_KEY) {
+      console.warn('Warning: LLONGTERM_API_KEY environment variable is not set');
+    }
+  }
 
   public static getInstance(): LlongtermClient {
     if (!LlongtermClient.instance) {
@@ -40,8 +47,8 @@ class LlongtermClient {
   async createMind(options: CreateMindOptions): Promise<Mind> {
     try {
       if (!LLONGTERM_API_KEY) {
-        console.error('LLONGTERM_API_KEY is not set');
-        throw new Error('LLONGTERM_API_KEY is not set');
+        console.error('LLONGTERM_API_KEY is not set in environment');
+        throw new Error('LLONGTERM_API_KEY environment variable is not set');
       }
 
       console.log('Creating mind with options:', options);
@@ -114,7 +121,7 @@ class LlongtermClient {
   async getMind(mindId: string): Promise<Mind | null> {
     try {
       if (!LLONGTERM_API_KEY) {
-        console.error('LLONGTERM_API_KEY is not set');
+        console.error('LLONGTERM_API_KEY is not set in environment');
         return null;
       }
 
