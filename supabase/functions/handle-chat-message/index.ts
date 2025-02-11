@@ -19,6 +19,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('Received request:', req.method);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -29,6 +31,7 @@ serve(async (req) => {
 
   // Only allow POST requests
   if (req.method !== 'POST') {
+    console.error(`Invalid method: ${req.method}`);
     return new Response(
       JSON.stringify({ 
         error: `Method ${req.method} not allowed`, 
