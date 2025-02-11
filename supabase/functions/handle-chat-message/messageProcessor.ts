@@ -15,16 +15,72 @@ import {
 import { getNextRespondingRole } from "./processors/responseChainProcessor.ts";
 import { llongtermClient } from "./llongtermClient.ts";
 
-async function enrichMessageWithContext(mind: any, content: string, previousResponses: Message[]) {
+async function storeConversationHistory(mind: any, conversationHistory: any[], roleId: string) {
   try {
-    // First, get direct context for the current message
+    // Format messages for Llongterm storage
+    const memoryMessages = conversationHistory.map(msg => ({
+      author: msg.author,
+      message: msg.message,
+      timestamp: msg.timestamp,
+      metadata: {
+        ...msg.metadata,
+        role_id: roleId,
+        stored_at: Date.now()
+      }
+    }));
+
+    console.log('Storing conversation history:', {
+      messageCount: memoryMessages.length,
+      roleId
+    });
+
+    // Store messages in Llongterm memory
+    const memoryResponse = await mind.remember(memoryMessages);
+    
+    console.log('Memory storage response:', memoryResponse);
+    return memoryResponse;
+  } catch (error) {
+    console.error('Error storing conversation history:', error);
+    return null;
+  }
+}
+
+async function enrichMessageWithContext(mind: any, content: string, previousResponses: Message[], roleId: string) {
+  try {
+    // Store conversation history first
+    const conversationHistory = previousResponses.map(msg => ({
+      author: msg.role_id ? 'assistant' : 'user',
+      message: msg.content,
+      timestamp: new Date(msg.created_at).getTime(),
+      metadata: {
+        role_id: msg.role_id,
+        thread_id: msg.thread_id,
+      }
+    }));
+
+    // Add current message to history
+    conversationHistory.push({
+      author: 'user',
+      message: content,
+      timestamp: Date.now(),
+      metadata: {
+        role_id: roleId,
+      }
+    });
+
+    // First, store the conversation
+    await storeConversationHistory(mind, conversationHistory, roleId);
+
+    // Then, get direct context for the current message
+    console.log('Retrieving direct context for:', content);
     const knowledgeResponse = await mind.ask(content);
     const directContext = knowledgeResponse?.relevantMemories || [];
     
-    // Then, get context from previous message if this is a follow-up
+    // Get context from previous message if this is a follow-up
     let followUpContext: string[] = [];
     if (previousResponses.length > 0) {
       const lastMessage = previousResponses[previousResponses.length - 1];
+      console.log('Retrieving follow-up context for:', lastMessage.content);
       const followUpResponse = await mind.ask(
         `Context about: ${lastMessage.content}`
       );
@@ -134,11 +190,11 @@ export async function processMessage(
       try {
         const mind = await llongtermClient.getMind(roleMind.mind_id);
         if (mind) {
-          // Use the new enrichMessage function
           mindContext = await enrichMessageWithContext(
             mind,
             userMessage.content,
-            previousResponses
+            previousResponses,
+            roleId
           );
           console.log('Retrieved enriched mind context:', mindContext ? 'Present' : 'None');
         }
@@ -204,7 +260,7 @@ export async function processMessage(
     if (saveError) throw saveError;
 
     // Store response in mind if available
-    if (roleMind?.mind_id) {
+    if (roleMind?.mind_id && responseContent) {
       try {
         const mind = await llongtermClient.getMind(roleMind.mind_id);
         if (mind) {
@@ -238,4 +294,3 @@ export async function processMessage(
     throw error;
   }
 }
-
