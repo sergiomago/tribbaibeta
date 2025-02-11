@@ -16,6 +16,12 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
+// Utility function to validate UUID
+function isValidUUID(uuid: string) {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -38,21 +44,50 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Get roles data first
+    // Validate threadId is a UUID
+    if (!isValidUUID(threadId)) {
+      throw new Error('Invalid thread ID format');
+    }
+
+    // Convert role tags to IDs if needed
+    const roleIds = await Promise.all(chain.map(async (item) => {
+      const roleId = item.role_id;
+      
+      // If it's already a valid UUID, use it
+      if (isValidUUID(roleId)) {
+        return roleId;
+      }
+
+      // If it's a tag, look up the ID
+      const { data: role, error } = await supabase
+        .from('roles')
+        .select('id')
+        .eq('tag', roleId)
+        .single();
+
+      if (error || !role) {
+        console.error(`Error finding role with tag ${roleId}:`, error);
+        throw new Error(`Role not found with tag: ${roleId}`);
+      }
+
+      return role.id;
+    }));
+
+    // Get roles data
     const { data: roles, error: rolesError } = await supabase
       .from('roles')
       .select('*')
-      .in('id', chain.map(c => c.role_id));
+      .in('id', roleIds);
 
     if (rolesError) throw rolesError;
     if (!roles?.length) throw new Error('No roles found');
 
     // Process responses sequentially
-    for (const [index, { role_id }] of chain.entries()) {
+    for (const [index, roleId] of roleIds.entries()) {
       try {
-        const currentRole = roles.find(r => r.id === role_id);
+        const currentRole = roles.find(r => r.id === roleId);
         if (!currentRole) {
-          console.error(`Role ${role_id} not found`);
+          console.error(`Role ${roleId} not found`);
           continue;
         }
 
@@ -97,7 +132,7 @@ serve(async (req) => {
           .from('messages')
           .insert({
             thread_id: threadId,
-            role_id: role_id,
+            role_id: roleId,
             content: responseContent,
             chain_position: index + 1
           });
@@ -108,7 +143,7 @@ serve(async (req) => {
         await supabase
           .from('role_memories')
           .insert({
-            role_id: role_id,
+            role_id: roleId,
             content: responseContent,
             context_type: 'conversation',
             metadata: {
@@ -119,7 +154,7 @@ serve(async (req) => {
           });
 
       } catch (error) {
-        console.error(`Error processing response for role ${role_id}:`, error);
+        console.error(`Error processing response for role ${roleId}:`, error);
         throw error;
       }
     }
