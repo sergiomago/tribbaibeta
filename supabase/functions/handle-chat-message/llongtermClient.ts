@@ -75,21 +75,10 @@ class LlongtermClient {
         id: mindId,
         async remember(messages: Message[]): Promise<RememberResponse> {
           console.log('Storing messages in mind:', messages);
-          const rememberResponse = await fetch(`${BASE_URL}/minds/${mindId}/remember`, {
+          const rememberResponse = await this.makeRequest(`/minds/${mindId}/remember`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
             body: JSON.stringify({ messages })
           });
-
-          if (!rememberResponse.ok) {
-            const errorText = await rememberResponse.text();
-            console.error('Failed to store memory:', rememberResponse.status, rememberResponse.statusText, errorText);
-            throw new Error(`Failed to store memory: ${rememberResponse.status} ${rememberResponse.statusText} - ${errorText}`);
-          }
 
           const result = await rememberResponse.json();
           console.log('Memory stored successfully:', result);
@@ -97,21 +86,10 @@ class LlongtermClient {
         },
         async ask(question: string): Promise<KnowledgeResponse> {
           console.log('Querying mind with question:', question);
-          const askResponse = await fetch(`${BASE_URL}/minds/${mindId}/ask`, {
+          const askResponse = await this.makeRequest(`/minds/${mindId}/ask`, {
             method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
             body: JSON.stringify({ question })
           });
-
-          if (!askResponse.ok) {
-            const errorText = await askResponse.text();
-            console.error('Failed to query mind:', askResponse.status, askResponse.statusText, errorText);
-            throw new Error(`Failed to query mind: ${askResponse.status} ${askResponse.statusText} - ${errorText}`);
-          }
 
           const result = await askResponse.json();
           console.log('Mind query successful:', result);
