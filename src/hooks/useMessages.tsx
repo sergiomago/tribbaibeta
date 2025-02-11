@@ -30,7 +30,7 @@ export function useMessages(threadId: string | null) {
       if (error) throw error;
       
       // Transform the response to match our Message type
-      return (data as MessageResponse[]).map(msg => ({
+      return ((data || []) as unknown as MessageResponse[]).map(msg => ({
         id: msg.id,
         thread_id: msg.thread_id,
         role_id: msg.role_id,
