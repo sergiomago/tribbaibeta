@@ -38,146 +38,85 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Get all roles in the chain with their details and minds
-    const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
-      const { data: roleData, error: roleError } = await supabase
-        .from('roles')
-        .select(`
-          *,
-          mind:role_minds(
-            mind_id,
-            status
-          )
-        `)
-        .eq('id', role_id)
-        .maybeSingle();
-      
-      if (roleError) {
-        console.error(`Error fetching role ${role_id}:`, roleError);
-        throw roleError;
-      }
+    // Get roles data first
+    const { data: roles, error: rolesError } = await supabase
+      .from('roles')
+      .select('*')
+      .in('id', chain.map(c => c.role_id));
 
-      if (!roleData) {
-        throw new Error(`Role ${role_id} not found`);
-      }
-      
-      return { ...roleData, position: index + 1 };
-    }));
-
-    console.log('Chain roles with minds:', chainRoles);
+    if (rolesError) throw rolesError;
+    if (!roles?.length) throw new Error('No roles found');
 
     // Process responses sequentially
     for (const [index, { role_id }] of chain.entries()) {
       try {
-        const currentRole = chainRoles[index];
-        
-        // Check if role exists and has valid data
+        const currentRole = roles.find(r => r.id === role_id);
         if (!currentRole) {
-          console.error(`Role data not found for role ${role_id}`);
+          console.error(`Role ${role_id} not found`);
           continue;
         }
 
-        // Get conversation history
-        const { data: history, error: historyError } = await supabase
+        // Get conversation history with a reasonable limit
+        const { data: history } = await supabase
           .from('messages')
-          .select(`
-            content,
-            role:roles!messages_role_id_fkey (
-              name,
-              expertise_areas
-            ),
-            created_at
-          `)
+          .select('content, created_at')
           .eq('thread_id', threadId)
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(5);
 
-        if (historyError) throw historyError;
-
-        // Format conversation history
         const conversationThread = history?.map(msg => ({
-          role: msg.role ? 'assistant' : 'user',
-          content: msg.content,
-          name: msg.role?.name,
-          expertise: msg.role?.expertise_areas
+          role: 'user',
+          content: msg.content
         })) || [];
 
-        // Build memory context
-        const memoryContext = await buildMemoryContext(
-          supabase,
-          openai,
-          threadId,
-          role_id,
-          content
-        );
-
-        // Create completion with memory context
+        // Generate response
         const completion = await openai.chat.completions.create({
           model: currentRole.model || 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
               content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
-                ${memoryContext.systemContext || ''}
                 
                 Your role instructions:
                 ${currentRole.instructions}
                 
-                Previous context and memories:
-                ${memoryContext.enrichedMessage || ''}
-                
                 Guidelines:
-                1. Use the provided context and memories to maintain conversation continuity
-                2. Stay within your expertise areas
-                3. Be natural and conversational
-                4. Acknowledge and build upon previous points from memory`
+                1. Stay within your expertise areas
+                2. Be natural and conversational
+                3. Be concise but informative`
             },
-            ...conversationThread.map(msg => ({
-              role: msg.role as 'user' | 'assistant',
-              content: msg.content
-            })),
+            ...conversationThread,
             { role: 'user', content }
           ],
         });
 
         const responseContent = completion.choices[0].message.content;
-        console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-        // Store response in database
-        const { data: savedMessage, error: responseError } = await supabase
+        // Store response
+        const { error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: role_id,
             content: responseContent,
-            chain_position: index + 1,
-            conversation_context: {
-              memory_context: memoryContext,
-              depth_level: conversationThread.length,
-              role_expertise: currentRole.expertise_areas
+            chain_position: index + 1
+          });
+
+        if (responseError) throw responseError;
+
+        // Store memory separately
+        await supabase
+          .from('role_memories')
+          .insert({
+            role_id: role_id,
+            content: responseContent,
+            context_type: 'conversation',
+            metadata: {
+              thread_id: threadId,
+              timestamp: new Date().toISOString(),
+              chain_position: index + 1
             }
-          })
-          .select()
-          .single();
-
-        if (responseError) {
-          console.error(`Error saving response for role ${role_id}:`, responseError);
-          throw responseError;
-        }
-
-        // Update role's memory
-        await updateMemoryForRole(supabase, role_id, {
-          thread_id: threadId,
-          content: responseContent,
-          user_message: content,
-          context_type: 'conversation',
-          metadata: {
-            timestamp: new Date().toISOString(),
-            conversation_depth: conversationThread.length,
-            chain_position: index + 1,
-            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response'
-          }
-        });
+          });
 
       } catch (error) {
         console.error(`Error processing response for role ${role_id}:`, error);
@@ -204,37 +143,3 @@ serve(async (req) => {
     );
   }
 });
-
-async function updateMemoryForRole(
-  supabase: any,
-  roleId: string,
-  memory: {
-    thread_id: string;
-    content: string;
-    user_message: string;
-    context_type: string;
-    metadata: Record<string, any>;
-  }
-) {
-  try {
-    const { error } = await supabase
-      .from('role_memories')
-      .insert({
-        role_id: roleId,
-        content: memory.content,
-        context_type: memory.context_type,
-        metadata: memory.metadata,
-        conversation_context: {
-          user_message: memory.user_message,
-          thread_id: memory.thread_id,
-          created_at: new Date().toISOString()
-        }
-      });
-
-    if (error) throw error;
-    console.log(`Memory stored for role ${roleId}`);
-  } catch (error) {
-    console.error('Error storing memory:', error);
-    throw error;
-  }
-}
