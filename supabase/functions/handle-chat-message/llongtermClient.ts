@@ -14,6 +14,17 @@ interface MemoryResponse {
   confidence?: number;
 }
 
+interface CreateMindOptions {
+  specialism: string;
+  specialismDepth?: number;
+  initialMemory?: {
+    summary: string;
+    unstructured: Record<string, unknown>;
+    structured: Record<string, unknown>;
+  };
+  metadata?: Record<string, unknown>;
+}
+
 class LlongtermClient {
   private static instance: LlongtermClient;
   
@@ -24,6 +35,80 @@ class LlongtermClient {
       LlongtermClient.instance = new LlongtermClient();
     }
     return LlongtermClient.instance;
+  }
+
+  async createMind(options: CreateMindOptions): Promise<Mind> {
+    try {
+      if (!LLONGTERM_API_KEY) {
+        console.error('LLONGTERM_API_KEY is not set');
+        throw new Error('LLONGTERM_API_KEY is not set');
+      }
+
+      console.log('Creating mind with options:', options);
+
+      const response = await fetch(`${BASE_URL}/minds`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(options)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Failed to create mind: ${response.status} - ${errorText}`);
+        throw new Error(`Failed to create mind: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('Mind created successfully:', data);
+      
+      return {
+        id: data.id,
+        async remember(messages: any[]): Promise<MemoryResponse> {
+          const rememberResponse = await fetch(`${BASE_URL}/minds/${data.id}/remember`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ messages })
+          });
+
+          if (!rememberResponse.ok) {
+            console.error(`Failed to store memory: ${rememberResponse.statusText}`);
+            return {};
+          }
+
+          return rememberResponse.json();
+        },
+        
+        async ask(question: string): Promise<MemoryResponse> {
+          const askResponse = await fetch(`${BASE_URL}/minds/${data.id}/ask`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ question })
+          });
+
+          if (!askResponse.ok) {
+            console.error(`Failed to query mind: ${askResponse.statusText}`);
+            return {
+              relevantMemories: [],
+              confidence: 0
+            };
+          }
+
+          return askResponse.json();
+        }
+      };
+    } catch (error) {
+      console.error('Error in createMind:', error);
+      throw error;
+    }
   }
 
   async getMind(mindId: string): Promise<Mind | null> {
