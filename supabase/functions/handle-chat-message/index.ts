@@ -27,6 +27,20 @@ serve(async (req) => {
     });
   }
 
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ 
+        error: `Method ${req.method} not allowed`, 
+        details: 'Only POST requests are accepted' 
+      }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 405 
+      }
+    );
+  }
+
   try {
     if (!openAIApiKey) throw new ChatError('OpenAI API key is not configured');
     if (!supabaseUrl || !supabaseServiceKey) throw new ChatError('Supabase configuration is missing');
