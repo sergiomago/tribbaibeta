@@ -19,6 +19,10 @@ serve(async (req) => {
   }
 
   try {
+    if (req.method !== 'POST') {
+      throw new Error(`Method ${req.method} not allowed`)
+    }
+
     const { roleId } = await req.json()
     console.log(`Creating mind for role: ${roleId}`)
 
@@ -136,4 +140,3 @@ serve(async (req) => {
     )
   }
 })
-
