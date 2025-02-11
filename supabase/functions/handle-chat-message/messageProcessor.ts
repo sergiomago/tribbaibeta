@@ -39,8 +39,8 @@ export async function processMessage(
       .single();
 
     if (!roleMind?.mind_id) {
-      console.log('No active mind found for role:', roleId);
-      return null;
+      console.error('No active mind found for role:', roleId);
+      throw new Error('Role mind not found or inactive');
     }
 
     console.log('Found mind for role:', roleMind.mind_id);
@@ -62,10 +62,36 @@ export async function processMessage(
       previousResponses[previousResponses.length - 1]?.role_id || null
     );
 
-    // Initialize mind and store user message first
+    // Initialize or get existing mind
+    console.log('Initializing mind:', roleMind.mind_id);
     const mind = await llongtermClient.getMind(roleMind.mind_id);
     if (!mind) {
-      throw new Error('Failed to initialize mind');
+      console.log('Mind not found, creating new one');
+      // Update mind status to processing
+      await supabase.rpc('update_mind_status', {
+        p_role_id: roleId,
+        p_status: 'processing'
+      });
+
+      const newMind = await llongtermClient.createMind({
+        specialism: role.name || 'AI Assistant'
+      });
+
+      if (!newMind) {
+        throw new Error('Failed to create new mind');
+      }
+
+      // Update mind_id in database
+      await supabase
+        .from('role_minds')
+        .update({ 
+          mind_id: newMind.id,
+          status: 'active',
+          updated_at: new Date().toISOString()
+        })
+        .eq('role_id', roleId);
+
+      console.log('New mind created and stored:', newMind.id);
     }
 
     // Store user message immediately
