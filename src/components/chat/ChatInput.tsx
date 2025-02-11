@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
@@ -38,18 +37,6 @@ export function ChatInput({
     
     setIsSending(true);
     try {
-      // First store the user message
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          content: message.trim(),
-          is_bot: false
-        });
-
-      if (messageError) throw messageError;
-
-      // Then process with orchestrator
       const orchestrator = createRoleOrchestrator(threadId);
       
       // Extract tagged role if present
