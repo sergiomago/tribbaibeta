@@ -37,29 +37,36 @@ class LlongtermClient {
     return LlongtermClient.instance;
   }
 
+  private async makeRequest(endpoint: string, options: RequestInit) {
+    const url = `${BASE_URL}${endpoint}`;
+    console.log(`Making ${options.method} request to:`, url);
+
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...options.headers,
+      }
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Request failed: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`${response.status} ${response.statusText} - ${errorText}`);
+    }
+
+    return response;
+  }
+
   async getMind(mindId: string) {
     console.log('Getting mind:', mindId);
     
     try {
-      const response = await fetch(`${BASE_URL}/minds/${mindId}`, {
+      const response = await this.makeRequest(`/minds/${mindId}`, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
       });
-
-      if (!response.ok) {
-        console.error('Failed to get mind:', response.status, response.statusText);
-        const errorText = await response.text();
-        console.error('Error details:', errorText);
-        
-        if (response.status === 404) {
-          console.log('Mind not found, returning null');
-          return null;
-        }
-        throw new Error(`Failed to get mind: ${response.status} ${response.statusText} - ${errorText}`);
-      }
 
       const data = await response.json();
       console.log('Mind retrieved successfully');
@@ -72,7 +79,8 @@ class LlongtermClient {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify({ messages })
           });
@@ -93,7 +101,8 @@ class LlongtermClient {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-              'Content-Type': 'application/json'
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
             },
             body: JSON.stringify({ question })
           });
@@ -111,6 +120,10 @@ class LlongtermClient {
       };
     } catch (error) {
       console.error('Error in getMind:', error);
+      if (error.message.includes('404')) {
+        console.log('Mind not found, returning null');
+        return null;
+      }
       throw error;
     }
   }
@@ -123,20 +136,10 @@ class LlongtermClient {
         throw new Error('LLONGTERM_API_KEY is not set');
       }
 
-      const response = await fetch(`${BASE_URL}/minds`, {
+      const response = await this.makeRequest('/minds', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${LLONGTERM_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(options)
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Failed to create mind:', response.status, response.statusText, errorText);
-        throw new Error(`Failed to create mind: ${response.status} ${response.statusText} - ${errorText}`);
-      }
 
       const data = await response.json();
       console.log('Mind created successfully:', data);
