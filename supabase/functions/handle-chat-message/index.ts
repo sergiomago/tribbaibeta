@@ -19,29 +19,12 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('Received request:', req.method);
-
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders,
       status: 204,
     });
-  }
-
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    console.error(`Invalid method: ${req.method}`);
-    return new Response(
-      JSON.stringify({ 
-        error: `Method ${req.method} not allowed`, 
-        details: 'Only POST requests are accepted' 
-      }),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 405 
-      }
-    );
   }
 
   try {

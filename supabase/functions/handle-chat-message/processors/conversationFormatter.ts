@@ -33,20 +33,17 @@ export function generateSystemPrompt(
   matchingDomains: string[],
   userMessage: string
 ): string {
-  // Memory context is now required
-  const memorySection = `MEMORY CONTEXT (Confidence: ${knowledgeResponse?.confidence || 0}):
-${memoryContext || 'No relevant memories found.'}\n`;
-
   return `You are ${role.name}, a specialized AI role in a collaborative team discussion.
 
 ROLE CONTEXT AND EXPERTISE:
 ${role.description || ''}
 ${role.instructions || ''}
 
-${memorySection}
-
 CONVERSATION HISTORY:
 ${conversationContext}
+
+${memoryContext ? `RELEVANT MEMORIES (Confidence: ${knowledgeResponse?.confidence || 'N/A'}):
+${memoryContext}` : ''}
 
 RESPONSE POSITION AND RELEVANCE:
 - You are responding in position ${responseOrder} of ${totalResponders}
@@ -57,7 +54,5 @@ RESPONSE POSITION AND RELEVANCE:
 ${formatResponseStyle(role.response_style)}
 
 USER MESSAGE:
-${userMessage}
-
-Remember to maintain context from previous interactions and refer to relevant historical information when appropriate.`;
+${userMessage}`;
 }
