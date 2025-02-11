@@ -1,11 +1,8 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { determineResponseOrder } from "./messageAnalyzer.ts";
-import { handleResponseChain } from "./responseManager.ts";
-import { handleError, ChatError } from "./errorHandler.ts";
+import { buildMemoryContext } from "./memoryContextBuilder.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -19,7 +16,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: corsHeaders,
@@ -28,86 +24,161 @@ serve(async (req) => {
   }
 
   try {
-    if (!openAIApiKey) throw new ChatError('OpenAI API key is not configured');
-    if (!supabaseUrl || !supabaseServiceKey) throw new ChatError('Supabase configuration is missing');
+    if (!openAIApiKey) throw new Error('OpenAI API key is not configured');
+    if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
     
-    const { threadId, content, taggedRoleId } = await req.json();
-    console.log('Processing message:', { threadId, content, taggedRoleId });
+    const { threadId, content, chain, taggedRoleId } = await req.json();
+    console.log('Processing message:', { threadId, content, chain, taggedRoleId });
 
     if (!threadId || !content) {
-      throw new ChatError('Missing required fields: threadId and content are required', 400);
+      throw new Error('Missing required fields: threadId and content are required');
     }
 
-    let resolvedRoleId = null;
-    if (taggedRoleId) {
-      // If taggedRoleId is not a UUID, try to find the role by tag
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      if (!uuidRegex.test(taggedRoleId)) {
-        // Normalize tag - ensure @ prefix and try both with and without @
-        const normalizedTag = taggedRoleId.startsWith('@') ? taggedRoleId : `@${taggedRoleId}`;
-        
-        console.log('Looking for role with tag:', normalizedTag);
-        
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('id, name, tag')
-          .eq('tag', normalizedTag)
+    // Get all roles in the chain with their details
+    const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
+      const { data: role, error: roleError } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', role_id)
+        .single();
+      
+      if (roleError) {
+        console.error(`Error fetching role ${role_id}:`, roleError);
+        throw roleError;
+      }
+      
+      return { ...role, position: index + 1 };
+    }));
+
+    console.log('Chain roles:', chainRoles);
+
+    // Process responses sequentially
+    for (const [index, { role_id }] of chain.entries()) {
+      try {
+        const currentRole = chainRoles[index];
+        if (!currentRole) {
+          console.error(`Role ${role_id} not found in chain roles`);
+          continue;
+        }
+
+        // Get role's mind
+        const { data: mindData, error: mindError } = await supabase
+          .from('role_minds')
+          .select('*')
+          .eq('role_id', role_id)
+          .eq('status', 'active')
           .single();
 
-        if (roleError || !role) {
-          console.error('Role lookup error:', roleError);
-          throw new ChatError(`Role with tag "${taggedRoleId}" not found. Tags must start with @ symbol (e.g., @productexpert)`, 404);
+        if (mindError || !mindData) {
+          console.error(`Error fetching mind for role ${role_id}:`, mindError);
+          throw new Error(`No active mind found for role ${role_id}`);
         }
-        console.log('Found role:', role);
-        resolvedRoleId = role.id;
-      } else {
-        resolvedRoleId = taggedRoleId;
+
+        // Get conversation history
+        const { data: history, error: historyError } = await supabase
+          .from('messages')
+          .select(`
+            content,
+            role:roles!messages_role_id_fkey (
+              name,
+              expertise_areas
+            ),
+            created_at
+          `)
+          .eq('thread_id', threadId)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (historyError) throw historyError;
+
+        // Format conversation history for mind
+        const conversationThread = history?.map(msg => ({
+          role: msg.role ? 'assistant' : 'user',
+          content: msg.content,
+          name: msg.role?.name,
+          expertise: msg.role?.expertise_areas
+        })) || [];
+
+        // Use mind to enrich context
+        const enrichedContext = await mindData.remember({
+          thread: conversationThread,
+          content,
+          metadata: {
+            role_name: currentRole.name,
+            expertise_areas: currentRole.expertise_areas,
+            thread_id: threadId
+          }
+        });
+
+        // Generate response using enriched context
+        const completion = await openai.chat.completions.create({
+          model: currentRole.model || 'gpt-4o-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
+                ${enrichedContext.systemContext}
+                
+                Your role instructions:
+                ${currentRole.instructions}
+                
+                Guidelines:
+                1. Use the provided context to maintain conversation continuity
+                2. Stay within your expertise areas
+                3. Be natural and conversational
+                4. Acknowledge and build upon previous points`
+            },
+            { role: 'user', content: enrichedContext.enrichedMessage || content }
+          ],
+        });
+
+        const responseContent = completion.choices[0].message.content;
+        console.log('Generated response:', responseContent.substring(0, 100) + '...');
+
+        // Store response
+        const { data: savedMessage, error: responseError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role_id,
+            content: responseContent,
+            chain_id: chain[0].role_id,
+            chain_position: index + 1,
+            conversation_context: {
+              enriched_context: enrichedContext,
+              role_expertise: currentRole.expertise_areas,
+              chain_position: index + 1
+            }
+          })
+          .select()
+          .single();
+
+        if (responseError) {
+          console.error(`Error saving response for role ${role_id}:`, responseError);
+          throw responseError;
+        }
+
+        // Store interaction in mind
+        await mindData.remember({
+          thread: [
+            { role: 'user', content },
+            { role: 'assistant', content: responseContent }
+          ],
+          metadata: {
+            thread_id: threadId,
+            chain_position: index + 1,
+            interaction_type: taggedRoleId ? 'direct_response' : 'chain_response'
+          }
+        });
+
+      } catch (error) {
+        console.error(`Error processing response for role ${role_id}:`, error);
+        throw error;
       }
     }
-
-    const { data: message, error: messageError } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: threadId,
-        content,
-        tagged_role_id: resolvedRoleId,
-        depth_level: 0,
-        chain_position: 0,
-        metadata: {},
-      })
-      .select()
-      .single();
-
-    if (messageError) {
-      console.error('Error saving user message:', messageError);
-      throw messageError;
-    }
-
-    const { data: threadRoles, error: rolesError } = await supabase
-      .from('thread_roles')
-      .select('role_id')
-      .eq('thread_id', threadId);
-
-    if (rolesError) throw rolesError;
-    if (!threadRoles?.length) throw new ChatError('No roles found for thread', 404);
-
-    let orderedRoles;
-    if (resolvedRoleId) {
-      orderedRoles = [{ roleId: resolvedRoleId, score: 1 }];
-    } else {
-      orderedRoles = await determineResponseOrder(
-        supabase,
-        threadId,
-        content,
-        threadRoles.map(tr => tr.role_id),
-        openai
-      );
-    }
-
-    await handleResponseChain(supabase, threadId, message, orderedRoles, openai);
 
     return new Response(
       JSON.stringify({ success: true }), 
@@ -115,6 +186,16 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    return handleError(error);
+    console.error('Error in handle-chat-message:', error);
+    return new Response(
+      JSON.stringify({ 
+        error: error.message || 'An error occurred while processing your request.',
+        details: error.toString()
+      }),
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   }
 });

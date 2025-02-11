@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { Message } from "@/types";
+import { createRoleSelector } from "../../roles/selection/RoleSelector";
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -13,11 +14,19 @@ export class RoleOrchestrator {
     console.log('Orchestrator handling message:', { content, taggedRoleId });
 
     try {
-      // Send to edge function for processing with either tagged role or for full scoring
+      // If a specific role is tagged, use only that role
+      const chain = taggedRoleId 
+        ? [{ role_id: taggedRoleId }]
+        : await this.buildRelevanceChain(content);
+
+      console.log('Processing with chain:', chain);
+
+      // Process message through edge function
       const { error } = await supabase.functions.invoke("handle-chat-message", {
         body: {
           threadId: this.threadId,
           content,
+          chain,
           taggedRoleId
         },
       });
@@ -28,6 +37,21 @@ export class RoleOrchestrator {
       console.error('Error in orchestrator:', error);
       throw error;
     }
+  }
+
+  private async buildRelevanceChain(content: string) {
+    // Create a role selector instance
+    const roleSelector = createRoleSelector(this.threadId);
+    
+    // Get roles sorted by relevance to the message content
+    const relevantRoles = await roleSelector.selectResponders(content);
+    
+    console.log('Relevant roles selected:', relevantRoles);
+
+    // Convert to chain format
+    return relevantRoles.map(role => ({
+      role_id: role.id
+    }));
   }
 }
 

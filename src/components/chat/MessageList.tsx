@@ -1,9 +1,8 @@
-
 import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMemoryManagement } from "@/hooks/useMemoryManagement";
-import { Shield, ShieldCheck, ShieldX, AlertCircle, MessageSquare } from "lucide-react";
+import { Shield, ShieldCheck, ShieldX, AlertCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -107,11 +106,6 @@ export function MessageList({
     }
   };
 
-  // Calculate indentation based on thread depth
-  const getMessageIndentation = (depth: number) => {
-    return `ml-${Math.min(depth * 4, 16)}`;
-  };
-
   if (isLoading) {
     return <div className="flex-1 p-4">Loading messages...</div>;
   }
@@ -127,8 +121,7 @@ export function MessageList({
           id={message.id}
           className={cn(
             "flex items-start gap-4 transition-colors",
-            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row",
-            getMessageIndentation(message.thread_depth || 0)
+            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
           )}
         >
           <div
@@ -145,15 +138,7 @@ export function MessageList({
                 {getVerificationIcon(message.id)}
               </div>
             )}
-            <div className="text-sm whitespace-pre-wrap">
-              {message.content}
-              {message.parent_message_id && (
-                <div className="mt-1 text-xs text-muted-foreground flex items-center gap-1">
-                  <MessageSquare className="h-3 w-3" />
-                  <span>Reply to previous message</span>
-                </div>
-              )}
-            </div>
+            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
           </div>
           {index === messages.length - 1 && (
             <div ref={lastMessageRef} />

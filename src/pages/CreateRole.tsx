@@ -1,4 +1,3 @@
-
 import { AppNavbar } from "@/components/AppNavbar";
 import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
 import { useToast } from "@/hooks/use-toast";
@@ -70,11 +69,9 @@ const CreateRole = () => {
           title: "Success",
           description: "Role updated successfully",
         });
-        
-        navigate('/roles');
       } else {
-        // Create new role and initialize mind
-        const { data: newRole, error: createError } = await supabase
+        // Create new role
+        const { error } = await supabase
           .from('roles')
           .insert({
             name: values.name,
@@ -85,34 +82,17 @@ const CreateRole = () => {
             model: values.model,
             special_capabilities: values.special_capabilities,
             user_id: session.user.id
-          })
-          .select()
-          .single();
+          });
 
-        if (createError) throw createError;
-        if (!newRole) throw new Error("Role created but no ID returned");
+        if (error) throw error;
 
-        // Initialize the mind using the edge function
-        const { error: mindError } = await supabase.functions.invoke('create-role-mind', {
-          body: { roleId: newRole.id }
+        toast({
+          title: "Success",
+          description: "Role created successfully",
         });
-
-        if (mindError) {
-          // If mind creation fails, we should still notify the user that the role was created
-          toast({
-            title: "Partial Success",
-            description: "Role created but mind initialization failed. You can try reinitializing it later.",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Success",
-            description: "Role and mind created successfully",
-          });
-        }
-
-        navigate('/roles');
       }
+      
+      navigate('/roles');
     } catch (error) {
       toast({
         title: "Error",
@@ -155,4 +135,3 @@ const CreateRole = () => {
 };
 
 export default CreateRole;
-

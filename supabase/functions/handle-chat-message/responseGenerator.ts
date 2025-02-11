@@ -1,3 +1,4 @@
+
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
@@ -17,8 +18,11 @@ export async function generateRoleResponse(
 
   if (!role) throw new Error(`Role ${roleId} not found`);
 
+  // Format memories for natural context inclusion
   const memoryContext = memories?.length 
-    ? `Relevant context from your memory:\n${memories.map(m => m.content).join('\n\n')}`
+    ? `Relevant context from previous discussions:\n${memories.map(m => 
+        `${new Date(m.created_at).toLocaleDateString()}: ${m.content}`
+      ).join('\n\n')}`
     : '';
 
   console.log('Generating response with role:', role.name);
@@ -39,13 +43,19 @@ export async function generateRoleResponse(
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response successfully');
 
+    // Save response with natural conversation flow context
     const { data: savedMessage, error } = await supabase
       .from('messages')
       .insert({
         thread_id: threadId,
         role_id: roleId,
         content: responseContent,
-        chain_id: userMessage.id,
+        response_to_id: userMessage.id,
+        conversation_context: {
+          referenced_memories: memories.map(m => m.id),
+          response_context: 'natural_flow',
+          memory_relevance: memories.length > 0
+        }
       })
       .select()
       .single();
@@ -73,11 +83,12 @@ export async function recordInteraction(
       thread_id: threadId,
       initiator_role_id: roleId,
       responder_role_id: taggedRoleId || roleId,
-      interaction_type: taggedRoleId ? 'direct_response' : 'analysis_based',
+      interaction_type: taggedRoleId ? 'direct_response' : 'natural_flow',
       metadata: {
         context_type: 'conversation',
         analysis: analysis || null,
-        memory_count: memoryCount
+        memory_count: memoryCount,
+        flow_type: 'natural'
       }
     });
 }

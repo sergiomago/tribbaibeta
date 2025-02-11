@@ -1,296 +1,174 @@
 
-import OpenAI from "https://esm.sh/openai@4.26.0";
 import { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { Message } from "./types.ts";
-import { 
-  analyzeMessageTopic, 
-  calculateMemorySignificance,
-  handleMemoryOperations 
-} from "./processors/memoryProcessor.ts";
-import { 
-  formatConversationHistory,
-  formatResponseStyle,
-  generateSystemPrompt 
-} from "./processors/conversationFormatter.ts";
-import { getNextRespondingRole } from "./processors/responseChainProcessor.ts";
-import { llongtermClient } from "./llongtermClient.ts";
+import OpenAI from "https://esm.sh/openai@4.26.0";
 
-async function storeConversationHistory(mind: any, conversationHistory: any[], roleId: string) {
-  try {
-    // Format messages for Llongterm storage
-    const memoryMessages = conversationHistory.map(msg => ({
-      author: msg.author,
-      message: msg.message,
-      timestamp: msg.timestamp,
-      metadata: {
-        ...msg.metadata,
-        role_id: roleId,
-        stored_at: Date.now()
-      }
-    }));
-
-    console.log('Storing conversation history:', {
-      messageCount: memoryMessages.length,
-      roleId
-    });
-
-    // Store messages in Llongterm memory
-    const memoryResponse = await mind.remember(memoryMessages);
-    
-    console.log('Memory storage response:', memoryResponse);
-    return memoryResponse;
-  } catch (error) {
-    console.error('Error storing conversation history:', error);
-    return null;
-  }
-}
-
-async function enrichMessageWithContext(mind: any, content: string, previousResponses: Message[], roleId: string) {
-  try {
-    // Store conversation history first
-    const conversationHistory = previousResponses.map(msg => ({
-      author: msg.role_id ? 'assistant' : 'user',
-      message: msg.content,
-      timestamp: new Date(msg.created_at).getTime(),
-      metadata: {
-        role_id: msg.role_id,
-        thread_id: msg.thread_id,
-      }
-    }));
-
-    // Add current message to history
-    conversationHistory.push({
-      author: 'user',
-      message: content,
-      timestamp: Date.now(),
-      metadata: {
-        role_id: roleId,
-      }
-    });
-
-    // First, store the conversation
-    await storeConversationHistory(mind, conversationHistory, roleId);
-
-    // Then, get direct context for the current message
-    console.log('Retrieving direct context for:', content);
-    const knowledgeResponse = await mind.ask(content);
-    const directContext = knowledgeResponse?.relevantMemories || [];
-    
-    // Get context from previous message if this is a follow-up
-    let followUpContext: string[] = [];
-    if (previousResponses.length > 0) {
-      const lastMessage = previousResponses[previousResponses.length - 1];
-      console.log('Retrieving follow-up context for:', lastMessage.content);
-      const followUpResponse = await mind.ask(
-        `Context about: ${lastMessage.content}`
-      );
-      followUpContext = followUpResponse?.relevantMemories || [];
-    }
-
-    // Combine and deduplicate contexts
-    const allContext = [...new Set([...directContext, ...followUpContext])];
-    
-    console.log('Enriched message context:', {
-      directContextCount: directContext.length,
-      followUpContextCount: followUpContext.length,
-      totalUniqueContext: allContext.length
-    });
-
-    return allContext.join('\n');
-  } catch (error) {
-    console.error('Error enriching message context:', error);
-    return '';
-  }
+interface ProcessedMessage {
+  content: string;
+  analyzedPoints: {
+    keyPoints: Array<{
+      topic: string;
+      point: string;
+      madeBy: string;
+      needsInputFrom: string[];
+    }>;
+    requiresExpertise: string[];
+    addressedPoints: string[];
+  };
+  topicMap: {
+    mainTopic: string | null;
+    subTopics: string[];
+    coverage: Record<string, string[]>;
+    pendingAspects: string[];
+  };
+  interactionContext: {
+    responseRequirements: string[];
+    expertiseFocus: string[];
+    referencedPoints: string[];
+  };
 }
 
 export async function processMessage(
-  openai: OpenAI,
   supabase: SupabaseClient,
-  threadId: string,
-  roleId: string,
-  userMessage: any,
-  previousResponses: Message[],
-  responseOrder: number = 1,
-  totalResponders: number = 1,
-  relevanceScore: number = 1.0,
-  matchingDomains: string[] = []
-) {
-  console.log('Processing message for role:', roleId);
+  openai: OpenAI,
+  messageId: string,
+  content: string,
+  roleId: string | null,
+  threadId: string
+): Promise<ProcessedMessage> {
+  console.log('Processing message:', { messageId, roleId, threadId });
 
   try {
-    // Get role mind
-    const { data: roleMind } = await supabase
-      .from('role_minds')
-      .select('mind_id, status')
-      .eq('role_id', roleId)
-      .eq('status', 'active')
-      .single();
+    // Get conversation context
+    const { data: context, error: contextError } = await supabase
+      .from('messages')
+      .select(`
+        content,
+        analyzed_points,
+        topic_map,
+        interaction_context,
+        role:roles (
+          name,
+          expertise_areas
+        )
+      `)
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: false })
+      .limit(5);
 
-    if (!roleMind?.mind_id) {
-      console.log('No active mind found for role:', roleId);
-    } else {
-      console.log('Found mind for role:', roleMind.mind_id);
-    }
+    if (contextError) throw contextError;
 
-    // Check message depth before processing
-    const currentDepth = userMessage.depth_level || 0;
-    if (currentDepth >= 9) {
-      console.log('Maximum conversation depth reached');
-      return null;
-    }
+    // Format context for analysis
+    const contextString = context?.map(msg => {
+      const roleName = msg.role?.name || 'User';
+      const expertise = msg.role?.expertise_areas?.join(', ');
+      return `${roleName}${expertise ? ` (${expertise})` : ''}: ${msg.content}`;
+    }).join('\n\n');
 
-    // Get role details
-    const { data: role, error: roleError } = await supabase
-      .from('roles')
-      .select('*')
-      .eq('id', roleId)
-      .single();
-
-    if (roleError) throw roleError;
-    if (!role) throw new Error('Role not found');
-
-    // Get next responding role
-    const nextRole = await getNextRespondingRole(
-      supabase,
-      threadId,
-      previousResponses[previousResponses.length - 1]?.role_id || null
-    );
-
-    // Analyze message topic
-    const topicAnalysis = await analyzeMessageTopic(userMessage.content);
-
-    // Format conversation history with enhanced metadata
-    const conversationHistory = previousResponses.map(msg => ({
-      author: msg.role_id ? 'assistant' : 'user',
-      message: msg.content,
-      timestamp: new Date(msg.created_at).getTime(),
-      metadata: {
-        role_id: msg.role_id,
-        role_name: msg.role?.name,
-        expertise: msg.role?.expertise_areas,
-        topic_classification: topicAnalysis,
-        interaction_depth: msg.depth_level || 0
-      }
-    }));
-
-    // Add current message
-    conversationHistory.push({
-      author: 'user',
-      message: userMessage.content,
-      timestamp: Date.now(),
-      metadata: { 
-        thread_id: threadId,
-        topic_classification: topicAnalysis
-      }
-    });
-
-    // Get enriched context from mind if available
-    let mindContext = '';
-    if (roleMind?.mind_id) {
-      try {
-        const mind = await llongtermClient.getMind(roleMind.mind_id);
-        if (mind) {
-          mindContext = await enrichMessageWithContext(
-            mind,
-            userMessage.content,
-            previousResponses,
-            roleId
-          );
-          console.log('Retrieved enriched mind context:', mindContext ? 'Present' : 'None');
-        }
-      } catch (error) {
-        console.error('Error accessing mind:', error);
-      }
-    }
-
-    // Create enhanced system prompt with context
-    const conversationContext = await formatConversationHistory(previousResponses, role);
-    const systemPrompt = generateSystemPrompt(
-      role,
-      conversationContext,
-      mindContext,
-      null,
-      responseOrder,
-      totalResponders,
-      nextRole,
-      relevanceScore,
-      matchingDomains,
-      userMessage.content
-    );
-
-    console.log('Generated system prompt:', systemPrompt);
-
-    // Generate response
+    // Analyze message content
     const completion = await openai.chat.completions.create({
-      model: role.model || 'gpt-4o-mini',
+      model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage.content }
+        {
+          role: 'system',
+          content: `Analyze this message in the context of the conversation. Extract:
+1. Key points and their topics
+2. Required expertise for follow-up
+3. Points being addressed
+4. Main topic and subtopics
+5. Current coverage of different expertise areas
+6. Pending aspects that need addressing
+7. Required responses and expertise focus
+
+Previous context:
+${contextString}
+
+Provide analysis in a structured format.`
+        },
+        { role: 'user', content }
       ],
     });
 
-    const responseContent = completion.choices[0].message.content;
-    console.log('Generated response:', responseContent.substring(0, 100) + '...');
+    const analysis = completion.choices[0].message.content;
+    
+    // Parse the analysis into structured data
+    const processedMessage = parseAnalysis(analysis);
 
-    // Save response
-    const { data: savedMessage, error: saveError } = await supabase
+    // Store the processed data
+    const { error: updateError } = await supabase
       .from('messages')
-      .insert({
-        thread_id: threadId,
-        role_id: roleId,
-        responding_role_id: nextRole,
-        content: responseContent,
-        is_bot: true,
-        parent_message_id: userMessage.id,
-        depth_level: (userMessage.depth_level || 0) + 1,
-        chain_position: responseOrder,
-        metadata: {
-          response_quality: 1.0,
-          response_time: Date.now() - new Date(userMessage.created_at).getTime(),
-          role_performance: relevanceScore,
-          memory_context: {
-            mind_id: roleMind?.mind_id,
-            topic_classification: topicAnalysis
-          }
-        }
+      .update({
+        analyzed_points: processedMessage.analyzedPoints,
+        topic_map: processedMessage.topicMap,
+        interaction_context: processedMessage.interactionContext
       })
-      .select()
-      .single();
+      .eq('id', messageId);
 
-    if (saveError) throw saveError;
+    if (updateError) throw updateError;
 
-    // Store response in mind if available
-    if (roleMind?.mind_id && responseContent) {
-      try {
-        const mind = await llongtermClient.getMind(roleMind.mind_id);
-        if (mind) {
-          await mind.remember([{
-            author: 'assistant',
-            message: responseContent,
-            timestamp: Date.now(),
-            metadata: {
-              role_id: roleId,
-              thread_id: threadId,
-              parent_message_id: userMessage.id,
-              response_order: responseOrder,
-              topic_classification: topicAnalysis,
-              interaction_summary: {
-                roles_involved: [roleId, nextRole].filter(Boolean),
-                outcome: 'completed',
-                effectiveness: relevanceScore
-              }
-            }
-          }]);
-          console.log('Stored response in mind');
-        }
-      } catch (error) {
-        console.error('Error storing in mind:', error);
-      }
-    }
+    return processedMessage;
 
-    return responseContent;
   } catch (error) {
-    console.error('Error in processMessage:', error);
+    console.error('Error processing message:', error);
     throw error;
   }
+}
+
+function parseAnalysis(analysis: string): ProcessedMessage {
+  // Initialize default structure
+  const processedMessage: ProcessedMessage = {
+    content: '',
+    analyzedPoints: {
+      keyPoints: [],
+      requiresExpertise: [],
+      addressedPoints: []
+    },
+    topicMap: {
+      mainTopic: null,
+      subTopics: [],
+      coverage: {},
+      pendingAspects: []
+    },
+    interactionContext: {
+      responseRequirements: [],
+      expertiseFocus: [],
+      referencedPoints: []
+    }
+  };
+
+  try {
+    // Split analysis into sections
+    const sections = analysis.split('\n\n');
+    
+    sections.forEach(section => {
+      if (section.includes('Key Points:')) {
+        const points = section.split('\n').slice(1);
+        points.forEach(point => {
+          const [topic, content] = point.split(':').map(s => s.trim());
+          processedMessage.analyzedPoints.keyPoints.push({
+            topic,
+            point: content,
+            madeBy: 'unknown',
+            needsInputFrom: []
+          });
+        });
+      } else if (section.includes('Required Expertise:')) {
+        processedMessage.analyzedPoints.requiresExpertise = section
+          .split('\n')
+          .slice(1)
+          .map(s => s.trim());
+      } else if (section.includes('Topics:')) {
+        const [mainTopic, ...subTopics] = section
+          .split('\n')
+          .slice(1)
+          .map(s => s.trim());
+        processedMessage.topicMap.mainTopic = mainTopic;
+        processedMessage.topicMap.subTopics = subTopics;
+      }
+    });
+
+  } catch (error) {
+    console.error('Error parsing analysis:', error);
+  }
+
+  return processedMessage;
 }
