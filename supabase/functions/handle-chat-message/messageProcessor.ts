@@ -13,6 +13,7 @@ import {
   generateSystemPrompt 
 } from "./processors/conversationFormatter.ts";
 import { getNextRespondingRole } from "./processors/responseChainProcessor.ts";
+import { llongtermClient } from "./llongtermClient.ts";
 
 export async function processMessage(
   openai: OpenAI,
@@ -100,9 +101,11 @@ export async function processMessage(
     if (roleMind?.mind_id) {
       try {
         const mind = await llongtermClient.getMind(roleMind.mind_id);
-        const knowledgeResponse = await mind.ask(userMessage.content);
-        mindContext = knowledgeResponse.relevantMemories?.join('\n') || '';
-        console.log('Retrieved mind context:', mindContext ? 'Present' : 'None');
+        if (mind) {
+          const knowledgeResponse = await mind.ask(userMessage.content);
+          mindContext = knowledgeResponse?.relevantMemories?.join('\n') || '';
+          console.log('Retrieved mind context:', mindContext ? 'Present' : 'None');
+        }
       } catch (error) {
         console.error('Error accessing mind:', error);
       }
@@ -168,24 +171,26 @@ export async function processMessage(
     if (roleMind?.mind_id) {
       try {
         const mind = await llongtermClient.getMind(roleMind.mind_id);
-        await mind.remember([{
-          author: 'assistant',
-          message: responseContent,
-          timestamp: Date.now(),
-          metadata: {
-            role_id: roleId,
-            thread_id: threadId,
-            parent_message_id: userMessage.id,
-            response_order: responseOrder,
-            topic_classification: topicAnalysis,
-            interaction_summary: {
-              roles_involved: [roleId, nextRole].filter(Boolean),
-              outcome: 'completed',
-              effectiveness: relevanceScore
+        if (mind) {
+          await mind.remember([{
+            author: 'assistant',
+            message: responseContent,
+            timestamp: Date.now(),
+            metadata: {
+              role_id: roleId,
+              thread_id: threadId,
+              parent_message_id: userMessage.id,
+              response_order: responseOrder,
+              topic_classification: topicAnalysis,
+              interaction_summary: {
+                roles_involved: [roleId, nextRole].filter(Boolean),
+                outcome: 'completed',
+                effectiveness: relevanceScore
+              }
             }
-          }
-        }]);
-        console.log('Stored response in mind');
+          }]);
+          console.log('Stored response in mind');
+        }
       } catch (error) {
         console.error('Error storing in mind:', error);
       }
@@ -197,4 +202,3 @@ export async function processMessage(
     throw error;
   }
 }
-
