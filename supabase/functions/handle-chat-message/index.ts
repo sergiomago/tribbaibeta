@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -37,11 +38,17 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // Get all roles in the chain with their details
+    // Get all roles in the chain with their details and minds
     const chainRoles = await Promise.all(chain.map(async ({ role_id }, index) => {
-      const { data: role, error: roleError } = await supabase
+      const { data: roleData, error: roleError } = await supabase
         .from('roles')
-        .select('*')
+        .select(`
+          *,
+          mind:role_minds!inner(
+            mind_id,
+            status
+          )
+        `)
         .eq('id', role_id)
         .single();
       
@@ -50,31 +57,18 @@ serve(async (req) => {
         throw roleError;
       }
       
-      return { ...role, position: index + 1 };
+      return { ...roleData, position: index + 1 };
     }));
 
-    console.log('Chain roles:', chainRoles);
+    console.log('Chain roles with minds:', chainRoles);
 
     // Process responses sequentially
     for (const [index, { role_id }] of chain.entries()) {
       try {
         const currentRole = chainRoles[index];
-        if (!currentRole) {
-          console.error(`Role ${role_id} not found in chain roles`);
+        if (!currentRole?.mind?.mind_id) {
+          console.error(`No active mind found for role ${role_id}`);
           continue;
-        }
-
-        // Get role's mind
-        const { data: mindData, error: mindError } = await supabase
-          .from('role_minds')
-          .select('*')
-          .eq('role_id', role_id)
-          .eq('status', 'active')
-          .single();
-
-        if (mindError || !mindData) {
-          console.error(`Error fetching mind for role ${role_id}:`, mindError);
-          throw new Error(`No active mind found for role ${role_id}`);
         }
 
         // Get conversation history
@@ -94,7 +88,7 @@ serve(async (req) => {
 
         if (historyError) throw historyError;
 
-        // Format conversation history for mind
+        // Format conversation history
         const conversationThread = history?.map(msg => ({
           role: msg.role ? 'assistant' : 'user',
           content: msg.content,
@@ -102,55 +96,59 @@ serve(async (req) => {
           expertise: msg.role?.expertise_areas
         })) || [];
 
-        // Use mind to enrich context
-        const enrichedContext = await mindData.remember({
-          thread: conversationThread,
-          content,
-          metadata: {
-            role_name: currentRole.name,
-            expertise_areas: currentRole.expertise_areas,
-            thread_id: threadId
-          }
-        });
+        // Build memory context
+        const memoryContext = await buildMemoryContext(
+          supabase,
+          openai,
+          threadId,
+          role_id,
+          content
+        );
 
-        // Generate response using enriched context
+        // Create completion with memory context
         const completion = await openai.chat.completions.create({
           model: currentRole.model || 'gpt-4o-mini',
           messages: [
             { 
               role: 'system', 
               content: `You are ${currentRole.name}, an expert in ${currentRole.expertise_areas?.join(', ')}.
-                ${enrichedContext.systemContext}
+                ${memoryContext.systemContext || ''}
                 
                 Your role instructions:
                 ${currentRole.instructions}
                 
+                Previous context and memories:
+                ${memoryContext.enrichedMessage || ''}
+                
                 Guidelines:
-                1. Use the provided context to maintain conversation continuity
+                1. Use the provided context and memories to maintain conversation continuity
                 2. Stay within your expertise areas
                 3. Be natural and conversational
-                4. Acknowledge and build upon previous points`
+                4. Acknowledge and build upon previous points from memory`
             },
-            { role: 'user', content: enrichedContext.enrichedMessage || content }
+            ...conversationThread.map(msg => ({
+              role: msg.role as 'user' | 'assistant',
+              content: msg.content
+            })),
+            { role: 'user', content }
           ],
         });
 
         const responseContent = completion.choices[0].message.content;
         console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-        // Store response
+        // Store response in database
         const { data: savedMessage, error: responseError } = await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: role_id,
             content: responseContent,
-            chain_id: chain[0].role_id,
             chain_position: index + 1,
             conversation_context: {
-              enriched_context: enrichedContext,
-              role_expertise: currentRole.expertise_areas,
-              chain_position: index + 1
+              memory_context: memoryContext,
+              depth_level: conversationThread.length,
+              role_expertise: currentRole.expertise_areas
             }
           })
           .select()
@@ -161,14 +159,15 @@ serve(async (req) => {
           throw responseError;
         }
 
-        // Store interaction in mind
-        await mindData.remember({
-          thread: [
-            { role: 'user', content },
-            { role: 'assistant', content: responseContent }
-          ],
+        // Update role's memory
+        await updateMemoryForRole(supabase, role_id, {
+          thread_id: threadId,
+          content: responseContent,
+          user_message: content,
+          context_type: 'conversation',
           metadata: {
-            thread_id: threadId,
+            timestamp: new Date().toISOString(),
+            conversation_depth: conversationThread.length,
             chain_position: index + 1,
             interaction_type: taggedRoleId ? 'direct_response' : 'chain_response'
           }
@@ -199,3 +198,37 @@ serve(async (req) => {
     );
   }
 });
+
+async function updateMemoryForRole(
+  supabase: any,
+  roleId: string,
+  memory: {
+    thread_id: string;
+    content: string;
+    user_message: string;
+    context_type: string;
+    metadata: Record<string, any>;
+  }
+) {
+  try {
+    const { error } = await supabase
+      .from('role_memories')
+      .insert({
+        role_id: roleId,
+        content: memory.content,
+        context_type: memory.context_type,
+        metadata: memory.metadata,
+        conversation_context: {
+          user_message: memory.user_message,
+          thread_id: memory.thread_id,
+          created_at: new Date().toISOString()
+        }
+      });
+
+    if (error) throw error;
+    console.log(`Memory stored for role ${roleId}`);
+  } catch (error) {
+    console.error('Error storing memory:', error);
+    throw error;
+  }
+}
