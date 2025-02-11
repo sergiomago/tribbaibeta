@@ -29,6 +29,20 @@ export async function processMessage(
   console.log('Processing message for role:', roleId);
 
   try {
+    // Get role mind
+    const { data: roleMind } = await supabase
+      .from('role_minds')
+      .select('mind_id, status')
+      .eq('role_id', roleId)
+      .eq('status', 'active')
+      .single();
+
+    if (!roleMind?.mind_id) {
+      console.log('No active mind found for role:', roleId);
+    } else {
+      console.log('Found mind for role:', roleMind.mind_id);
+    }
+
     // Check message depth before processing
     const currentDepth = userMessage.depth_level || 0;
     if (currentDepth >= 9) {
@@ -81,26 +95,26 @@ export async function processMessage(
       }
     });
 
-    // Handle memory operations
-    const { mind, memoryResponse, knowledgeResponse } = await handleMemoryOperations(
-      supabase,
-      roleId,
-      userMessage.content,
-      conversationHistory,
-      topicAnalysis
-    );
+    // Get context from mind if available
+    let mindContext = '';
+    if (roleMind?.mind_id) {
+      try {
+        const mind = await llongtermClient.getMind(roleMind.mind_id);
+        const knowledgeResponse = await mind.ask(userMessage.content);
+        mindContext = knowledgeResponse.relevantMemories?.join('\n') || '';
+        console.log('Retrieved mind context:', mindContext ? 'Present' : 'None');
+      } catch (error) {
+        console.error('Error accessing mind:', error);
+      }
+    }
 
     // Create enhanced system prompt with context
     const conversationContext = await formatConversationHistory(previousResponses, role);
-    const memoryContext = knowledgeResponse?.relevantMemories
-      ?.filter(memory => memory.includes(userMessage.content.substring(0, 10)))
-      ?.join('\n') || '';
-
     const systemPrompt = generateSystemPrompt(
       role,
       conversationContext,
-      memoryContext,
-      knowledgeResponse,
+      mindContext,
+      null,
       responseOrder,
       totalResponders,
       nextRole,
@@ -123,7 +137,7 @@ export async function processMessage(
     const responseContent = completion.choices[0].message.content;
     console.log('Generated response:', responseContent.substring(0, 100) + '...');
 
-    // Save response with updated fields
+    // Save response
     const { data: savedMessage, error: saveError } = await supabase
       .from('messages')
       .insert({
@@ -140,9 +154,7 @@ export async function processMessage(
           response_time: Date.now() - new Date(userMessage.created_at).getTime(),
           role_performance: relevanceScore,
           memory_context: {
-            used_memories: knowledgeResponse?.relevantMemories || [],
-            memory_id: memoryResponse?.memoryId,
-            context_summary: memoryResponse?.summary,
+            mind_id: roleMind?.mind_id,
             topic_classification: topicAnalysis
           }
         }
@@ -152,11 +164,10 @@ export async function processMessage(
 
     if (saveError) throw saveError;
 
-    // Store the response in memory with enhanced metadata
-    if (mind) {
+    // Store response in mind if available
+    if (roleMind?.mind_id) {
       try {
-        const responseTopicAnalysis = await analyzeMessageTopic(responseContent);
-        
+        const mind = await llongtermClient.getMind(roleMind.mind_id);
         await mind.remember([{
           author: 'assistant',
           message: responseContent,
@@ -166,7 +177,7 @@ export async function processMessage(
             thread_id: threadId,
             parent_message_id: userMessage.id,
             response_order: responseOrder,
-            topic_classification: responseTopicAnalysis,
+            topic_classification: topicAnalysis,
             interaction_summary: {
               roles_involved: [roleId, nextRole].filter(Boolean),
               outcome: 'completed',
@@ -174,8 +185,9 @@ export async function processMessage(
             }
           }
         }]);
+        console.log('Stored response in mind');
       } catch (error) {
-        console.error('Error storing response in memory:', error);
+        console.error('Error storing in mind:', error);
       }
     }
 
@@ -185,3 +197,4 @@ export async function processMessage(
     throw error;
   }
 }
+
