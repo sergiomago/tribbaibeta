@@ -24,9 +24,10 @@ export async function calculateMemorySignificance(
   timestamp: number
 ): Promise<number> {
   const now = Date.now();
-  const timeDiff = (now - timestamp) / (24 * 60 * 60 * 1000);
-  const timeFactor = Math.exp(-timeDiff / 30);
+  const timeDiff = (now - timestamp) / (24 * 60 * 60 * 1000); // Convert to days
+  const timeFactor = Math.exp(-timeDiff / 30); // Decay over 30 days
   
+  // Weighted combination of factors
   return relevance * 0.4 + 
          Math.min(interactionCount / 10, 1) * 0.3 + 
          timeFactor * 0.3;
@@ -39,67 +40,61 @@ export async function handleMemoryOperations(
   conversationHistory: any[],
   topicAnalysis: any
 ) {
+  console.log('Starting memory operations for role:', roleId);
   let mind = null;
   let memoryResponse = null;
   let knowledgeResponse = null;
 
   try {
+    // Get or create mind
     mind = await llongtermClient.getMind(roleId);
     if (!mind) {
-      console.log('Creating new mind for role:', roleId);
-      
-      const { data: role } = await supabase
-        .from('roles')
-        .select('*')
-        .eq('id', roleId)
-        .single();
-      
-      mind = await llongtermClient.createMind({
-        specialism: role.name,
-        specialismDepth: 8,
-        metadata: {
-          roleId,
-          expertise: role.expertise_areas || [],
-          interaction: {
-            style: role.response_style || {},
-            preferences: role.interaction_preferences || {}
-          },
-          created: new Date().toISOString()
-        }
-      });
+      console.log('No mind found for role:', roleId);
+      return { mind: null, memoryResponse: null, knowledgeResponse: null };
     }
 
-    if (mind) {
+    console.log('Retrieved mind for role:', roleId);
+
+    // Store conversation in memory
+    if (conversationHistory.length > 0) {
       memoryResponse = await mind.remember(conversationHistory);
-      console.log('Memory response:', memoryResponse);
+      console.log('Memory storage response:', memoryResponse);
+    }
 
-      knowledgeResponse = await mind.ask(content);
-      console.log('Knowledge response:', knowledgeResponse);
+    // Query for relevant context
+    knowledgeResponse = await mind.ask(content);
+    console.log('Knowledge response:', knowledgeResponse);
 
-      const significance = await calculateMemorySignificance(
-        knowledgeResponse?.confidence || 0.5,
-        conversationHistory.length,
-        Date.now()
-      );
+    // Calculate memory significance
+    const significance = await calculateMemorySignificance(
+      knowledgeResponse?.confidence || 0.5,
+      conversationHistory.length,
+      Date.now()
+    );
 
-      if (memoryResponse?.memoryId) {
-        await supabase
-          .from('role_memories')
-          .update({
-            memory_significance: significance,
-            topic_classification: topicAnalysis,
-            interaction_summary: {
-              roles_involved: [roleId],
-              outcome: null,
-              effectiveness: 1.0
-            }
-          })
-          .eq('id', memoryResponse.memoryId);
+    // Update memory metadata if we have a memory ID
+    if (memoryResponse?.memoryId) {
+      const { error: updateError } = await supabase
+        .from('role_memories')
+        .update({
+          memory_significance: significance,
+          topic_classification: topicAnalysis,
+          interaction_summary: {
+            roles_involved: [roleId],
+            outcome: null,
+            effectiveness: 1.0
+          }
+        })
+        .eq('id', memoryResponse.memoryId);
+
+      if (updateError) {
+        console.error('Error updating memory metadata:', updateError);
       }
     }
-  } catch (error) {
-    console.error('Error with memory operations:', error);
-  }
 
-  return { mind, memoryResponse, knowledgeResponse };
+    return { mind, memoryResponse, knowledgeResponse };
+  } catch (error) {
+    console.error('Error in handleMemoryOperations:', error);
+    return { mind: null, memoryResponse: null, knowledgeResponse: null };
+  }
 }

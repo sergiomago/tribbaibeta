@@ -8,7 +8,11 @@ export async function formatConversationHistory(
   if (!messages.length) return '';
   
   return messages
-    .map(msg => `${msg.role_id ? msg.role?.name || 'Assistant' : 'User'}: ${msg.content}`)
+    .map(msg => {
+      const rolePrefix = msg.role_id ? msg.role?.name || 'Assistant' : 'User';
+      const confidenceInfo = msg.confidence_score ? ` (Confidence: ${msg.confidence_score.toFixed(2)})` : '';
+      return `${rolePrefix}: ${msg.content}${confidenceInfo}`;
+    })
     .join('\n');
 }
 
@@ -33,6 +37,11 @@ export function generateSystemPrompt(
   matchingDomains: string[],
   userMessage: string
 ): string {
+  // Format memory confidence if available
+  const memoryConfidence = knowledgeResponse?.confidence 
+    ? `(Confidence: ${(knowledgeResponse.confidence * 100).toFixed(1)}%)`
+    : '(No confidence score available)';
+
   return `You are ${role.name}, a specialized AI role in a collaborative team discussion.
 
 ROLE CONTEXT AND EXPERTISE:
@@ -42,7 +51,7 @@ ${role.instructions || ''}
 CONVERSATION HISTORY:
 ${conversationContext}
 
-${memoryContext ? `RELEVANT MEMORIES (Confidence: ${knowledgeResponse?.confidence || 'N/A'}):
+${memoryContext ? `RELEVANT MEMORIES ${memoryConfidence}:
 ${memoryContext}` : ''}
 
 RESPONSE POSITION AND RELEVANCE:

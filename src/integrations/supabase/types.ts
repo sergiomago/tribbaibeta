@@ -214,14 +214,21 @@ export type Database = {
         Row: {
           analyzed_intent: Json | null
           chain_position: number | null
+          confidence_score: number | null
           content: string
+          context_chain: string[] | null
+          context_summary: string | null
+          context_type: string | null
           conversation_context: Json | null
           created_at: string
           depth_level: number | null
           id: string
           is_bot: boolean | null
+          memory_context: Json | null
+          memory_id: string | null
           metadata: Json | null
           parent_message_id: string | null
+          relevance_score: number | null
           responding_role_id: string | null
           response_order: number | null
           response_to_id: string | null
@@ -233,14 +240,21 @@ export type Database = {
         Insert: {
           analyzed_intent?: Json | null
           chain_position?: number | null
+          confidence_score?: number | null
           content: string
+          context_chain?: string[] | null
+          context_summary?: string | null
+          context_type?: string | null
           conversation_context?: Json | null
           created_at?: string
           depth_level?: number | null
           id?: string
           is_bot?: boolean | null
+          memory_context?: Json | null
+          memory_id?: string | null
           metadata?: Json | null
           parent_message_id?: string | null
+          relevance_score?: number | null
           responding_role_id?: string | null
           response_order?: number | null
           response_to_id?: string | null
@@ -252,14 +266,21 @@ export type Database = {
         Update: {
           analyzed_intent?: Json | null
           chain_position?: number | null
+          confidence_score?: number | null
           content?: string
+          context_chain?: string[] | null
+          context_summary?: string | null
+          context_type?: string | null
           conversation_context?: Json | null
           created_at?: string
           depth_level?: number | null
           id?: string
           is_bot?: boolean | null
+          memory_context?: Json | null
+          memory_id?: string | null
           metadata?: Json | null
           parent_message_id?: string | null
+          relevance_score?: number | null
           responding_role_id?: string | null
           response_order?: number | null
           response_to_id?: string | null
