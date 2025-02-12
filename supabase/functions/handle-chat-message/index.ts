@@ -40,44 +40,93 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // First, create a Llongterm mind for the role if it doesn't exist
-    async function getOrCreateMind(roleId: string) {
-      const response = await fetch('https://api.llongterm.com/v1/minds', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${llongtermApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          specialism: 'AI Assistant',
-          metadata: {
-            roleId,
-            threadId,
-            created: new Date().toISOString()
-          }
-        })
-      });
+    // First check if a mind exists for the role, if not create the mind record first
+    async function getOrCreateMindId(roleId: string) {
+      const { data: existingMind } = await supabase
+        .from('role_minds')
+        .select('mind_id')
+        .eq('role_id', roleId)
+        .eq('status', 'active')
+        .maybeSingle();
 
-      if (!response.ok) {
-        throw new Error('Failed to create Llongterm mind');
+      if (existingMind?.mind_id) {
+        console.log('Using existing mind:', existingMind.mind_id);
+        return existingMind.mind_id;
       }
 
-      const { mindId } = await response.json();
-      
-      // Store the mind ID in our database
-      await supabase
+      // Create a new mind record first
+      const { data: mindRecord, error: mindError } = await supabase
         .from('role_minds')
-        .upsert({
+        .insert({
           role_id: roleId,
-          mind_id: mindId,
-          status: 'active',
-          metadata: {
-            threadId,
-            lastUsed: new Date().toISOString()
-          }
+          mind_id: 'pending',
+          status: 'processing'
+        })
+        .select()
+        .single();
+
+      if (mindError) {
+        console.error('Failed to create mind record:', mindError);
+        throw new Error('Failed to create mind record');
+      }
+
+      // Now create the actual mind in Llongterm
+      try {
+        console.log('Creating new Llongterm mind for role:', roleId);
+        const response = await fetch('https://api.llongterm.com/v1/minds', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${llongtermApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            specialism: 'AI Assistant',
+            metadata: {
+              roleId,
+              threadId,
+              created: new Date().toISOString()
+            }
+          })
         });
 
-      return mindId;
+        if (!response.ok) {
+          throw new Error(`Llongterm API error: ${response.statusText}`);
+        }
+
+        const mindData = await response.json();
+        console.log('Mind created successfully:', mindData);
+
+        // Update the mind record with the actual mind ID
+        const { error: updateError } = await supabase
+          .from('role_minds')
+          .update({
+            mind_id: mindData.mindId,
+            status: 'active',
+            metadata: {
+              created_at: new Date().toISOString(),
+              threadId
+            }
+          })
+          .eq('id', mindRecord.id);
+
+        if (updateError) {
+          console.error('Failed to update mind record:', updateError);
+          throw new Error('Failed to update mind record');
+        }
+
+        return mindData.mindId;
+      } catch (error) {
+        console.error('Error creating Llongterm mind:', error);
+        // Update the mind record to failed state
+        await supabase
+          .from('role_minds')
+          .update({
+            status: 'failed',
+            error_message: error.message
+          })
+          .eq('id', mindRecord.id);
+        throw error;
+      }
     }
 
     // If a role is tagged, only that role responds
@@ -91,7 +140,8 @@ serve(async (req) => {
       if (!role) throw new Error('Tagged role not found');
 
       // Get or create mind for this role
-      const mindId = await getOrCreateMind(taggedRoleId);
+      const mindId = await getOrCreateMindId(taggedRoleId);
+      console.log('Using mind:', mindId);
 
       // Store the message in Llongterm
       const memoryResponse = await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
@@ -190,7 +240,8 @@ serve(async (req) => {
         }
 
         // Get or create mind for this role
-        const mindId = await getOrCreateMind(role_id);
+        const mindId = await getOrCreateMindId(role_id);
+        console.log('Using mind for chain response:', mindId);
 
         // Store user message in Llongterm for this role
         await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
