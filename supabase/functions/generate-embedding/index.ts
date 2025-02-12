@@ -1,7 +1,6 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY');
 
@@ -45,6 +44,12 @@ serve(async (req) => {
     });
 
     if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Llongterm API error:', {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorData
+      });
       throw new Error(`API error: ${response.statusText}`);
     }
 
