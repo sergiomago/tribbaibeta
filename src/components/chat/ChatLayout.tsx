@@ -4,9 +4,9 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import { ChatSidebar } from "./ChatSidebar";
-import { RoleManagementBar } from "./RoleManagementBar";
-import { ChatInput } from "./ChatInput";
+import { ChatSidebar } from "@/components/chat/ChatSidebar";
+import { RoleManagementBar } from "@/components/chat/RoleManagementBar";
+import { ChatInput } from "@/components/chat/ChatInput";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
