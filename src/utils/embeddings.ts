@@ -1,24 +1,16 @@
+
+import { supabase } from '@/integrations/supabase/client';
+
 export async function createEmbedding(text: string): Promise<number[]> {
   try {
-    const response = await fetch('https://api.llongterm.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.LLONGTERM_API_KEY}`
-      },
-      body: JSON.stringify({
-        input: text,
-        model: "text-embedding-ada-002",
-        encoding_format: "float"
-      })
+    const { data, error } = await supabase.functions.invoke('generate-embedding', {
+      body: { text }
     });
 
-    if (!response.ok) {
-      throw new Error(`API error: ${response.statusText}`);
-    }
+    if (error) throw error;
+    if (!data?.embedding) throw new Error('No embedding returned');
 
-    const { data } = await response.json();
-    return data[0].embedding;
+    return data.embedding;
   } catch (error) {
     console.error('Error creating embedding:', error);
     throw error;

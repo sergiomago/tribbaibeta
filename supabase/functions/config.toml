@@ -1,3 +1,4 @@
+
 project_id = "wdffpyeesafsejfmzwvi"
 
 [create-checkout-session.http]
@@ -10,4 +11,7 @@ port = 54321
 port = 54321
 
 [create-role-mind.http]
+port = 54321
+
+[generate-embedding.http]
 port = 54321
