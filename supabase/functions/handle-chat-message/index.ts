@@ -177,7 +177,7 @@ serve(async (req) => {
         );
 
         const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
+          model: 'gpt-4', // Use standard model name
           messages: [
             { 
               role: 'system', 
@@ -275,7 +275,7 @@ serve(async (req) => {
           : enrichedMessage;
 
         const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
+          model: 'gpt-4', // Use standard model name
           messages: [
             { 
               role: 'system', 
