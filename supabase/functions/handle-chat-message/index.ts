@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
@@ -40,39 +39,55 @@ serve(async (req) => {
       throw new Error('Missing required fields: threadId and content are required');
     }
 
-    // First check if a mind exists for the role, if not create the mind record first
     async function getOrCreateMindId(roleId: string) {
-      const { data: existingMind } = await supabase
-        .from('role_minds')
-        .select('mind_id')
-        .eq('role_id', roleId)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (existingMind?.mind_id) {
-        console.log('Using existing mind:', existingMind.mind_id);
-        return existingMind.mind_id;
-      }
-
-      // Create a new mind record first
-      const { data: mindRecord, error: mindError } = await supabase
-        .from('role_minds')
-        .insert({
-          role_id: roleId,
-          mind_id: 'pending',
-          status: 'processing'
-        })
-        .select()
-        .single();
-
-      if (mindError) {
-        console.error('Failed to create mind record:', mindError);
-        throw new Error('Failed to create mind record');
-      }
-
-      // Now create the actual mind in Llongterm
       try {
-        console.log('Creating new Llongterm mind for role:', roleId);
+        // First check for existing mind
+        const { data: existingMind } = await supabase
+          .from('role_minds')
+          .select('mind_id, status')
+          .eq('role_id', roleId)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        if (existingMind?.mind_id) {
+          console.log('Using existing mind:', existingMind.mind_id);
+          return existingMind.mind_id;
+        }
+
+        // Handle any existing non-active mind record
+        await supabase
+          .from('role_minds')
+          .update({ status: 'deleted' })
+          .eq('role_id', roleId)
+          .neq('status', 'active');
+
+        // Create a new mind record
+        const { data: mindRecord, error: insertError } = await supabase
+          .from('role_minds')
+          .insert({
+            role_id: roleId,
+            mind_id: 'pending',
+            status: 'processing',
+            metadata: {
+              created_at: new Date().toISOString(),
+              threadId
+            }
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Failed to create mind record:', insertError);
+          throw new Error(`Failed to create mind record: ${insertError.message}`);
+        }
+
+        if (!mindRecord) {
+          throw new Error('Mind record creation returned no data');
+        }
+
+        console.log('Created mind record:', mindRecord);
+
+        // Create the mind in Llongterm
         const response = await fetch('https://api.llongterm.com/v1/minds', {
           method: 'POST',
           headers: {
@@ -90,11 +105,12 @@ serve(async (req) => {
         });
 
         if (!response.ok) {
-          throw new Error(`Llongterm API error: ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`Llongterm API error: ${response.statusText}. ${errorText}`);
         }
 
         const mindData = await response.json();
-        console.log('Mind created successfully:', mindData);
+        console.log('Mind created in Llongterm:', mindData);
 
         // Update the mind record with the actual mind ID
         const { error: updateError } = await supabase
@@ -102,29 +118,26 @@ serve(async (req) => {
           .update({
             mind_id: mindData.mindId,
             status: 'active',
-            metadata: {
-              created_at: new Date().toISOString(),
-              threadId
-            }
+            updated_at: new Date().toISOString()
           })
           .eq('id', mindRecord.id);
 
         if (updateError) {
           console.error('Failed to update mind record:', updateError);
-          throw new Error('Failed to update mind record');
+          throw new Error(`Failed to update mind record: ${updateError.message}`);
         }
 
         return mindData.mindId;
       } catch (error) {
-        console.error('Error creating Llongterm mind:', error);
-        // Update the mind record to failed state
-        await supabase
-          .from('role_minds')
-          .update({
-            status: 'failed',
-            error_message: error.message
-          })
-          .eq('id', mindRecord.id);
+        console.error('Error in getOrCreateMindId:', error);
+        // Update the mind record to failed state if it exists
+        if (error.message.includes('mind record')) {
+          await supabase.rpc('update_mind_status', {
+            p_role_id: roleId,
+            p_status: 'failed',
+            p_error_message: error.message
+          });
+        }
         throw error;
       }
     }
