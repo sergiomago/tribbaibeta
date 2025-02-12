@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import { buildMemoryContext } from "./memoryContextBuilder.ts";
+import Llongterm from "https://esm.sh/llongterm@latest";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -32,6 +33,9 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
+    const llongterm = new Llongterm({
+      keys: { llongterm: llongtermApiKey }
+    });
     
     const { threadId, content, chain, taggedRoleId } = await req.json();
     console.log('Processing message:', { threadId, content, chain, taggedRoleId });
@@ -68,7 +72,7 @@ serve(async (req) => {
           .insert({
             role_id: roleId,
             mind_id: 'pending',
-            status: 'creating', // Changed from 'processing' to 'creating'
+            status: 'creating',
             metadata: {
               created_at: new Date().toISOString(),
               threadId
@@ -88,57 +92,47 @@ serve(async (req) => {
 
         console.log('Created mind record:', mindRecord);
 
-        // Create the mind in Llongterm
-        const response = await fetch('https://api.llongterm.com/v1/minds', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${llongtermApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
+        // Create the mind using the Llongterm client
+        try {
+          const mind = await llongterm.create({
             specialism: 'AI Assistant',
             metadata: {
               roleId,
               threadId,
               created: new Date().toISOString()
             }
-          })
-        });
+          });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Llongterm API error: ${response.statusText}. ${errorText}`);
-        }
+          console.log('Mind created in Llongterm:', mind);
 
-        const mindData = await response.json();
-        console.log('Mind created in Llongterm:', mindData);
+          // Update the mind record with the actual mind ID
+          const { error: updateError } = await supabase
+            .from('role_minds')
+            .update({
+              mind_id: mind.id,
+              status: 'active',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', mindRecord.id);
 
-        // Update the mind record with the actual mind ID
-        const { error: updateError } = await supabase
-          .from('role_minds')
-          .update({
-            mind_id: mindData.mindId,
-            status: 'active',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', mindRecord.id);
+          if (updateError) {
+            console.error('Failed to update mind record:', updateError);
+            throw new Error(`Failed to update mind record: ${updateError.message}`);
+          }
 
-        if (updateError) {
-          console.error('Failed to update mind record:', updateError);
-          throw new Error(`Failed to update mind record: ${updateError.message}`);
-        }
-
-        return mindData.mindId;
-      } catch (error) {
-        console.error('Error in getOrCreateMindId:', error);
-        // Update the mind record to failed state if it exists
-        if (error.message.includes('mind record')) {
+          return mind.id;
+        } catch (error) {
+          console.error('Error creating Llongterm mind:', error);
+          // Update the mind record to failed state
           await supabase.rpc('update_mind_status', {
             p_role_id: roleId,
             p_status: 'failed',
             p_error_message: error.message
           });
+          throw error;
         }
+      } catch (error) {
+        console.error('Error in getOrCreateMindId:', error);
         throw error;
       }
     }
@@ -157,26 +151,18 @@ serve(async (req) => {
       const mindId = await getOrCreateMindId(taggedRoleId);
       console.log('Using mind:', mindId);
 
-      // Store the message in Llongterm
-      const memoryResponse = await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${llongtermApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          content,
-          metadata: {
-            threadId,
-            timestamp: new Date().toISOString(),
-            type: 'user_message'
-          }
-        })
-      });
+      const mind = await llongterm.get(mindId);
 
-      if (!memoryResponse.ok) {
-        console.error('Failed to store memory in Llongterm');
-      }
+      // Store the message in Llongterm
+      await mind.remember([{
+        author: 'user',
+        message: content,
+        metadata: {
+          threadId,
+          timestamp: new Date().toISOString(),
+          type: 'user_message'
+        }
+      }]);
 
       // Get memory context
       const { enrichedMessage, systemContext } = await buildMemoryContext(
@@ -216,21 +202,15 @@ serve(async (req) => {
         });
 
       // Store AI response in Llongterm
-      await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${llongtermApiKey}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          content: responseContent,
-          metadata: {
-            threadId,
-            timestamp: new Date().toISOString(),
-            type: 'ai_response'
-          }
-        })
-      });
+      await mind.remember([{
+        author: 'assistant',
+        message: responseContent,
+        metadata: {
+          threadId,
+          timestamp: new Date().toISOString(),
+          type: 'ai_response'
+        }
+      }]);
 
       return new Response(
         JSON.stringify({ success: true }), 
@@ -257,23 +237,19 @@ serve(async (req) => {
         const mindId = await getOrCreateMindId(role_id);
         console.log('Using mind for chain response:', mindId);
 
+        const mind = await llongterm.get(mindId);
+
         // Store user message in Llongterm for this role
-        await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${llongtermApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            content,
-            metadata: {
-              threadId,
-              timestamp: new Date().toISOString(),
-              type: 'user_message',
-              chainPosition: index
-            }
-          })
-        });
+        await mind.remember([{
+          author: 'user',
+          message: content,
+          metadata: {
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'user_message',
+            chainPosition: index
+          }
+        }]);
 
         // Build context including previous responses in the chain
         const { enrichedMessage, systemContext } = await buildMemoryContext(
@@ -320,22 +296,16 @@ serve(async (req) => {
           });
 
         // Store AI response in Llongterm
-        await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${llongtermApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            content: responseContent,
-            metadata: {
-              threadId,
-              timestamp: new Date().toISOString(),
-              type: 'ai_response',
-              chainPosition: index + 1
-            }
-          })
-        });
+        await mind.remember([{
+          author: 'assistant',
+          message: responseContent,
+          metadata: {
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'ai_response',
+            chainPosition: index + 1
+          }
+        }]);
 
         // Add this response to the chain for next roles
         chainResponses.push({
