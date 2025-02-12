@@ -8,6 +8,7 @@ import { buildMemoryContext } from "./memoryContextBuilder.ts";
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,6 +28,7 @@ serve(async (req) => {
   try {
     if (!openAIApiKey) throw new Error('OpenAI API key is not configured');
     if (!supabaseUrl || !supabaseServiceKey) throw new Error('Supabase configuration is missing');
+    if (!llongtermApiKey) throw new Error('Llongterm API key is not configured');
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const openai = new OpenAI({ apiKey: openAIApiKey });
@@ -36,6 +38,46 @@ serve(async (req) => {
 
     if (!threadId || !content) {
       throw new Error('Missing required fields: threadId and content are required');
+    }
+
+    // First, create a Llongterm mind for the role if it doesn't exist
+    async function getOrCreateMind(roleId: string) {
+      const response = await fetch('https://api.llongterm.com/v1/minds', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${llongtermApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          specialism: 'AI Assistant',
+          metadata: {
+            roleId,
+            threadId,
+            created: new Date().toISOString()
+          }
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create Llongterm mind');
+      }
+
+      const { mindId } = await response.json();
+      
+      // Store the mind ID in our database
+      await supabase
+        .from('role_minds')
+        .upsert({
+          role_id: roleId,
+          mind_id: mindId,
+          status: 'active',
+          metadata: {
+            threadId,
+            lastUsed: new Date().toISOString()
+          }
+        });
+
+      return mindId;
     }
 
     // If a role is tagged, only that role responds
@@ -48,12 +90,38 @@ serve(async (req) => {
 
       if (!role) throw new Error('Tagged role not found');
 
+      // Get or create mind for this role
+      const mindId = await getOrCreateMind(taggedRoleId);
+
+      // Store the message in Llongterm
+      const memoryResponse = await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${llongtermApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content,
+          metadata: {
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'user_message'
+          }
+        })
+      });
+
+      if (!memoryResponse.ok) {
+        console.error('Failed to store memory in Llongterm');
+      }
+
+      // Get memory context
       const { enrichedMessage, systemContext } = await buildMemoryContext(
         supabase,
         openai,
         threadId,
         taggedRoleId,
-        content
+        content,
+        mindId
       );
 
       const completion = await openai.chat.completions.create({
@@ -69,27 +137,36 @@ serve(async (req) => {
 
       const responseContent = completion.choices[0].message.content;
 
+      // Store AI response
       await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
           role_id: taggedRoleId,
           content: responseContent,
-          chain_position: 1
-        });
-
-      await supabase
-        .from('role_memories')
-        .insert({
-          role_id: taggedRoleId,
-          content: responseContent,
-          context_type: 'conversation',
+          chain_position: 1,
           metadata: {
-            thread_id: threadId,
-            timestamp: new Date().toISOString(),
-            chain_position: 1
+            mindId,
+            hasMemoryContext: true
           }
         });
+
+      // Store AI response in Llongterm
+      await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${llongtermApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          content: responseContent,
+          metadata: {
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'ai_response'
+          }
+        })
+      });
 
       return new Response(
         JSON.stringify({ success: true }), 
@@ -112,13 +189,35 @@ serve(async (req) => {
           continue;
         }
 
+        // Get or create mind for this role
+        const mindId = await getOrCreateMind(role_id);
+
+        // Store user message in Llongterm for this role
+        await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${llongtermApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            content,
+            metadata: {
+              threadId,
+              timestamp: new Date().toISOString(),
+              type: 'user_message',
+              chainPosition: index
+            }
+          })
+        });
+
         // Build context including previous responses in the chain
         const { enrichedMessage, systemContext } = await buildMemoryContext(
           supabase,
           openai,
           threadId,
           role_id,
-          content
+          content,
+          mindId
         );
 
         // Add previous responses from the chain to the context
@@ -148,22 +247,30 @@ serve(async (req) => {
             thread_id: threadId,
             role_id: role_id,
             content: responseContent,
-            chain_position: index + 1
-          });
-
-        // Store memory
-        await supabase
-          .from('role_memories')
-          .insert({
-            role_id: role_id,
-            content: responseContent,
-            context_type: 'conversation',
+            chain_position: index + 1,
             metadata: {
-              thread_id: threadId,
-              timestamp: new Date().toISOString(),
-              chain_position: index + 1
+              mindId,
+              hasMemoryContext: true
             }
           });
+
+        // Store AI response in Llongterm
+        await fetch(`https://api.llongterm.com/v1/minds/${mindId}/memories`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${llongtermApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            content: responseContent,
+            metadata: {
+              threadId,
+              timestamp: new Date().toISOString(),
+              type: 'ai_response',
+              chainPosition: index + 1
+            }
+          })
+        });
 
         // Add this response to the chain for next roles
         chainResponses.push({
