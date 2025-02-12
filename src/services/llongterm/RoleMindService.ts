@@ -1,3 +1,4 @@
+
 import { supabase } from '@/lib/supabase';
 import { mindService } from './MindService';
 import type { CreateOptions, Mind } from 'llongterm';

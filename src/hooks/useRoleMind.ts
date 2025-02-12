@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Mind } from 'llongterm';
 import { roleMindService } from '@/services/llongterm/RoleMindService';
