@@ -1,17 +1,8 @@
 import { useState } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
-import { RoleSelectionDialog } from "./RoleSelectionDialog";
-
-interface RoleTagProps {
-  role: Tables<"roles">;
-  onRemove: (roleId: string) => void;
-}
 
 interface RoleManagementBarProps {
   threadId: string | null;
@@ -33,7 +24,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
         `)
         .eq("thread_id", threadId);
       if (error) throw error;
-      return data.map(tr => tr.role);
+      return data.map((tr) => tr.role);
     },
     enabled: !!threadId,
   });
@@ -43,7 +34,7 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
       if (!threadId) {
         throw new Error("No thread selected");
       }
-      
+
       const { error } = await supabase
         .from("thread_roles")
         .insert({
@@ -131,17 +122,5 @@ export function RoleManagementBar({ threadId }: RoleManagementBarProps) {
   );
 }
 
-function RoleTag({ role, onRemove }: RoleTagProps) {
-  return (
-    <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm">
-      <span className="font-medium text-primary">{role.name}</span>
-      <span className="text-xs text-gray-500">{role.tag}</span>
-      <button
-        className="ml-1 rounded-full hover:bg-primary/20 p-1"
-        onClick={() => onRemove(role.id)}
-      >
-        <X className="h-3 w-3 text-primary" />
-      </button>
-    </div>
-  );
-}
+import { RoleSelectionDialog } from "@/components/roles/RoleSelectionDialog";
+import { RoleTag } from "@/components/roles/RoleTag";
