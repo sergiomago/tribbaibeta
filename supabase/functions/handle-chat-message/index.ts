@@ -3,8 +3,8 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
-import { buildMemoryContext } from "./memoryContextBuilder.ts";
 import Llongterm from "https://esm.sh/llongterm@latest";
+import { buildMemoryContext } from "./memoryContextBuilder.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -59,14 +59,7 @@ serve(async (req) => {
           return existingMind.mind_id;
         }
 
-        // Handle any existing non-active mind record
-        await supabase
-          .from('role_minds')
-          .update({ status: 'deleted' })
-          .eq('role_id', roleId)
-          .neq('status', 'active');
-
-        // Create a new mind record
+        // Create a new mind record first
         const { data: mindRecord, error: insertError } = await supabase
           .from('role_minds')
           .insert({
@@ -116,19 +109,27 @@ serve(async (req) => {
             .eq('id', mindRecord.id);
 
           if (updateError) {
-            console.error('Failed to update mind record:', updateError);
-            throw new Error(`Failed to update mind record: ${updateError.message}`);
+            // If update fails, try to delete the mind to avoid orphaned minds
+            try {
+              await llongterm.delete(mind.id);
+            } catch (deleteError) {
+              console.error('Failed to delete mind after update error:', deleteError);
+            }
+            throw updateError;
           }
 
           return mind.id;
         } catch (error) {
-          console.error('Error creating Llongterm mind:', error);
           // Update the mind record to failed state
-          await supabase.rpc('update_mind_status', {
-            p_role_id: roleId,
-            p_status: 'failed',
-            p_error_message: error.message
-          });
+          await supabase
+            .from('role_minds')
+            .update({
+              status: 'failed',
+              error_message: error.message,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', mindRecord.id);
+          
           throw error;
         }
       } catch (error) {
@@ -147,75 +148,80 @@ serve(async (req) => {
 
       if (!role) throw new Error('Tagged role not found');
 
-      // Get or create mind for this role
-      const mindId = await getOrCreateMindId(taggedRoleId);
-      console.log('Using mind:', mindId);
+      try {
+        // Get or create mind for this role
+        const mindId = await getOrCreateMindId(taggedRoleId);
+        console.log('Using mind:', mindId);
 
-      const mind = await llongterm.get(mindId);
+        const mind = await llongterm.get(mindId);
 
-      // Store the message in Llongterm
-      await mind.remember([{
-        author: 'user',
-        message: content,
-        metadata: {
-          threadId,
-          timestamp: new Date().toISOString(),
-          type: 'user_message'
-        }
-      }]);
-
-      // Get memory context
-      const { enrichedMessage, systemContext } = await buildMemoryContext(
-        supabase,
-        openai,
-        threadId,
-        taggedRoleId,
-        content,
-        mindId
-      );
-
-      const completion = await openai.chat.completions.create({
-        model: role.model || 'gpt-4o-mini',
-        messages: [
-          { 
-            role: 'system', 
-            content: `${role.instructions}\n\n${systemContext}`
-          },
-          { role: 'user', content: enrichedMessage }
-        ],
-      });
-
-      const responseContent = completion.choices[0].message.content;
-
-      // Store AI response
-      await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          role_id: taggedRoleId,
-          content: responseContent,
-          chain_position: 1,
+        // Store the message in Llongterm
+        await mind.remember([{
+          author: 'user',
+          message: content,
           metadata: {
-            mindId,
-            hasMemoryContext: true
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'user_message'
           }
+        }]);
+
+        // Get memory context
+        const { enrichedMessage, systemContext } = await buildMemoryContext(
+          supabase,
+          openai,
+          threadId,
+          taggedRoleId,
+          content,
+          mindId
+        );
+
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: `${role.instructions}\n\n${systemContext}`
+            },
+            { role: 'user', content: enrichedMessage }
+          ],
         });
 
-      // Store AI response in Llongterm
-      await mind.remember([{
-        author: 'assistant',
-        message: responseContent,
-        metadata: {
-          threadId,
-          timestamp: new Date().toISOString(),
-          type: 'ai_response'
-        }
-      }]);
+        const responseContent = completion.choices[0].message.content;
 
-      return new Response(
-        JSON.stringify({ success: true }), 
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+        // Store AI response
+        await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: taggedRoleId,
+            content: responseContent,
+            chain_position: 1,
+            metadata: {
+              mindId,
+              hasMemoryContext: true
+            }
+          });
+
+        // Store AI response in Llongterm
+        await mind.remember([{
+          author: 'assistant',
+          message: responseContent,
+          metadata: {
+            threadId,
+            timestamp: new Date().toISOString(),
+            type: 'ai_response'
+          }
+        }]);
+
+        return new Response(
+          JSON.stringify({ success: true }), 
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      } catch (error) {
+        console.error('Error processing tagged role response:', error);
+        throw error;
+      }
     }
 
     // Process roles in order from the chain
