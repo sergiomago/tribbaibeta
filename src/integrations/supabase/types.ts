@@ -212,6 +212,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          analysis_result: Json | null
           analyzed_intent: Json | null
           chain_position: number | null
           confidence_score: number | null
@@ -238,6 +239,7 @@ export type Database = {
           thread_id: string
         }
         Insert: {
+          analysis_result?: Json | null
           analyzed_intent?: Json | null
           chain_position?: number | null
           confidence_score?: number | null
@@ -264,6 +266,7 @@ export type Database = {
           thread_id: string
         }
         Update: {
+          analysis_result?: Json | null
           analyzed_intent?: Json | null
           chain_position?: number | null
           confidence_score?: number | null
