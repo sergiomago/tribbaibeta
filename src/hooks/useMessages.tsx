@@ -1,13 +1,7 @@
-
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 import { Message } from "@/types";
-import { Database } from "@/integrations/supabase/types";
-
-type MessageResponse = Database['public']['Tables']['messages']['Row'] & {
-  role: Pick<Database['public']['Tables']['roles']['Row'], 'name' | 'tag' | 'special_capabilities'> | null;
-};
 
 export function useMessages(threadId: string | null) {
   const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
@@ -18,7 +12,7 @@ export function useMessages(threadId: string | null) {
         .from("messages")
         .select(`
           *,
-          role:roles(
+          role:roles!messages_role_id_fkey(
             name, 
             tag,
             special_capabilities
@@ -26,25 +20,8 @@ export function useMessages(threadId: string | null) {
         `)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
-      
       if (error) throw error;
-      
-      // Transform the response to match our Message type
-      return ((data || []) as unknown as Array<Database['public']['Tables']['messages']['Row'] & {
-        role: Pick<Database['public']['Tables']['roles']['Row'], 'name' | 'tag' | 'special_capabilities'> | null;
-      }>).map(msg => ({
-        id: msg.id,
-        thread_id: msg.thread_id,
-        role_id: msg.role_id,
-        content: msg.content,
-        created_at: msg.created_at,
-        tagged_role_id: msg.tagged_role_id,
-        role: msg.role ? {
-          name: msg.role.name,
-          tag: msg.role.tag,
-          special_capabilities: msg.role.special_capabilities
-        } : undefined
-      })) as Message[];
+      return data as Message[];
     },
     enabled: !!threadId,
   });
