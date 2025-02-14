@@ -1,17 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { Sparkles, MessageSquare, Zap } from "lucide-react";
-
 const Landing = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#2A2F3C] to-[#403E43]">
+  return <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#2A2F3C] to-[#403E43] my-0 bg-indigo-900 hover:bg-indigo-800 px-0 mx-0">
       {/* Logo Section */}
       <div className="pt-8 flex justify-center animate-fade-in">
-        <img 
-          src="/Logotribbai.png" 
-          alt="Tribbai Logo" 
-          className="w-32 h-32 object-contain hover:scale-105 transition-transform duration-300"
-        />
+        <img src="/Logotribbai.png" alt="Tribbai Logo" className="w-32 h-32 object-contain hover:scale-105 transition-transform duration-300" />
       </div>
 
       {/* Hero Section */}
@@ -41,19 +35,12 @@ const Landing = () => {
 
           <div className="flex gap-4 animate-in">
             <Link to="/signup">
-              <Button 
-                size="lg" 
-                className="bg-gradient-primary hover:opacity-90 text-white font-semibold hover:scale-105 transition-all duration-300"
-              >
+              <Button size="lg" className="bg-gradient-primary hover:opacity-90 text-white font-semibold hover:scale-105 transition-all duration-300">
                 Start Free Now
               </Button>
             </Link>
             <Link to="/login">
-              <Button 
-                size="lg" 
-                variant="outline" 
-                className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white hover:scale-105 transition-all duration-300"
-              >
+              <Button size="lg" variant="outline" className="border-white/20 bg-white/10 text-white hover:bg-white/20 hover:text-white hover:scale-105 transition-all duration-300">
                 Sign In
               </Button>
             </Link>
@@ -79,7 +66,9 @@ const Landing = () => {
           </div>
 
           {/* Start Conversations Card */}
-          <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{ animationDelay: "150ms" }}>
+          <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{
+          animationDelay: "150ms"
+        }}>
             <div className="w-12 h-12 rounded-full bg-primary-bright/20 flex items-center justify-center mb-6">
               <MessageSquare className="w-6 h-6 text-primary-bright" />
             </div>
@@ -90,7 +79,9 @@ const Landing = () => {
           </div>
 
           {/* Execute & Scale Card */}
-          <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{ animationDelay: "300ms" }}>
+          <div className="glass p-8 rounded-2xl transform hover:scale-105 transition-all duration-300 animate-in" style={{
+          animationDelay: "300ms"
+        }}>
             <div className="w-12 h-12 rounded-full bg-primary-bright/20 flex items-center justify-center mb-6">
               <Zap className="w-6 h-6 text-primary-bright" />
             </div>
@@ -101,8 +92,6 @@ const Landing = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Landing;
