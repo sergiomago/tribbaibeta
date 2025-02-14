@@ -5,16 +5,38 @@ import OpenAI from "https://esm.sh/openai@4.26.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Max-Age': '86400',
 };
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders
+    });
+  }
+
+  // Ensure the request is a POST
+  if (req.method !== 'POST') {
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }),
+      {
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 
   try {
+    // Check content type
+    const contentType = req.headers.get('content-type');
+    if (!contentType?.includes('application/json')) {
+      throw new Error('Content-Type must be application/json');
+    }
+
     const openai = new OpenAI({
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
@@ -23,7 +45,15 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY is not configured');
     }
 
-    let { type, name, description } = await req.json();
+    const body = await req.text();
+    let data;
+    try {
+      data = JSON.parse(body);
+    } catch (e) {
+      throw new Error('Invalid JSON body');
+    }
+
+    const { type, name, description } = data;
 
     // Input validation
     if (!type || !name) {
@@ -74,11 +104,11 @@ Format the response as a clear, cohesive set of instructions that flows naturall
     console.log('Sending request to OpenAI:', {
       type,
       name,
-      description: description?.substring(0, 100) + '...' // Log truncated description
+      description: description?.substring(0, 100) + '...'
     });
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Using the recommended fast and cheap model
+      model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       temperature: 0.7,
       max_tokens: type === 'instructions' ? 2000 : 100,
@@ -96,21 +126,29 @@ Format the response as a clear, cohesive set of instructions that flows naturall
       contentPreview: content.substring(0, 100) + '...'
     });
 
-    return new Response(JSON.stringify({ content }), {
-      headers: { 
+    const responseData = JSON.stringify({ content });
+    return new Response(responseData, {
+      status: 200,
+      headers: {
         ...corsHeaders,
         'Content-Type': 'application/json',
-      },
+        'Content-Length': responseData.length.toString()
+      }
     });
   } catch (error) {
     console.error('Error in generate-role-content:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: error instanceof Error ? error.stack : undefined
-      }), {
+    const errorResponse = JSON.stringify({
+      error: error.message,
+      details: error instanceof Error ? error.stack : undefined
+    });
+    
+    return new Response(errorResponse, {
       status: error.status || 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+        'Content-Length': errorResponse.length.toString()
+      }
     });
   }
 });
