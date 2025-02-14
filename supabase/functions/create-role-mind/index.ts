@@ -10,6 +10,7 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
+// Update API URL to use HTTPS explicitly
 const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
 
 serve(async (req) => {
@@ -85,56 +86,79 @@ serve(async (req) => {
       }
     }
 
-    console.log('Sending request to Llongterm API:', {
+    console.log('Preparing request to Llongterm API:', {
       url: `${LLONGTERM_API_URL}/minds`,
       options: createOptions
     })
 
-    // Create mind using Llongterm API
-    const response = await fetch(`${LLONGTERM_API_URL}/minds`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${llongtermApiKey}`,
-      },
-      body: JSON.stringify(createOptions),
-    })
-
-    if (!response.ok) {
-      const errorData = await response.text()
-      console.error('Llongterm API error response:', errorData)
-      throw new Error(`Llongterm API error: ${response.status} - ${errorData}`)
+    // Validate URL before making the request
+    try {
+      new URL(`${LLONGTERM_API_URL}/minds`)
+    } catch (e) {
+      throw new Error(`Invalid Llongterm API URL: ${LLONGTERM_API_URL}`)
     }
 
-    const mind = await response.json()
-    console.log('Successfully created mind:', mind)
+    // Add timeout to fetch request
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
-    // Update role_minds with success
-    const { error: updateError } = await supabase
-      .from('role_minds')
-      .update({
-        mind_id: mind.id,
-        status: 'active',
-        updated_at: new Date().toISOString(),
-        last_sync: new Date().toISOString(),
-        structured_memory: structuredMemory
+    try {
+      // Create mind using Llongterm API with timeout
+      const response = await fetch(`${LLONGTERM_API_URL}/minds`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${llongtermApiKey}`,
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(createOptions),
+        signal: controller.signal
       })
-      .eq('role_id', roleId)
 
-    if (updateError) {
-      console.error('Error updating role_minds:', updateError)
-      throw new Error(`Failed to update role_minds: ${updateError.message}`)
-    }
+      clearTimeout(timeout)
 
-    return new Response(
-      JSON.stringify({ success: true, mindId: mind.id }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        } 
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error('Llongterm API error response:', errorData)
+        throw new Error(`Llongterm API error: ${response.status} - ${errorData}`)
       }
-    )
+
+      const mind = await response.json()
+      console.log('Successfully created mind:', mind)
+
+      // Update role_minds with success
+      const { error: updateError } = await supabase
+        .from('role_minds')
+        .update({
+          mind_id: mind.id,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+          last_sync: new Date().toISOString(),
+          structured_memory: structuredMemory
+        })
+        .eq('role_id', roleId)
+
+      if (updateError) {
+        console.error('Error updating role_minds:', updateError)
+        throw new Error(`Failed to update role_minds: ${updateError.message}`)
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, mindId: mind.id }),
+        { 
+          headers: { 
+            ...corsHeaders,
+            'Content-Type': 'application/json'
+          } 
+        }
+      )
+    } catch (fetchError) {
+      clearTimeout(timeout)
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request to Llongterm API timed out after 30 seconds')
+      }
+      throw fetchError
+    }
 
   } catch (error) {
     console.error('Error creating mind:', error)
