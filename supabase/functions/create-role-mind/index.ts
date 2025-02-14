@@ -10,6 +10,7 @@ const corsHeaders = {
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
+const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -23,6 +24,10 @@ serve(async (req) => {
 
     if (!roleId) {
       throw new Error('Role ID is required')
+    }
+
+    if (!llongtermApiKey) {
+      throw new Error('LLONGTERM_API_KEY is not configured')
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -49,12 +54,6 @@ serve(async (req) => {
       throw new Error(`No pending mind record found for role: ${roleId}`)
     }
 
-    // Initialize Llongterm client
-    const llongtermClient = {
-      apiKey: llongtermApiKey,
-      baseURL: 'https://api.llongterm.ai/v1',
-    }
-
     // Create structured memory from role data
     const structuredMemory = {
       summary: role.description || '',
@@ -79,25 +78,36 @@ serve(async (req) => {
         userId: role.user_id,
         created: new Date().toISOString(),
       },
-      config: mindRecord.memory_configuration
+      config: mindRecord.memory_configuration || {
+        contextWindow: 10,
+        maxMemories: 100,
+        relevanceThreshold: 0.7
+      }
     }
 
+    console.log('Sending request to Llongterm API:', {
+      url: `${LLONGTERM_API_URL}/minds`,
+      options: createOptions
+    })
+
     // Create mind using Llongterm API
-    const response = await fetch(`${llongtermClient.baseURL}/minds`, {
+    const response = await fetch(`${LLONGTERM_API_URL}/minds`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${llongtermClient.apiKey}`,
+        'Authorization': `Bearer ${llongtermApiKey}`,
       },
       body: JSON.stringify(createOptions),
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(`Failed to create mind: ${error.message}`)
+      const errorData = await response.text()
+      console.error('Llongterm API error response:', errorData)
+      throw new Error(`Llongterm API error: ${response.status} - ${errorData}`)
     }
 
     const mind = await response.json()
+    console.log('Successfully created mind:', mind)
 
     // Update role_minds with success
     const { error: updateError } = await supabase
@@ -112,6 +122,7 @@ serve(async (req) => {
       .eq('role_id', roleId)
 
     if (updateError) {
+      console.error('Error updating role_minds:', updateError)
       throw new Error(`Failed to update role_minds: ${updateError.message}`)
     }
 
@@ -147,7 +158,10 @@ serve(async (req) => {
     }
     
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error instanceof Error ? error.stack : undefined
+      }),
       { 
         status: 400,
         headers: { 
