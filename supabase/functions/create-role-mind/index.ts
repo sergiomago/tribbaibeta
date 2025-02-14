@@ -12,35 +12,75 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
 const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
 
+// Utility function for making API calls with retries
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  let lastError;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const fetchOptions = {
+        ...options,
+        signal: controller.signal,
+      };
+      
+      console.log(`Attempt ${i + 1} - Fetching ${url}`);
+      const response = await fetch(url, fetchOptions);
+      clearTimeout(timeout);
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      // If response is not ok, read the error
+      const errorText = await response.text();
+      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+    } catch (error) {
+      console.error(`Attempt ${i + 1} failed:`, error);
+      lastError = error;
+      
+      // Wait before retrying (exponential backoff)
+      if (i < maxRetries - 1) {
+        const waitTime = Math.min(1000 * Math.pow(2, i), 5000);
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { roleId } = await req.json()
-    console.log(`Creating mind for role: ${roleId}`)
+    const { roleId } = await req.json();
+    console.log(`Creating mind for role: ${roleId}`);
 
     if (!roleId) {
-      throw new Error('Role ID is required')
+      throw new Error('Role ID is required');
     }
 
     if (!llongtermApiKey) {
-      throw new Error('LLONGTERM_API_KEY is not configured')
+      throw new Error('LLONGTERM_API_KEY is not configured');
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get role details
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
       .eq('id', roleId)
-      .single()
+      .single();
 
     if (roleError || !role) {
-      throw new Error(`Failed to fetch role: ${roleError?.message}`)
+      throw new Error(`Failed to fetch role: ${roleError?.message}`);
     }
 
     // Get pending mind record
@@ -48,10 +88,10 @@ serve(async (req) => {
       .from('role_minds')
       .select('*')
       .eq('role_id', roleId)
-      .single()
+      .single();
 
     if (mindError || !mindRecord) {
-      throw new Error(`No pending mind record found for role: ${roleId}`)
+      throw new Error(`No pending mind record found for role: ${roleId}`);
     }
 
     // Create structured memory from role data
@@ -68,7 +108,7 @@ serve(async (req) => {
         responseStyle: role.response_style || {},
         interactionPreferences: role.interaction_preferences || {},
       }
-    }
+    };
 
     // Create mind options
     const createOptions = {
@@ -83,53 +123,30 @@ serve(async (req) => {
         maxMemories: 100,
         relevanceThreshold: 0.7
       }
-    }
+    };
 
     console.log('Preparing request to Llongterm API:', {
       url: `${LLONGTERM_API_URL}/minds`,
       options: createOptions
-    })
-
-    // Add timeout to fetch request
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+    });
 
     try {
-      // Create mind using Llongterm API with timeout and detailed request options
-      const response = await fetch(`${LLONGTERM_API_URL}/minds`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${llongtermApiKey}`,
-          'Accept': 'application/json',
-          'User-Agent': 'Supabase Edge Function'
-        },
-        body: JSON.stringify(createOptions),
-        signal: controller.signal,
-        // Add additional fetch options for better reliability
-        keepalive: true,
-        mode: 'cors',
-        credentials: 'omit'
-      })
+      const response = await fetchWithRetry(
+        `${LLONGTERM_API_URL}/minds`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${llongtermApiKey}`,
+            'Accept': 'application/json',
+            'User-Agent': 'Supabase Edge Function'
+          },
+          body: JSON.stringify(createOptions)
+        }
+      );
 
-      clearTimeout(timeout)
-
-      // Log the response status and headers for debugging
-      console.log('Llongterm API response status:', response.status)
-      console.log('Llongterm API response headers:', Object.fromEntries(response.headers.entries()))
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('Llongterm API error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
-        })
-        throw new Error(`Llongterm API error: ${response.status} - ${errorText}`)
-      }
-
-      const mind = await response.json()
-      console.log('Successfully created mind:', mind)
+      const mind = await response.json();
+      console.log('Successfully created mind:', mind);
 
       // Update role_minds with success
       const { error: updateError } = await supabase
@@ -141,11 +158,11 @@ serve(async (req) => {
           last_sync: new Date().toISOString(),
           structured_memory: structuredMemory
         })
-        .eq('role_id', roleId)
+        .eq('role_id', roleId);
 
       if (updateError) {
-        console.error('Error updating role_minds:', updateError)
-        throw new Error(`Failed to update role_minds: ${updateError.message}`)
+        console.error('Error updating role_minds:', updateError);
+        throw new Error(`Failed to update role_minds: ${updateError.message}`);
       }
 
       return new Response(
@@ -156,23 +173,24 @@ serve(async (req) => {
             'Content-Type': 'application/json'
           } 
         }
-      )
+      );
     } catch (fetchError) {
-      clearTimeout(timeout)
-      if (fetchError.name === 'AbortError') {
-        throw new Error('Request to Llongterm API timed out after 30 seconds')
-      }
-      throw fetchError
+      console.error('Fetch error details:', {
+        error: fetchError,
+        message: fetchError.message,
+        stack: fetchError.stack
+      });
+      throw new Error(`Failed to create mind: ${fetchError.message}`);
     }
 
   } catch (error) {
-    console.error('Error creating mind:', error)
+    console.error('Error creating mind:', error);
     
     // Update role_minds with error status if we can
     try {
-      const { roleId } = await req.json()
+      const { roleId } = await req.json();
       if (roleId) {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey)
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
         await supabase
           .from('role_minds')
           .update({
@@ -180,10 +198,10 @@ serve(async (req) => {
             error_message: error.message,
             updated_at: new Date().toISOString(),
           })
-          .eq('role_id', roleId)
+          .eq('role_id', roleId);
       }
     } catch (updateError) {
-      console.error('Failed to update mind status:', updateError)
+      console.error('Failed to update mind status:', updateError);
     }
     
     return new Response(
@@ -198,6 +216,6 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         }
       }
-    )
+    );
   }
-})
+});
