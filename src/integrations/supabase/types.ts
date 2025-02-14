@@ -225,6 +225,7 @@ export type Database = {
           depth_level: number | null
           id: string
           is_bot: boolean | null
+          llongterm_memory_id: string | null
           memory_context: Json | null
           memory_id: string | null
           metadata: Json | null
@@ -252,6 +253,7 @@ export type Database = {
           depth_level?: number | null
           id?: string
           is_bot?: boolean | null
+          llongterm_memory_id?: string | null
           memory_context?: Json | null
           memory_id?: string | null
           metadata?: Json | null
@@ -279,6 +281,7 @@ export type Database = {
           depth_level?: number | null
           id?: string
           is_bot?: boolean | null
+          llongterm_memory_id?: string | null
           memory_context?: Json | null
           memory_id?: string | null
           metadata?: Json | null
