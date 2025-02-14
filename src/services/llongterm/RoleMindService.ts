@@ -13,31 +13,53 @@ export class RoleMindService {
       // Get role details for mind metadata
       const { data: role, error: roleError } = await supabase
         .from('roles')
-        .select('name, description, tag, instructions')
+        .select('name, description, tag, instructions, expertise_areas, special_capabilities')
         .eq('id', roleId)
         .single();
 
       if (roleError) throw new Error('Failed to fetch role details');
 
-      // Create mind using Llongterm
+      // Determine specialization based on role capabilities
+      const specialization = this.determineSpecialization(role.special_capabilities);
+
+      // Create mind using Llongterm with structured memory
       const mind = await mindService.createMind({
         ...options,
+        specialism: role.name,
+        specialismDepth: 2,
+        structured_memory: {
+          summary: role.description || '',
+          structured: {
+            [role.name]: {
+              instructions: role.instructions,
+              expertise_areas: role.expertise_areas,
+              capabilities: role.special_capabilities
+            }
+          },
+          unstructured: {}
+        },
         metadata: {
           ...options.metadata,
           role_id: roleId,
           role_name: role.name,
           role_tag: role.tag,
-          role_instructions: role.instructions,
           created_at: new Date().toISOString()
         }
       });
 
-      // Store the association and update status
+      // Store the association and configuration
       const { error } = await supabase
         .from('role_minds')
         .update({
           mind_id: mind.id,
           status: 'active',
+          specialization,
+          specialization_depth: 2,
+          memory_configuration: {
+            contextWindow: 10,
+            maxMemories: 100,
+            relevanceThreshold: 0.7
+          },
           updated_at: new Date().toISOString(),
           last_sync: new Date().toISOString(),
           metadata: {
@@ -59,6 +81,16 @@ export class RoleMindService {
       await this.updateMindStatus(roleId, 'failed', error.message);
       throw error;
     }
+  }
+
+  private determineSpecialization(capabilities?: string[]): 'general' | 'analyst' | 'researcher' | 'expert' | 'assistant' {
+    if (!capabilities || capabilities.length === 0) return 'assistant';
+    
+    if (capabilities.includes('analysis')) return 'analyst';
+    if (capabilities.includes('research')) return 'researcher';
+    if (capabilities.includes('expert_knowledge')) return 'expert';
+    
+    return 'general';
   }
 
   async getMindForRole(roleId: string): Promise<Mind | null> {

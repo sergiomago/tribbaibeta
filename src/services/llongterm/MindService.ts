@@ -1,17 +1,30 @@
+
 import { llongtermClient } from '@/lib/llongterm/client';
 import { validateCreateOptions, validateMessage } from '@/lib/llongterm/validation';
 import type { CreateOptions, Mind, Message, RememberResponse, KnowledgeResponse } from 'llongterm';
 import { LlongtermError, MindNotFoundError } from '@/lib/llongterm/errors';
 
+type StructuredMemory = {
+  summary: string;
+  structured: Record<string, unknown>;
+  unstructured: Record<string, unknown>;
+};
+
+type MindConfig = {
+  contextWindow?: number;
+  maxMemories?: number;
+  relevanceThreshold?: number;
+};
+
 export class MindService {
-  async createMind(options: CreateOptions): Promise<Mind> {
+  async createMind(options: CreateOptions & { structured_memory?: StructuredMemory, config?: MindConfig }): Promise<Mind> {
     try {
       const validatedOptions = validateCreateOptions({
         ...options,
-        initialMemory: options.initialMemory || {
+        initialMemory: options.structured_memory || {
           summary: '',
-          unstructured: {},
-          structured: {}
+          structured: {},
+          unstructured: {}
         }
       });
       
@@ -36,19 +49,33 @@ export class MindService {
     try {
       const validatedMessages = messages.map(msg => validateMessage({
         author: msg.author || 'user',
-        message: msg.message || '',
-        timestamp: msg.timestamp || Date.now(),
-        metadata: msg.metadata || {}
+        message: msg.message,
+        metadata: {
+          ...msg.metadata,
+          timestamp: msg.metadata?.timestamp || new Date().toISOString()
+        }
       }));
-      return await mind.remember(validatedMessages);
+
+      return await mind.remember({
+        thread: validatedMessages,
+        metadata: {
+          threadId: validatedMessages[0]?.metadata?.threadId,
+          timestamp: new Date().toISOString()
+        }
+      });
     } catch (error) {
       throw new LlongtermError(`Failed to store memory: ${error.message}`);
     }
   }
 
-  async ask(mind: Mind, question: string): Promise<KnowledgeResponse> {
+  async ask(mind: Mind, question: string, context?: { threadId?: string }): Promise<KnowledgeResponse> {
     try {
-      return await mind.ask(question);
+      return await mind.ask(question, {
+        metadata: {
+          ...context,
+          timestamp: new Date().toISOString()
+        }
+      });
     } catch (error) {
       throw new LlongtermError(`Failed to query mind: ${error.message}`);
     }
@@ -59,7 +86,6 @@ export class MindService {
       const response = await llongtermClient.deleteMind(mindId);
       return response.success;
     } catch (error) {
-      // Don't throw on deletion errors, just return false
       console.error(`Failed to delete mind ${mindId}:`, error);
       return false;
     }

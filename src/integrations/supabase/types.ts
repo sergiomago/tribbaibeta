@@ -753,11 +753,17 @@ export type Database = {
           id: string
           last_error_at: string | null
           last_sync: string | null
+          memory_configuration: Json | null
           metadata: Json | null
           mind_id: string
           retry_count: number | null
           role_id: string
+          specialization:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth: number | null
           status: Database["public"]["Enums"]["mind_status"] | null
+          structured_memory: Json | null
           updated_at: string
         }
         Insert: {
@@ -766,11 +772,17 @@ export type Database = {
           id?: string
           last_error_at?: string | null
           last_sync?: string | null
+          memory_configuration?: Json | null
           metadata?: Json | null
           mind_id: string
           retry_count?: number | null
           role_id: string
+          specialization?:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth?: number | null
           status?: Database["public"]["Enums"]["mind_status"] | null
+          structured_memory?: Json | null
           updated_at?: string
         }
         Update: {
@@ -779,11 +791,17 @@ export type Database = {
           id?: string
           last_error_at?: string | null
           last_sync?: string | null
+          memory_configuration?: Json | null
           metadata?: Json | null
           mind_id?: string
           retry_count?: number | null
           role_id?: string
+          specialization?:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth?: number | null
           status?: Database["public"]["Enums"]["mind_status"] | null
+          structured_memory?: Json | null
           updated_at?: string
         }
         Relationships: [
@@ -1436,6 +1454,12 @@ export type Database = {
         | "poor"
         | "needs_improvement"
       message_type: "text" | "file" | "analysis"
+      mind_specialization:
+        | "general"
+        | "analyst"
+        | "researcher"
+        | "expert"
+        | "assistant"
       mind_status: "pending" | "creating" | "active" | "failed" | "deleted"
       question_domain:
         | "product_strategy"
