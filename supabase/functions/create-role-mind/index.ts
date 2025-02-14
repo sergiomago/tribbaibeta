@@ -5,12 +5,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
-// Update API URL to use HTTPS explicitly
 const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
 
 serve(async (req) => {
@@ -91,36 +90,42 @@ serve(async (req) => {
       options: createOptions
     })
 
-    // Validate URL before making the request
-    try {
-      new URL(`${LLONGTERM_API_URL}/minds`)
-    } catch (e) {
-      throw new Error(`Invalid Llongterm API URL: ${LLONGTERM_API_URL}`)
-    }
-
     // Add timeout to fetch request
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
 
     try {
-      // Create mind using Llongterm API with timeout
+      // Create mind using Llongterm API with timeout and detailed request options
       const response = await fetch(`${LLONGTERM_API_URL}/minds`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${llongtermApiKey}`,
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'User-Agent': 'Supabase Edge Function'
         },
         body: JSON.stringify(createOptions),
-        signal: controller.signal
+        signal: controller.signal,
+        // Add additional fetch options for better reliability
+        keepalive: true,
+        mode: 'cors',
+        credentials: 'omit'
       })
 
       clearTimeout(timeout)
 
+      // Log the response status and headers for debugging
+      console.log('Llongterm API response status:', response.status)
+      console.log('Llongterm API response headers:', Object.fromEntries(response.headers.entries()))
+
       if (!response.ok) {
-        const errorData = await response.text()
-        console.error('Llongterm API error response:', errorData)
-        throw new Error(`Llongterm API error: ${response.status} - ${errorData}`)
+        const errorText = await response.text()
+        console.error('Llongterm API error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        })
+        throw new Error(`Llongterm API error: ${response.status} - ${errorText}`)
       }
 
       const mind = await response.json()
