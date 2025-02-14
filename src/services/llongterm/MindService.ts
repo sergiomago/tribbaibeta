@@ -56,26 +56,17 @@ export class MindService {
         }
       }));
 
-      return await mind.remember({
-        thread: validatedMessages,
-        metadata: {
-          threadId: validatedMessages[0]?.metadata?.threadId,
-          timestamp: new Date().toISOString()
-        }
-      });
+      // Pass the array directly as per type definition
+      return await mind.remember(validatedMessages);
     } catch (error) {
       throw new LlongtermError(`Failed to store memory: ${error.message}`);
     }
   }
 
-  async ask(mind: Mind, question: string, context?: { threadId?: string }): Promise<KnowledgeResponse> {
+  async ask(mind: Mind, question: string): Promise<KnowledgeResponse> {
     try {
-      return await mind.ask(question, {
-        metadata: {
-          ...context,
-          timestamp: new Date().toISOString()
-        }
-      });
+      // Only pass the question string as per type definition
+      return await mind.ask(question);
     } catch (error) {
       throw new LlongtermError(`Failed to query mind: ${error.message}`);
     }
