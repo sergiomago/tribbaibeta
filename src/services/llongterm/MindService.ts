@@ -36,8 +36,8 @@ export class MindService {
       const { error } = await supabase
         .from('role_minds')
         .insert({
-          id: mind.id, // Use id instead of mind_id to match the schema
-          role_id: options.metadata?.roleId,
+          mind_id: mind.id,
+          role_id: options.metadata?.roleId as string,
           status: 'active',
           metadata: options.metadata,
           structured_memory: options.structured_memory,
@@ -53,7 +53,7 @@ export class MindService {
       return mind;
     } catch (error) {
       console.error('Failed to create mind:', error);
-      throw new LlongtermError(`Failed to create mind: ${(error as Error).message}`);
+      throw new LlongtermError(`Failed to create mind: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -63,10 +63,11 @@ export class MindService {
       return await llongtermClient.getMind(mindId);
     } catch (error) {
       console.error('Error retrieving mind:', error);
-      if ((error as Error).message.includes('not found')) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('not found')) {
         throw new MindNotFoundError(mindId);
       }
-      throw new LlongtermError(`Failed to get mind: ${(error as Error).message}`);
+      throw new LlongtermError(`Failed to get mind: ${errorMessage}`);
     }
   }
 
@@ -99,7 +100,7 @@ export class MindService {
       return response;
     } catch (error) {
       console.error('Failed to store thread:', error);
-      throw new LlongtermError(`Failed to store thread: ${(error as Error).message}`);
+      throw new LlongtermError(`Failed to store thread: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -131,7 +132,7 @@ export class MindService {
       return response;
     } catch (error) {
       console.error('Failed to store memory:', error);
-      throw new LlongtermError(`Failed to store memory: ${(error as Error).message}`);
+      throw new LlongtermError(`Failed to store memory: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -147,7 +148,7 @@ export class MindService {
       return response;
     } catch (error) {
       console.error('Failed to query mind:', error);
-      throw new LlongtermError(`Failed to query mind: ${(error as Error).message}`);
+      throw new LlongtermError(`Failed to query mind: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -161,7 +162,7 @@ export class MindService {
         await supabase
           .from('role_minds')
           .update({ status: 'deleted' })
-          .eq('id', mindId); // Use id instead of mind_id
+          .eq('mind_id', mindId);
       }
 
       console.log('Mind deleted:', mindId);

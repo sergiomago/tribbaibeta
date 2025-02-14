@@ -33,15 +33,15 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       // If we have a mind, enrich messages with Llongterm context
       if (mind && dbMessages) {
         const context = await mind.ask(dbMessages.map(m => m.content).join('\n'));
-        return dbMessages.map(msg => ({
-          ...msg as object,
+        return (dbMessages as Message[]).map(msg => ({
+          ...msg,
           metadata: {
             ...(msg.metadata || {}),
             llongterm_context: context.relevantMemories
               .filter(m => m.includes(msg.content))
               .map(m => ({ content: m }))
           }
-        })) as Message[];
+        }));
       }
 
       return dbMessages as Message[];

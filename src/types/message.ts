@@ -1,3 +1,4 @@
+
 export type MessageMetadata = {
   message_id?: string;
   verification_status?: 'verified' | 'partially_verified' | 'needs_verification' | 'contradicted';
@@ -16,4 +17,5 @@ export type Message = {
     name: string;
     tag: string;
   };
+  metadata?: MessageMetadata;
 };
