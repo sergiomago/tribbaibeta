@@ -35,14 +35,14 @@ export class MindService {
       // Store the mind reference in the database
       const { error } = await supabase
         .from('role_minds')
-        .insert({
-          mind_id: mind.id,
+        .insert([{
           role_id: options.metadata?.roleId as string,
+          mind_id: mind.id,
           status: 'active',
           metadata: options.metadata,
           structured_memory: options.structured_memory,
           memory_configuration: options.config
-        });
+        }]);
 
       if (error) {
         console.error('Failed to store mind reference:', error);
@@ -89,7 +89,7 @@ export class MindService {
 
       // Update message references in the database
       for (const msg of thread.messages) {
-        if (msg.metadata?.messageId) {
+        if (msg.metadata?.messageId && typeof msg.metadata.messageId === 'string') {
           await supabase
             .from('messages')
             .update({ llongterm_memory_id: response.memoryId })
@@ -121,7 +121,7 @@ export class MindService {
 
       // Update message references if messageId is provided
       for (const msg of messages) {
-        if (msg.metadata?.messageId) {
+        if (msg.metadata?.messageId && typeof msg.metadata.messageId === 'string') {
           await supabase
             .from('messages')
             .update({ llongterm_memory_id: response.memoryId })
