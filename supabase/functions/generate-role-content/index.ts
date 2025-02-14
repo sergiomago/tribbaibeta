@@ -9,6 +9,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,7 +19,23 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
-    const { type, name, description } = await req.json();
+    if (!openai.apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    let { type, name, description } = await req.json();
+
+    // Input validation
+    if (!type || !name) {
+      throw new Error('Type and name are required');
+    }
+
+    console.log('Processing request:', {
+      type,
+      name,
+      hasDescription: !!description
+    });
+
     let prompt = '';
     
     switch (type) {
@@ -29,6 +46,9 @@ serve(async (req) => {
         prompt = `Create a creative, memorable alias for a role named "${name}". It should be a playful transformation of the role name into a person's name. Example: "Brand Strategist" becomes "Brad Strat". Only return the alias, nothing else.`;
         break;
       case 'instructions':
+        if (!description) {
+          throw new Error('Description is required for instructions generation');
+        }
         prompt = `As an expert in AI role design, create comprehensive instructions for an AI role with the following details:
 Name: "${name}"
 Description: "${description}"
@@ -51,10 +71,6 @@ Format the response as a clear, cohesive set of instructions that flows naturall
         throw new Error('Invalid generation type');
     }
 
-    if (!openai.apiKey) {
-      throw new Error('OPENAI_API_KEY is not configured');
-    }
-
     console.log('Sending request to OpenAI:', {
       type,
       name,
@@ -62,23 +78,38 @@ Format the response as a clear, cohesive set of instructions that flows naturall
     });
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4", // Fixed the model name from "gpt-4o" to "gpt-4"
+      model: "gpt-4o-mini", // Using the recommended fast and cheap model
       messages: [{ role: "user", content: prompt }],
+      temperature: 0.7,
+      max_tokens: type === 'instructions' ? 2000 : 100,
     });
 
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('No content received from OpenAI');
+    }
+
     const content = completion.choices[0].message.content.trim();
+    
     console.log('Received response from OpenAI:', {
       type,
-      contentLength: content.length
+      contentLength: content.length,
+      contentPreview: content.substring(0, 100) + '...'
     });
 
     return new Response(JSON.stringify({ content }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { 
+        ...corsHeaders,
+        'Content-Type': 'application/json',
+      },
     });
   } catch (error) {
     console.error('Error in generate-role-content:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        details: error instanceof Error ? error.stack : undefined
+      }), {
+      status: error.status || 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
