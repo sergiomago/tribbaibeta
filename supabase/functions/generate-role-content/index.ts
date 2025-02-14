@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import OpenAI from "https://esm.sh/openai@4.26.0";
@@ -50,12 +51,26 @@ Format the response as a clear, cohesive set of instructions that flows naturall
         throw new Error('Invalid generation type');
     }
 
+    if (!openai.apiKey) {
+      throw new Error('OPENAI_API_KEY is not configured');
+    }
+
+    console.log('Sending request to OpenAI:', {
+      type,
+      name,
+      description: description?.substring(0, 100) + '...' // Log truncated description
+    });
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4", // Fixed the model name from "gpt-4o" to "gpt-4"
       messages: [{ role: "user", content: prompt }],
     });
 
     const content = completion.choices[0].message.content.trim();
+    console.log('Received response from OpenAI:', {
+      type,
+      contentLength: content.length
+    });
 
     return new Response(JSON.stringify({ content }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
