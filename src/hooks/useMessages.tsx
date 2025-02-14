@@ -1,14 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
 import { Message } from "@/types";
+import { useRoleMind } from "./useRoleMind";
 
-export function useMessages(threadId: string | null) {
-  const { data: messages, refetch: refetchMessages, isLoading: isLoadingMessages } = useQuery({
+export function useMessages(threadId: string | null, roleId: string | null) {
+  const queryClient = useQueryClient();
+  const { mind } = useRoleMind(roleId);
+
+  const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", threadId],
     queryFn: async () => {
       if (!threadId) return [];
-      const { data, error } = await supabase
+      
+      // Fetch messages from Supabase
+      const { data: dbMessages, error } = await supabase
         .from("messages")
         .select(`
           *,
@@ -20,8 +27,24 @@ export function useMessages(threadId: string | null) {
         `)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
+      
       if (error) throw error;
-      return data as Message[];
+
+      // If we have a mind, enrich messages with Llongterm context
+      if (mind) {
+        const context = await mind.ask(dbMessages.map(m => m.content).join('\n'));
+        return dbMessages.map(msg => ({
+          ...msg,
+          metadata: {
+            ...msg.metadata,
+            llongterm_context: context.relevantMemories
+              .filter(m => m.includes(msg.content))
+              .map(m => ({ content: m }))
+          }
+        })) as Message[];
+      }
+
+      return dbMessages as Message[];
     },
     enabled: !!threadId,
   });
@@ -39,8 +62,25 @@ export function useMessages(threadId: string | null) {
           table: 'messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        () => {
-          refetchMessages();
+        async (payload) => {
+          // When a new message arrives, update cache and store in Llongterm if available
+          queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
+          
+          if (mind && payload.new) {
+            try {
+              await mind.remember([{
+                author: payload.new.role_id ? 'assistant' : 'user',
+                message: payload.new.content,
+                metadata: {
+                  messageId: payload.new.id,
+                  threadId: payload.new.thread_id,
+                  timestamp: payload.new.created_at
+                }
+              }]);
+            } catch (error) {
+              console.error('Failed to store message in Llongterm:', error);
+            }
+          }
         }
       )
       .subscribe();
@@ -48,7 +88,15 @@ export function useMessages(threadId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId, refetchMessages]);
+  }, [threadId, mind, queryClient]);
 
-  return { messages, refetchMessages, isLoadingMessages };
+  const refetchMessages = () => {
+    queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
+  };
+
+  return { 
+    messages, 
+    refetchMessages, 
+    isLoadingMessages 
+  };
 }

@@ -38,25 +38,41 @@ export function ChatInput({
     
     setIsSending(true);
     try {
-      // First store the user message
-      const { error: messageError } = await supabase
+      // Extract tagged role if present
+      const tagMatch = message.match(/@(\w+)/);
+      const taggedRoleId = tagMatch ? tagMatch[1] : null;
+      
+      // First store user message
+      const { data: storedMessage, error: messageError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
           content: message.trim(),
-          is_bot: false
-        });
+          is_bot: false,
+          metadata: {
+            context_type: 'conversation',
+            tagged_role: taggedRoleId
+          }
+        })
+        .select()
+        .single();
 
       if (messageError) throw messageError;
 
-      // Then process with orchestrator
-      const orchestrator = createRoleOrchestrator(threadId);
-      
-      // Extract tagged role if present
-      const tagMatch = message.match(/@(\w+)/);
-      const taggedRole = tagMatch ? tagMatch[1] : null;
-      
-      await orchestrator.handleMessage(message, taggedRole);
+      // Process with orchestrator
+      const { data: response, error: fnError } = await supabase.functions.invoke(
+        'handle-chat-message',
+        {
+          body: { 
+            threadId, 
+            content: message,
+            messageId: storedMessage.id,
+            taggedRoleId 
+          }
+        }
+      );
+
+      if (fnError) throw fnError;
 
       setMessage("");
       onMessageSent?.();

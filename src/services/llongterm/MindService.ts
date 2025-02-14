@@ -3,6 +3,7 @@ import { llongtermClient } from '@/lib/llongterm/client';
 import { validateCreateOptions, validateMessage } from '@/lib/llongterm/validation';
 import type { CreateOptions, Mind, Message, RememberResponse, KnowledgeResponse } from 'llongterm';
 import { LlongtermError, MindNotFoundError } from '@/lib/llongterm/errors';
+import { supabase } from '@/integrations/supabase/client';
 
 type StructuredMemory = {
   summary: string;
@@ -29,7 +30,27 @@ export class MindService {
       });
       
       console.log('Creating new mind with options:', validatedOptions);
-      return await llongtermClient.createMind(validatedOptions);
+      const mind = await llongtermClient.createMind(validatedOptions);
+
+      // Store the mind reference in the database
+      const { error } = await supabase
+        .from('role_minds')
+        .insert({
+          mind_id: mind.id,
+          role_id: options.metadata?.roleId,
+          status: 'active',
+          metadata: options.metadata,
+          structured_memory: options.structured_memory,
+          memory_configuration: options.config
+        });
+
+      if (error) {
+        console.error('Failed to store mind reference:', error);
+        await llongtermClient.deleteMind(mind.id);
+        throw error;
+      }
+
+      return mind;
     } catch (error) {
       console.error('Failed to create mind:', error);
       throw new LlongtermError(`Failed to create mind: ${error.message}`);
@@ -63,7 +84,19 @@ export class MindService {
         }
       }));
 
-      return await mind.remember(validatedMessages);
+      const response = await mind.remember(validatedMessages);
+
+      // Update message references in the database
+      for (const msg of thread.messages) {
+        if (msg.metadata?.messageId) {
+          await supabase
+            .from('messages')
+            .update({ llongterm_memory_id: response.memoryId })
+            .eq('id', msg.metadata.messageId);
+        }
+      }
+
+      return response;
     } catch (error) {
       console.error('Failed to store thread:', error);
       throw new LlongtermError(`Failed to store thread: ${error.message}`);
@@ -83,7 +116,19 @@ export class MindService {
         }
       }));
 
-      return await mind.remember(validatedMessages);
+      const response = await mind.remember(validatedMessages);
+
+      // Update message references if messageId is provided
+      for (const msg of messages) {
+        if (msg.metadata?.messageId) {
+          await supabase
+            .from('messages')
+            .update({ llongterm_memory_id: response.memoryId })
+            .eq('id', msg.metadata.messageId);
+        }
+      }
+
+      return response;
     } catch (error) {
       console.error('Failed to store memory:', error);
       throw new LlongtermError(`Failed to store memory: ${error.message}`);
@@ -110,6 +155,15 @@ export class MindService {
     try {
       console.log('Deleting mind:', mindId);
       const response = await llongtermClient.deleteMind(mindId);
+      
+      if (response.success) {
+        // Update mind status in database
+        await supabase
+          .from('role_minds')
+          .update({ status: 'deleted' })
+          .eq('mind_id', mindId);
+      }
+
       console.log('Mind deleted:', mindId);
       return response.success;
     } catch (error) {
