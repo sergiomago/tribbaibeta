@@ -1,3 +1,4 @@
+
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 import { useMessages } from "@/hooks/useMessages";
@@ -18,7 +19,8 @@ export function ChatContent({
   messagesEndRef,
   maxMessages = Infinity 
 }: ChatContentProps) {
-  const { messages, isLoadingMessages } = useMessages(threadId);
+  // Pass null as roleId since we handle multiple roles in the thread
+  const { messages, isLoadingMessages } = useMessages(threadId, null);
 
   const { data: thread } = useQuery({
     queryKey: ["thread", threadId],
