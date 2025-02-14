@@ -4,7 +4,6 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import OpenAI from "https://esm.sh/openai@4.26.0";
 import Llongterm from "https://esm.sh/llongterm@latest";
-import { buildMemoryContext } from "./memoryContextBuilder.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -59,79 +58,57 @@ serve(async (req) => {
           return existingMind.mind_id;
         }
 
-        // Create a new mind record first
-        const { data: mindRecord, error: insertError } = await supabase
+        // Get role details for mind creation
+        const { data: role } = await supabase
+          .from('roles')
+          .select('name, description, instructions, expertise_areas, special_capabilities')
+          .eq('id', roleId)
+          .single();
+
+        if (!role) throw new Error('Role not found');
+
+        // Create the mind using proper configuration
+        const mind = await llongterm.create({
+          specialism: role.name,
+          specialismDepth: 2,
+          initialMemory: {
+            summary: role.description || '',
+            structured: {
+              [role.name]: {
+                instructions: role.instructions,
+                expertise_areas: role.expertise_areas,
+                capabilities: role.special_capabilities
+              }
+            },
+            unstructured: {}
+          },
+          metadata: {
+            roleId,
+            threadId,
+            created: new Date().toISOString()
+          }
+        });
+
+        console.log('Mind created in Llongterm:', mind);
+
+        // Store the mind reference
+        const { error: updateError } = await supabase
           .from('role_minds')
           .insert({
             role_id: roleId,
-            mind_id: 'pending',
-            status: 'creating',
+            mind_id: mind.id,
+            status: 'active',
             metadata: {
-              created_at: new Date().toISOString(),
-              threadId
-            }
-          })
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Failed to create mind record:', insertError);
-          throw new Error(`Failed to create mind record: ${insertError.message}`);
-        }
-
-        if (!mindRecord) {
-          throw new Error('Mind record creation returned no data');
-        }
-
-        console.log('Created mind record:', mindRecord);
-
-        // Create the mind using the Llongterm client
-        try {
-          const mind = await llongterm.create({
-            specialism: 'AI Assistant',
-            metadata: {
-              roleId,
-              threadId,
-              created: new Date().toISOString()
+              role_details: role
             }
           });
 
-          console.log('Mind created in Llongterm:', mind);
-
-          // Update the mind record with the actual mind ID
-          const { error: updateError } = await supabase
-            .from('role_minds')
-            .update({
-              mind_id: mind.id,
-              status: 'active',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', mindRecord.id);
-
-          if (updateError) {
-            // If update fails, try to delete the mind to avoid orphaned minds
-            try {
-              await llongterm.delete(mind.id);
-            } catch (deleteError) {
-              console.error('Failed to delete mind after update error:', deleteError);
-            }
-            throw updateError;
-          }
-
-          return mind.id;
-        } catch (error) {
-          // Update the mind record to failed state
-          await supabase
-            .from('role_minds')
-            .update({
-              status: 'failed',
-              error_message: error.message,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', mindRecord.id);
-          
-          throw error;
+        if (updateError) {
+          await llongterm.delete(mind.id);
+          throw updateError;
         }
+
+        return mind.id;
       } catch (error) {
         console.error('Error in getOrCreateMindId:', error);
         throw error;
@@ -149,10 +126,7 @@ serve(async (req) => {
       if (!role) throw new Error('Tagged role not found');
 
       try {
-        // Get or create mind for this role
         const mindId = await getOrCreateMindId(taggedRoleId);
-        console.log('Using mind:', mindId);
-
         const mind = await llongterm.get(mindId);
 
         // Store the message in Llongterm
@@ -166,40 +140,33 @@ serve(async (req) => {
           }
         }]);
 
-        // Get memory context
-        const { enrichedMessage, systemContext } = await buildMemoryContext(
-          supabase,
-          openai,
-          threadId,
-          taggedRoleId,
-          content,
-          mindId
-        );
-
+        // Get enriched context from Llongterm
+        const knowledgeResponse = await mind.ask(content);
+        
+        // Generate response using OpenAI
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4', // Use standard model name
+          model: 'gpt-4',
           messages: [
             { 
               role: 'system', 
-              content: `${role.instructions}\n\n${systemContext}`
+              content: `${role.instructions}\n\nContext from previous interactions:\n${knowledgeResponse.relevantMemories.join('\n\n')}`
             },
-            { role: 'user', content: enrichedMessage }
+            { role: 'user', content }
           ],
         });
 
         const responseContent = completion.choices[0].message.content;
 
-        // Store AI response
+        // Store AI response reference in Supabase
         await supabase
           .from('messages')
           .insert({
             thread_id: threadId,
             role_id: taggedRoleId,
             content: responseContent,
-            chain_position: 1,
             metadata: {
               mindId,
-              hasMemoryContext: true
+              hasLlongtermContext: true
             }
           });
 
@@ -224,105 +191,60 @@ serve(async (req) => {
       }
     }
 
-    // Process roles in order from the chain
-    let chainResponses = [];
+    // Handle chain responses similarly to tagged responses
     for (const [index, { role_id }] of chain.entries()) {
-      try {
-        const { data: role } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', role_id)
-          .single();
+      const mindId = await getOrCreateMindId(role_id);
+      const mind = await llongterm.get(mindId);
+      
+      // Get context and generate response using the same pattern as above
+      const knowledgeResponse = await mind.ask(content);
+      
+      const { data: role } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', role_id)
+        .single();
 
-        if (!role) {
-          console.error(`Role ${role_id} not found`);
-          continue;
-        }
+      if (!role) continue;
 
-        // Get or create mind for this role
-        const mindId = await getOrCreateMindId(role_id);
-        console.log('Using mind for chain response:', mindId);
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          { 
+            role: 'system', 
+            content: `${role.instructions}\n\nContext from previous interactions:\n${knowledgeResponse.relevantMemories.join('\n\n')}`
+          },
+          { role: 'user', content }
+        ],
+      });
 
-        const mind = await llongterm.get(mindId);
+      const responseContent = completion.choices[0].message.content;
 
-        // Store user message in Llongterm for this role
-        await mind.remember([{
-          author: 'user',
-          message: content,
+      // Store message reference
+      await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          role_id: role_id,
+          content: responseContent,
+          chain_position: index + 1,
           metadata: {
-            threadId,
-            timestamp: new Date().toISOString(),
-            type: 'user_message',
-            chainPosition: index
+            mindId,
+            hasLlongtermContext: true
           }
-        }]);
+        });
 
-        // Build context including previous responses in the chain
-        const { enrichedMessage, systemContext } = await buildMemoryContext(
-          supabase,
-          openai,
+      // Store in Llongterm
+      await mind.remember([{
+        author: 'assistant',
+        message: responseContent,
+        metadata: {
           threadId,
-          role_id,
-          content,
-          mindId
-        );
-
-        // Add previous responses from the chain to the context
-        const contextWithChainResponses = chainResponses.length > 0 
-          ? `${enrichedMessage}\n\nPrevious responses in this conversation:\n${chainResponses.map(r => 
-              `${r.roleName}: ${r.content}`
-            ).join('\n\n')}`
-          : enrichedMessage;
-
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4', // Use standard model name
-          messages: [
-            { 
-              role: 'system', 
-              content: `${role.instructions}\n\n${systemContext}`
-            },
-            { role: 'user', content: contextWithChainResponses }
-          ],
-        });
-
-        const responseContent = completion.choices[0].message.content;
-
-        // Store response
-        await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            role_id: role_id,
-            content: responseContent,
-            chain_position: index + 1,
-            metadata: {
-              mindId,
-              hasMemoryContext: true
-            }
-          });
-
-        // Store AI response in Llongterm
-        await mind.remember([{
-          author: 'assistant',
-          message: responseContent,
-          metadata: {
-            threadId,
-            timestamp: new Date().toISOString(),
-            type: 'ai_response',
-            chainPosition: index + 1
-          }
-        }]);
-
-        // Add this response to the chain for next roles
-        chainResponses.push({
-          roleName: role.name,
-          content: responseContent
-        });
-
-      } catch (error) {
-        console.error(`Error processing response for role ${role_id}:`, error);
-        throw error;
-      }
+          timestamp: new Date().toISOString(),
+          type: 'ai_response',
+          chainPosition: index + 1
+        }
+      }]);
     }
 
     return new Response(
