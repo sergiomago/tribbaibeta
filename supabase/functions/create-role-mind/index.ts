@@ -9,7 +9,7 @@ const corsHeaders = {
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
+const llongtermApiKey = Deno.env.get('VITE_LLONGTERM_API_KEY')!
 const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
 
 // Utility function for making API calls with retries
@@ -67,7 +67,7 @@ serve(async (req) => {
     }
 
     if (!llongtermApiKey) {
-      throw new Error('LLONGTERM_API_KEY is not configured');
+      throw new Error('VITE_LLONGTERM_API_KEY is not configured');
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -219,3 +219,4 @@ serve(async (req) => {
     );
   }
 });
+
