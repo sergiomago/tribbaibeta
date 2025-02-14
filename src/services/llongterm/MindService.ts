@@ -35,14 +35,16 @@ export class MindService {
       // Store the mind reference in the database
       const { error } = await supabase
         .from('role_minds')
-        .insert([{
+        .insert({
           role_id: options.metadata?.roleId as string,
           mind_id: mind.id,
           status: 'active',
-          metadata: options.metadata,
-          structured_memory: options.structured_memory,
-          memory_configuration: options.config
-        }]);
+          metadata: options.metadata as unknown as Json,
+          structured_memory: options.structured_memory as unknown as Json,
+          memory_configuration: options.config as unknown as Json,
+          specialization: 'assistant',
+          specialization_depth: 1
+        });
 
       if (error) {
         console.error('Failed to store mind reference:', error);
