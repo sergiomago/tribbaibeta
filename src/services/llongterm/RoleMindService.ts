@@ -10,50 +10,24 @@ export class RoleMindService {
       // Update status to processing
       await this.updateMindStatus(roleId, 'processing');
 
-      // Get role details for mind metadata
-      const { data: role, error: roleError } = await supabase
-        .from('roles')
-        .select('name, description, tag, instructions, expertise_areas, special_capabilities')
-        .eq('id', roleId)
-        .single();
-
-      if (roleError) throw new Error('Failed to fetch role details');
-
-      // Determine specialization based on role capabilities
-      const specialization = this.determineSpecialization(role.special_capabilities);
-
-      // Create mind using Llongterm with structured memory
-      const mind = await mindService.createMind({
-        ...options,
-        specialism: role.name,
-        specialismDepth: 2,
-        structured_memory: {
-          summary: role.description || '',
-          structured: {
-            [role.name]: {
-              instructions: role.instructions,
-              expertise_areas: role.expertise_areas,
-              capabilities: role.special_capabilities
-            }
-          },
-          unstructured: {}
+      // Call the edge function with proper JSON payload
+      const { data: mind, error } = await supabase.functions.invoke('create-role-mind', {
+        body: JSON.stringify({ roleId }), // Make sure we're stringifying the body
+        headers: {
+          'Content-Type': 'application/json', // Explicitly set content type
         },
-        metadata: {
-          ...options.metadata,
-          role_id: roleId,
-          role_name: role.name,
-          role_tag: role.tag,
-          created_at: new Date().toISOString()
-        }
       });
 
+      if (error) throw error;
+      if (!mind) throw new Error('No response from mind creation service');
+
       // Store the association and configuration
-      const { error } = await supabase
+      const { error: dbError } = await supabase
         .from('role_minds')
         .update({
           mind_id: mind.id,
           status: 'active',
-          specialization,
+          specialization: 'assistant',
           specialization_depth: 2,
           memory_configuration: {
             contextWindow: 10,
@@ -64,20 +38,20 @@ export class RoleMindService {
           last_sync: new Date().toISOString(),
           metadata: {
             ...options.metadata,
-            role_details: role
           }
         })
         .eq('role_id', roleId);
 
-      if (error) {
+      if (dbError) {
         // If database update fails, clean up the created mind
-        await mindService.deleteMind(mind.id);
-        throw error;
+        console.error('Database error:', dbError);
+        throw dbError;
       }
 
-      return mind;
+      return mind as Mind;
     } catch (error) {
       // Update status to failed with error message
+      console.error('Error in createMindForRole:', error);
       await this.updateMindStatus(roleId, 'failed', error.message);
       throw error;
     }
