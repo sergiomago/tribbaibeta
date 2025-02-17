@@ -1,13 +1,14 @@
 
 import { LLONGTERM_API_KEY } from '@/config/secrets';
 import { LlongtermError } from './errors';
-import llongtermFactory from 'llongterm';
+import * as llongtermModule from 'llongterm';
 
 let llongterm;
 
 try {
   // Create SDK instance with our API key
-  llongterm = llongtermFactory({
+  const factory = (llongtermModule.default || llongtermModule) as (config: { apiKey: string }) => any;
+  llongterm = factory({
     apiKey: LLONGTERM_API_KEY,
   });
 
@@ -21,4 +22,3 @@ try {
 }
 
 export { llongterm };
-

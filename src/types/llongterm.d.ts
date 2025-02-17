@@ -57,8 +57,8 @@ declare module 'llongterm' {
     }
   }
 
-  // Add the factory function type
-  const llongtermFactory: (config: { apiKey: string }) => LlongtermClient;
-  export default llongtermFactory;
+  // Allow both default and named exports
+  const factory: (config: { apiKey: string }) => LlongtermClient;
+  export default factory;
+  export = factory;
 }
-
