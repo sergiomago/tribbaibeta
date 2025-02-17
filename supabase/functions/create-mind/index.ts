@@ -22,10 +22,8 @@ serve(async (req) => {
     const { specialism, specialismDepth, metadata } = await req.json()
     console.log('Received request parameters:', { specialism, specialismDepth })
 
-    // Initialize Llongterm with correct pattern
-    const llongterm = new Llongterm({
-      apiKey: llongtermApiKey // Direct apiKey property, not nested in 'keys'
-    })
+    // Initialize Llongterm correctly as a factory function (no 'new' keyword)
+    const llongterm = Llongterm({ apiKey: llongtermApiKey })
 
     if (!llongterm) {
       console.error('Failed to initialize Llongterm client')
@@ -87,4 +85,3 @@ serve(async (req) => {
     )
   }
 })
-
