@@ -1,160 +1,59 @@
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY') || '';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
+const llongtermClient = {
+  apiKey: llongtermApiKey,
+  baseURL: 'https://api.llongterm.com/v1', // Changed from .ai to .com
+};
 
-serve(async (req) => {
-  // Handle CORS preflight requests
+Deno.serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { roleId } = await req.json()
-    console.log(`Creating mind for role: ${roleId}`)
+    const { roleId } = await req.json();
 
     if (!roleId) {
-      throw new Error('Role ID is required')
+      throw new Error('Role ID is required');
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
-    // Get role details
-    const { data: role, error: roleError } = await supabase
-      .from('roles')
-      .select('*')
-      .eq('id', roleId)
-      .single()
-
-    if (roleError || !role) {
-      throw new Error(`Failed to fetch role: ${roleError?.message}`)
-    }
-
-    // Get pending mind record
-    const { data: mindRecord, error: mindError } = await supabase
-      .from('role_minds')
-      .select('*')
-      .eq('role_id', roleId)
-      .single()
-
-    if (mindError || !mindRecord) {
-      throw new Error(`No pending mind record found for role: ${roleId}`)
-    }
-
-    // Initialize Llongterm client
-    const llongtermClient = {
-      apiKey: llongtermApiKey,
-      baseURL: 'https://api.llongterm.ai/v1',
-    }
-
-    // Create structured memory from role data
-    const structuredMemory = {
-      summary: role.description || '',
-      structured: {
-        name: role.name,
-        expertise: role.expertise_areas || [],
-        primaryTopics: role.primary_topics || [],
-        capabilities: role.special_capabilities || [],
-      },
-      unstructured: {
-        instructions: role.instructions,
-        responseStyle: role.response_style || {},
-        interactionPreferences: role.interaction_preferences || {},
-      }
-    }
-
-    // Create mind options
-    const createOptions = {
-      initialMemory: structuredMemory,
-      metadata: {
-        roleId: role.id,
-        userId: role.user_id,
-        created: new Date().toISOString(),
-      },
-      config: mindRecord.memory_configuration
-    }
-
-    // Create mind using Llongterm API
-    const response = await fetch(`${llongtermClient.baseURL}/minds`, {
+    // Create mind in Llongterm
+    const mindResponse = await fetch(`${llongtermClient.baseURL}/minds`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${llongtermClient.apiKey}`,
       },
-      body: JSON.stringify(createOptions),
-    })
+      body: JSON.stringify({
+        id: roleId,
+        metadata: {
+          roleId,
+          created: new Date().toISOString(),
+        },
+      }),
+    });
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(`Failed to create mind: ${error.message}`)
+    if (!mindResponse.ok) {
+      const error = await mindResponse.json();
+      throw new Error(`Failed to create mind: ${JSON.stringify(error)}`);
     }
 
-    const mind = await response.json()
+    const mind = await mindResponse.json();
 
-    // Update role_minds with success
-    const { error: updateError } = await supabase
-      .from('role_minds')
-      .update({
-        mind_id: mind.id,
-        status: 'active',
-        updated_at: new Date().toISOString(),
-        last_sync: new Date().toISOString(),
-        structured_memory: structuredMemory
-      })
-      .eq('role_id', roleId)
-
-    if (updateError) {
-      throw new Error(`Failed to update role_minds: ${updateError.message}`)
-    }
-
-    return new Response(
-      JSON.stringify({ success: true, mindId: mind.id }),
-      { 
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        } 
-      }
-    )
-
+    return new Response(JSON.stringify(mind), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
   } catch (error) {
-    console.error('Error creating mind:', error)
-    
-    // Update role_minds with error status if we can
-    try {
-      const { roleId } = await req.json()
-      if (roleId) {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey)
-        await supabase
-          .from('role_minds')
-          .update({
-            status: 'failed',
-            error_message: error.message,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('role_id', roleId)
-      }
-    } catch (updateError) {
-      console.error('Failed to update mind status:', updateError)
-    }
-    
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 400,
-        headers: { 
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
+    console.error('Error:', error.message);
+    return new Response(JSON.stringify({ error: error.message }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 400,
+    });
   }
-})
+});
