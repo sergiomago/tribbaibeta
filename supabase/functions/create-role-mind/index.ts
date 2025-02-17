@@ -5,82 +5,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+}
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-const llongtermApiKey = Deno.env.get('VITE_LLONGTERM_API_KEY')!
-const LLONGTERM_API_URL = 'https://api.llongterm.ai/v1'
-
-// Utility function for making API calls with retries
-async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
-  let lastError;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const fetchOptions = {
-        ...options,
-        signal: controller.signal,
-      };
-      
-      console.log(`Attempt ${i + 1} - Fetching ${url}`);
-      const response = await fetch(url, fetchOptions);
-      clearTimeout(timeout);
-      
-      if (response.ok) {
-        return response;
-      }
-      
-      // If response is not ok, read the error
-      const errorText = await response.text();
-      throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
-    } catch (error) {
-      console.error(`Attempt ${i + 1} failed:`, error);
-      lastError = error;
-      
-      // Wait before retrying (exponential backoff)
-      if (i < maxRetries - 1) {
-        const waitTime = Math.min(1000 * Math.pow(2, i), 5000);
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-      }
-    }
-  }
-  
-  throw lastError;
-}
+const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')!
 
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { roleId } = await req.json();
-    console.log(`Creating mind for role: ${roleId}`);
+    const { roleId } = await req.json()
+    console.log(`Creating mind for role: ${roleId}`)
 
     if (!roleId) {
-      throw new Error('Role ID is required');
+      throw new Error('Role ID is required')
     }
 
-    if (!llongtermApiKey) {
-      throw new Error('VITE_LLONGTERM_API_KEY is not configured');
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     // Get role details
     const { data: role, error: roleError } = await supabase
       .from('roles')
       .select('*')
       .eq('id', roleId)
-      .single();
+      .single()
 
     if (roleError || !role) {
-      throw new Error(`Failed to fetch role: ${roleError?.message}`);
+      throw new Error(`Failed to fetch role: ${roleError?.message}`)
     }
 
     // Get pending mind record
@@ -88,10 +43,16 @@ serve(async (req) => {
       .from('role_minds')
       .select('*')
       .eq('role_id', roleId)
-      .single();
+      .single()
 
     if (mindError || !mindRecord) {
-      throw new Error(`No pending mind record found for role: ${roleId}`);
+      throw new Error(`No pending mind record found for role: ${roleId}`)
+    }
+
+    // Initialize Llongterm client
+    const llongtermClient = {
+      apiKey: llongtermApiKey,
+      baseURL: 'https://api.llongterm.ai/v1',
     }
 
     // Create structured memory from role data
@@ -108,7 +69,7 @@ serve(async (req) => {
         responseStyle: role.response_style || {},
         interactionPreferences: role.interaction_preferences || {},
       }
-    };
+    }
 
     // Create mind options
     const createOptions = {
@@ -118,79 +79,60 @@ serve(async (req) => {
         userId: role.user_id,
         created: new Date().toISOString(),
       },
-      config: mindRecord.memory_configuration || {
-        contextWindow: 10,
-        maxMemories: 100,
-        relevanceThreshold: 0.7
-      }
-    };
-
-    console.log('Preparing request to Llongterm API:', {
-      url: `${LLONGTERM_API_URL}/minds`,
-      options: createOptions
-    });
-
-    try {
-      const response = await fetchWithRetry(
-        `${LLONGTERM_API_URL}/minds`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${llongtermApiKey}`,
-            'Accept': 'application/json',
-            'User-Agent': 'Supabase Edge Function'
-          },
-          body: JSON.stringify(createOptions)
-        }
-      );
-
-      const mind = await response.json();
-      console.log('Successfully created mind:', mind);
-
-      // Update role_minds with success
-      const { error: updateError } = await supabase
-        .from('role_minds')
-        .update({
-          mind_id: mind.id,
-          status: 'active',
-          updated_at: new Date().toISOString(),
-          last_sync: new Date().toISOString(),
-          structured_memory: structuredMemory
-        })
-        .eq('role_id', roleId);
-
-      if (updateError) {
-        console.error('Error updating role_minds:', updateError);
-        throw new Error(`Failed to update role_minds: ${updateError.message}`);
-      }
-
-      return new Response(
-        JSON.stringify({ success: true, mindId: mind.id }),
-        { 
-          headers: { 
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          } 
-        }
-      );
-    } catch (fetchError) {
-      console.error('Fetch error details:', {
-        error: fetchError,
-        message: fetchError.message,
-        stack: fetchError.stack
-      });
-      throw new Error(`Failed to create mind: ${fetchError.message}`);
+      config: mindRecord.memory_configuration
     }
 
+    // Create mind using Llongterm API
+    const response = await fetch(`${llongtermClient.baseURL}/minds`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${llongtermClient.apiKey}`,
+      },
+      body: JSON.stringify(createOptions),
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(`Failed to create mind: ${error.message}`)
+    }
+
+    const mind = await response.json()
+
+    // Update role_minds with success
+    const { error: updateError } = await supabase
+      .from('role_minds')
+      .update({
+        mind_id: mind.id,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+        last_sync: new Date().toISOString(),
+        structured_memory: structuredMemory
+      })
+      .eq('role_id', roleId)
+
+    if (updateError) {
+      throw new Error(`Failed to update role_minds: ${updateError.message}`)
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, mindId: mind.id }),
+      { 
+        headers: { 
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        } 
+      }
+    )
+
   } catch (error) {
-    console.error('Error creating mind:', error);
+    console.error('Error creating mind:', error)
     
     // Update role_minds with error status if we can
     try {
-      const { roleId } = await req.json();
+      const { roleId } = await req.json()
       if (roleId) {
-        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        const supabase = createClient(supabaseUrl, supabaseServiceKey)
         await supabase
           .from('role_minds')
           .update({
@@ -198,17 +140,14 @@ serve(async (req) => {
             error_message: error.message,
             updated_at: new Date().toISOString(),
           })
-          .eq('role_id', roleId);
+          .eq('role_id', roleId)
       }
     } catch (updateError) {
-      console.error('Failed to update mind status:', updateError);
+      console.error('Failed to update mind status:', updateError)
     }
     
     return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: error instanceof Error ? error.stack : undefined
-      }),
+      JSON.stringify({ error: error.message }),
       { 
         status: 400,
         headers: { 
@@ -216,7 +155,6 @@ serve(async (req) => {
           'Content-Type': 'application/json'
         }
       }
-    );
+    )
   }
-});
-
+})

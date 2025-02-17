@@ -758,7 +758,7 @@ export type Database = {
           last_sync: string | null
           memory_configuration: Json | null
           metadata: Json | null
-          mind_id: string | null
+          mind_id: string
           retry_count: number | null
           role_id: string
           specialization:
@@ -777,7 +777,7 @@ export type Database = {
           last_sync?: string | null
           memory_configuration?: Json | null
           metadata?: Json | null
-          mind_id?: string | null
+          mind_id: string
           retry_count?: number | null
           role_id: string
           specialization?:
@@ -796,7 +796,7 @@ export type Database = {
           last_sync?: string | null
           memory_configuration?: Json | null
           metadata?: Json | null
-          mind_id?: string | null
+          mind_id?: string
           retry_count?: number | null
           role_id?: string
           specialization?:
