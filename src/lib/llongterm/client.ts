@@ -1,10 +1,10 @@
 
 import { LLONGTERM_API_KEY } from '@/config/secrets';
 import { LlongtermError } from './errors';
-import { Client as LlongtermClient } from 'llongterm';
+import { Llongterm } from 'llongterm';
 
 // Create SDK instance
-const llongterm = new LlongtermClient({
+const llongterm = new Llongterm({
   apiKey: LLONGTERM_API_KEY,
 });
 
