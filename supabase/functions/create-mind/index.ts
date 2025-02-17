@@ -4,6 +4,7 @@ import { corsHeaders } from '../_shared/cors.ts'
 import Llongterm from "https://esm.sh/llongterm@latest"
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -11,23 +12,48 @@ serve(async (req) => {
   try {
     const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')
     if (!llongtermApiKey) {
+      console.error('LLONGTERM_API_KEY is not set in environment variables')
       throw new Error('LLONGTERM_API_KEY is not set')
     }
 
+    console.log('Initializing Llongterm with API key length:', llongtermApiKey.length)
+
     // Get request body
     const { specialism, specialismDepth, metadata } = await req.json()
+    console.log('Received request parameters:', { specialism, specialismDepth })
 
-    // Initialize Llongterm
+    // Initialize Llongterm with correct pattern
     const llongterm = new Llongterm({
-      keys: { llongterm: llongtermApiKey }
+      apiKey: llongtermApiKey // Direct apiKey property, not nested in 'keys'
     })
 
-    // Create mind
+    if (!llongterm) {
+      console.error('Failed to initialize Llongterm client')
+      throw new Error('Failed to initialize Llongterm client')
+    }
+
+    console.log('Llongterm initialized successfully')
+
+    // Validate llongterm.minds exists
+    if (!llongterm.minds) {
+      console.error('llongterm.minds is undefined after initialization')
+      throw new Error('Invalid Llongterm client state: minds property is undefined')
+    }
+
+    // Create mind with validation
     const mind = await llongterm.minds.create({
       specialism,
       specialismDepth,
       metadata
     })
+
+    // Validate mind object
+    if (!mind || !mind.id) {
+      console.error('Invalid mind object returned:', mind)
+      throw new Error('Failed to create valid mind object')
+    }
+
+    console.log('Mind created successfully with ID:', mind.id)
 
     // Return only the necessary mind data
     return new Response(
@@ -48,7 +74,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.stack 
+        details: error.stack,
+        timestamp: new Date().toISOString()
       }),
       {
         headers: {
@@ -60,3 +87,4 @@ serve(async (req) => {
     )
   }
 })
+
