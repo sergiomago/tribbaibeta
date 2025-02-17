@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     let payload: CreateMindRequest;
     try {
       const rawBody = await req.text();
-      console.log('Received raw body:', rawBody); // Debug log
+      console.log('Received raw body:', rawBody);
       payload = JSON.parse(rawBody);
     } catch (e) {
       console.error('JSON parsing error:', e);
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
 
     console.log('Creating mind with payload:', JSON.stringify(payload, null, 2));
 
-    // Create mind in Llongterm
+    // Create mind in Llongterm with proper initialization parameters
     const mindResponse = await fetch(`https://api.llongterm.com/v1/minds`, {
       method: 'POST',
       headers: {
@@ -51,7 +51,8 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${llongtermApiKey}`,
       },
       body: JSON.stringify({
-        id: payload.roleId,
+        specialism: payload.roleName,
+        specialismDepth: 2,
         metadata: {
           roleId: payload.roleId,
           name: payload.roleName,
@@ -62,6 +63,14 @@ Deno.serve(async (req) => {
           specialCapabilities: payload.specialCapabilities,
           created: new Date().toISOString(),
         },
+        initialMemory: {
+          summary: `${payload.roleName} is an AI assistant with expertise in ${payload.expertiseAreas?.join(', ') || 'various areas'}. ${payload.roleDescription}`,
+          structured: {
+            instructions: payload.roleInstructions,
+            capabilities: payload.specialCapabilities
+          },
+          unstructured: {}
+        }
       }),
     });
 
@@ -84,7 +93,10 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in create-role-mind:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error.message,
+        details: error.stack // Adding stack trace for better debugging
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400,
