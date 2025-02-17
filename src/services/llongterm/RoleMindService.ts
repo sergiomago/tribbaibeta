@@ -1,6 +1,6 @@
 
 import { supabase } from '@/lib/supabase';
-import { mindService } from './MindService';
+import { llongtermClient } from '@/lib/llongterm/client';
 import type { CreateOptions, Mind } from 'llongterm';
 import { LlongtermError } from '@/lib/llongterm/errors';
 
@@ -19,30 +19,21 @@ export class RoleMindService {
 
       if (roleError) throw new Error('Failed to fetch role details');
 
-      // Call the edge function with proper JSON payload including role details
-      const { data: mind, error } = await supabase.functions.invoke('create-role-mind', {
-        body: JSON.stringify({
+      // Create mind directly using the client
+      const mind = await llongtermClient.createMind({
+        specialism: role.name,
+        specialismDepth: 2,
+        metadata: {
           roleId,
-          roleName: role.name,
-          roleDescription: role.description,
-          roleTag: role.tag,
-          roleInstructions: role.instructions,
+          name: role.name,
+          description: role.description,
+          tag: role.tag,
+          instructions: role.instructions,
           expertiseAreas: role.expertise_areas,
-          specialCapabilities: role.special_capabilities
-        }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
+          specialCapabilities: role.special_capabilities,
+          ...options.metadata
+        }
       });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw error;
-      }
-      if (!mind) throw new Error('No response from mind creation service');
-
-      // Determine specialization based on role capabilities
-      const specialization = this.determineSpecialization(role.special_capabilities);
 
       // Store the association and configuration
       const { error: dbError } = await supabase
@@ -50,7 +41,7 @@ export class RoleMindService {
         .update({
           mind_id: mind.id,
           status: 'active',
-          specialization,
+          specialization: this.determineSpecialization(role.special_capabilities),
           specialization_depth: 2,
           memory_configuration: {
             contextWindow: 10,
@@ -68,12 +59,17 @@ export class RoleMindService {
 
       if (dbError) {
         console.error('Database error:', dbError);
+        // Attempt to clean up the mind if database update fails
+        try {
+          await llongtermClient.deleteMind(mind.id);
+        } catch (cleanupError) {
+          console.error('Failed to cleanup mind after database error:', cleanupError);
+        }
         throw dbError;
       }
 
-      return mind as Mind;
+      return mind;
     } catch (error) {
-      // Update status to failed with error message
       console.error('Error in createMindForRole:', error);
       await this.updateMindStatus(roleId, 'failed', error.message);
       throw error;
@@ -103,9 +99,8 @@ export class RoleMindService {
     }
 
     try {
-      return await mindService.getMind(data.mind_id);
+      return await llongtermClient.getMind(data.mind_id);
     } catch (error) {
-      // If mind retrieval fails, update status
       await this.updateMindStatus(roleId, 'failed', error.message);
       return null;
     }
@@ -123,10 +118,8 @@ export class RoleMindService {
     }
 
     try {
-      // Delete from Llongterm
-      await mindService.deleteMind(data.mind_id);
+      await llongtermClient.deleteMind(data.mind_id);
 
-      // Update database record
       await supabase
         .from('role_minds')
         .update({ 

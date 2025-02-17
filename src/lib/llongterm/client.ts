@@ -1,3 +1,4 @@
+
 import { LLONGTERM_API_KEY } from '@/config/secrets';
 import { LlongtermError } from './errors';
 import type { CreateOptions, Mind, DeleteResponse } from 'llongterm';
@@ -19,40 +20,75 @@ class LlongtermClient {
     return LlongtermClient.instance;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`,
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new LlongtermError(`API request failed: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
   async createMind(options: CreateOptions): Promise<Mind> {
-    return this.request<Mind>('/minds', {
-      method: 'POST',
-      body: JSON.stringify(options),
-    });
+    try {
+      const response = await fetch(`${this.baseUrl}/minds`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          specialism: options.specialism || 'AI Assistant',
+          specialismDepth: options.specialismDepth || 2,
+          metadata: options.metadata,
+          initialMemory: {
+            summary: options.metadata?.description || '',
+            structured: options.metadata?.structured || {},
+            unstructured: options.metadata?.unstructured || {}
+          }
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new LlongtermError(`Failed to create mind: ${errorData}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to create mind:', error);
+      throw error instanceof LlongtermError ? error : new LlongtermError(String(error));
+    }
   }
 
   async getMind(mindId: string): Promise<Mind> {
-    return this.request<Mind>(`/minds/${mindId}`, {
-      method: 'GET',
-    });
+    try {
+      const response = await fetch(`${this.baseUrl}/minds/${mindId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new LlongtermError(`Failed to get mind: ${await response.text()}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to get mind:', error);
+      throw error instanceof LlongtermError ? error : new LlongtermError(String(error));
+    }
   }
 
   async deleteMind(mindId: string): Promise<DeleteResponse> {
-    return this.request<DeleteResponse>(`/minds/${mindId}`, {
-      method: 'DELETE',
-    });
+    try {
+      const response = await fetch(`${this.baseUrl}/minds/${mindId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new LlongtermError(`Failed to delete mind: ${await response.text()}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to delete mind:', error);
+      throw error instanceof LlongtermError ? error : new LlongtermError(String(error));
+    }
   }
 }
 
