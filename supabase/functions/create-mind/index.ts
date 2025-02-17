@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
-import llongterm from 'npm:llongterm'
+import Llongterm from "https://esm.sh/llongterm@latest"
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -11,27 +11,30 @@ serve(async (req) => {
   try {
     const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')
     if (!llongtermApiKey) {
-      throw new Error('LLONGTERM_API_KEY is not set in environment variables')
+      throw new Error('LLONGTERM_API_KEY is not set')
     }
 
-    // Initialize the client using the default export
-    const client = llongterm({
-      apiKey: llongtermApiKey,
-    });
+    // Get request body
+    const { specialism, specialismDepth, metadata } = await req.json()
 
-    // Test if client initialized correctly
-    if (!client || !client.minds) {
-      throw new Error('Failed to initialize Llongterm client');
-    }
+    // Initialize Llongterm
+    const llongterm = new Llongterm({
+      keys: { llongterm: llongtermApiKey }
+    })
 
-    // Return only necessary client data
-    const clientData = {
-      minds: client.minds,
-      initialized: true
-    };
+    // Create mind
+    const mind = await llongterm.minds.create({
+      specialism,
+      specialismDepth,
+      metadata
+    })
 
+    // Return only the necessary mind data
     return new Response(
-      JSON.stringify({ client: clientData }),
+      JSON.stringify({
+        id: mind.id,
+        status: 'created'
+      }),
       {
         headers: {
           ...corsHeaders,
@@ -41,7 +44,7 @@ serve(async (req) => {
       },
     )
   } catch (error) {
-    console.error('Error in init-llongterm:', error);
+    console.error('Error in create-mind:', error)
     return new Response(
       JSON.stringify({ 
         error: error.message,

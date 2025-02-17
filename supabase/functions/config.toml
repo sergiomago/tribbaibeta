@@ -19,3 +19,6 @@ port = 54321
 [init-llongterm.http]
 port = 54321
 
+[create-mind.http]
+port = 54321
+
