@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { LlongtermError } from './errors';
-import type { CreateOptions, Mind, DeleteResponse } from 'llongterm';
+import type { CreateOptions, Mind, DeleteResponse, Message, RememberResponse, KnowledgeResponse } from 'llongterm';
 
 // Create a wrapper for Llongterm operations
 class LlongtermMindClient {
@@ -19,24 +19,8 @@ class LlongtermMindClient {
         throw new Error(`Failed to create mind: ${error.message}`);
       }
 
-      // Return a Mind object with the necessary methods
-      return {
-        id: data.id,
-        async kill() {
-          const { error: deleteError } = await supabase.functions.invoke('delete-mind', {
-            body: { mindId: data.id }
-          });
-
-          if (deleteError) {
-            throw new Error(`Failed to delete mind: ${deleteError.message}`);
-          }
-
-          return {
-            success: true,
-            mindId: data.id
-          };
-        }
-      };
+      // Return a Mind object with all required methods
+      return this.createMindInstance(data.id);
     } catch (error) {
       console.error('Error creating mind:', error);
       throw new LlongtermError('Failed to create mind: ' + error.message);
@@ -44,24 +28,7 @@ class LlongtermMindClient {
   }
 
   async get(mindId: string): Promise<Mind> {
-    // For now, just return a basic mind object since we're focusing on creation
-    return {
-      id: mindId,
-      async kill() {
-        const { error: deleteError } = await supabase.functions.invoke('delete-mind', {
-          body: { mindId }
-        });
-
-        if (deleteError) {
-          throw new Error(`Failed to delete mind: ${deleteError.message}`);
-        }
-
-        return {
-          success: true,
-          mindId
-        };
-      }
-    };
+    return this.createMindInstance(mindId);
   }
 
   async delete(mindId: string): Promise<DeleteResponse> {
@@ -76,6 +43,62 @@ class LlongtermMindClient {
     return {
       success: true,
       mindId
+    };
+  }
+
+  private createMindInstance(mindId: string): Mind {
+    return {
+      id: mindId,
+      async remember(messages: Message[]): Promise<RememberResponse> {
+        const { data, error } = await supabase.functions.invoke('remember-mind', {
+          body: { 
+            mindId,
+            messages 
+          }
+        });
+
+        if (error) {
+          throw new Error(`Failed to store memory: ${error.message}`);
+        }
+
+        return {
+          success: true,
+          memoryId: data.memoryId,
+          summary: data.summary
+        };
+      },
+      async ask(question: string): Promise<KnowledgeResponse> {
+        const { data, error } = await supabase.functions.invoke('ask-mind', {
+          body: { 
+            mindId,
+            question 
+          }
+        });
+
+        if (error) {
+          throw new Error(`Failed to get answer: ${error.message}`);
+        }
+
+        return {
+          answer: data.answer,
+          confidence: data.confidence,
+          relevantMemories: data.relevantMemories
+        };
+      },
+      async kill(): Promise<DeleteResponse> {
+        const { error } = await supabase.functions.invoke('delete-mind', {
+          body: { mindId }
+        });
+
+        if (error) {
+          throw new Error(`Failed to delete mind: ${error.message}`);
+        }
+
+        return {
+          success: true,
+          mindId
+        };
+      }
     };
   }
 }

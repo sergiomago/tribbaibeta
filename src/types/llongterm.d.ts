@@ -8,6 +8,9 @@ declare module 'llongterm' {
 
   export interface Mind {
     id: string;
+    memory?: MemoryStructure;
+    remember: (messages: Message[]) => Promise<RememberResponse>;
+    ask: (question: string) => Promise<KnowledgeResponse>;
     kill: () => Promise<DeleteResponse>;
   }
 
