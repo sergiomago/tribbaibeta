@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
-import * as llongtermModule from 'npm:llongterm'
+import { createLlongterm } from 'npm:llongterm'
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -15,8 +15,7 @@ serve(async (req) => {
     }
 
     // Create SDK instance with API key
-    const factory = llongtermModule as (config: { apiKey: string }) => any;
-    const client = factory({
+    const client = createLlongterm({
       apiKey: llongtermApiKey,
     });
 

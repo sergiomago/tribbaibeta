@@ -16,3 +16,6 @@ port = 54321
 [generate-embedding.http]
 port = 54321
 
+[init-llongterm.http]
+port = 54321
+
