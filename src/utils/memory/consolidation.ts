@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { MemoryMetadata, DatabaseMemory } from "./types";
 import { createEmbedding } from "../embeddings";
