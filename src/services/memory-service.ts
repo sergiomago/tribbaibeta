@@ -1,3 +1,4 @@
+
 import { llongterm } from '@/lib/llongterm/client';
 
 interface LlongtermResponse {
@@ -5,33 +6,31 @@ interface LlongtermResponse {
 }
 
 export class MemoryService {
-  private static llongtermClient: any = null;
+  private static mind: any = null;
 
   private static async getMind() {
-    if (!this.llongtermClient) {
+    if (!this.mind) {
       try {
-        this.llongtermClient = await llongterm.createMind({ 
-          specialism: 'Tribbai' 
+        this.mind = await llongterm.minds.create({ 
+          specialism: 'Tribbai',
+          specialismDepth: 1
         });
         
         console.log('Mind created successfully');
-        return this.llongtermClient;
+        return this.mind;
       } catch (error) {
         console.error('Error creating mind:', error);
         throw error;
       }
     }
-    return this.llongtermClient;
+    return this.mind;
   }
 
   static async getConversationContext(conversationId: string): Promise<string[]> {
     try {
       const mind = await this.getMind();
-      const { memories }: LlongtermResponse = await mind.retrieve({
-        conversation_id: conversationId,
-        depth: 3
-      });
-      return memories.map(m => m.content);
+      const response = await mind.ask(`What do you remember about conversation ${conversationId}?`);
+      return [response.answer];
     } catch (error) {
       console.error('Memory retrieval failed:', error);
       return [];
@@ -41,8 +40,15 @@ export class MemoryService {
   static async storeConversationMemory(conversationId: string, thread: { author: string, message: string }[]): Promise<void> {
     try {
       const mind = await this.getMind();
-      const enrichedMessage = await mind.remember({ thread });
-      console.log('Memory stored successfully:', enrichedMessage);
+      await mind.remember(thread.map(m => ({
+        content: m.message,
+        metadata: {
+          author: m.author,
+          conversationId,
+          timestamp: new Date().toISOString()
+        }
+      })));
+      console.log('Memory stored successfully');
     } catch (error) {
       console.error('Failed to store memory:', error);
     }
