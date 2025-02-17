@@ -10,16 +10,39 @@ export class RoleMindService {
       // Update status to processing
       await this.updateMindStatus(roleId, 'processing');
 
-      // Call the edge function with proper JSON payload
+      // Get role details for mind metadata
+      const { data: role, error: roleError } = await supabase
+        .from('roles')
+        .select('name, description, tag, instructions, expertise_areas, special_capabilities')
+        .eq('id', roleId)
+        .single();
+
+      if (roleError) throw new Error('Failed to fetch role details');
+
+      // Call the edge function with proper JSON payload including role details
       const { data: mind, error } = await supabase.functions.invoke('create-role-mind', {
-        body: JSON.stringify({ roleId }), // Make sure we're stringifying the body
+        body: JSON.stringify({
+          roleId,
+          roleName: role.name,
+          roleDescription: role.description,
+          roleTag: role.tag,
+          roleInstructions: role.instructions,
+          expertiseAreas: role.expertise_areas,
+          specialCapabilities: role.special_capabilities
+        }),
         headers: {
-          'Content-Type': 'application/json', // Explicitly set content type
+          'Content-Type': 'application/json',
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
+      }
       if (!mind) throw new Error('No response from mind creation service');
+
+      // Determine specialization based on role capabilities
+      const specialization = this.determineSpecialization(role.special_capabilities);
 
       // Store the association and configuration
       const { error: dbError } = await supabase
@@ -27,7 +50,7 @@ export class RoleMindService {
         .update({
           mind_id: mind.id,
           status: 'active',
-          specialization: 'assistant',
+          specialization,
           specialization_depth: 2,
           memory_configuration: {
             contextWindow: 10,
@@ -38,12 +61,12 @@ export class RoleMindService {
           last_sync: new Date().toISOString(),
           metadata: {
             ...options.metadata,
+            role_details: role
           }
         })
         .eq('role_id', roleId);
 
       if (dbError) {
-        // If database update fails, clean up the created mind
         console.error('Database error:', dbError);
         throw dbError;
       }
