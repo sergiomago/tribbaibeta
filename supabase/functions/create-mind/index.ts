@@ -22,7 +22,7 @@ serve(async (req) => {
     const { specialism, specialismDepth, metadata } = await req.json()
     console.log('Received request parameters:', { specialism, specialismDepth })
 
-    // Initialize Llongterm correctly as a factory function (no 'new' keyword)
+    // Initialize Llongterm correctly as a factory function
     const llongterm = Llongterm({ apiKey: llongtermApiKey })
 
     if (!llongterm) {
@@ -53,12 +53,9 @@ serve(async (req) => {
 
     console.log('Mind created successfully with ID:', mind.id)
 
-    // Return only the necessary mind data
+    // Return ONLY the id property - this matches what the client expects
     return new Response(
-      JSON.stringify({
-        id: mind.id,
-        status: 'created'
-      }),
+      JSON.stringify({ id: mind.id }),
       {
         headers: {
           ...corsHeaders,
