@@ -751,12 +751,16 @@ export type Database = {
       }
       role_minds: {
         Row: {
+          context_window: number | null
           created_at: string
           error_message: string | null
           id: string
+          initialization_status: string | null
           last_error_at: string | null
+          last_interaction_at: string | null
           last_sync: string | null
           memory_configuration: Json | null
+          memory_limit: number | null
           metadata: Json | null
           mind_id: string | null
           retry_count: number | null
@@ -770,12 +774,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          context_window?: number | null
           created_at?: string
           error_message?: string | null
           id?: string
+          initialization_status?: string | null
           last_error_at?: string | null
+          last_interaction_at?: string | null
           last_sync?: string | null
           memory_configuration?: Json | null
+          memory_limit?: number | null
           metadata?: Json | null
           mind_id?: string | null
           retry_count?: number | null
@@ -789,12 +797,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          context_window?: number | null
           created_at?: string
           error_message?: string | null
           id?: string
+          initialization_status?: string | null
           last_error_at?: string | null
+          last_interaction_at?: string | null
           last_sync?: string | null
           memory_configuration?: Json | null
+          memory_limit?: number | null
           metadata?: Json | null
           mind_id?: string | null
           retry_count?: number | null
