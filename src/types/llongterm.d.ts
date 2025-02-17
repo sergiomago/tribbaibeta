@@ -1,14 +1,9 @@
-declare module 'llongterm' {
-  export interface MemorySection {
-    content: string;
-    timestamp: number;
-    metadata?: Record<string, unknown>;
-  }
 
-  export interface MemoryStructure {
-    summary: string;
-    unstructured: Record<string, unknown>;
-    structured: Record<string, MemorySection>;
+declare module 'llongterm' {
+  export interface CreateOptions {
+    specialism?: string;
+    specialismDepth?: number;
+    metadata?: Record<string, unknown>;
   }
 
   export interface Mind {
@@ -22,15 +17,19 @@ declare module 'llongterm' {
   export interface Message {
     author: 'user' | 'assistant' | 'system';
     message: string;
-    timestamp?: number;
     metadata?: Record<string, unknown>;
   }
 
-  export interface CreateOptions {
-    specialism?: string;
-    specialismDepth?: number;
-    initialMemory?: MemoryStructure;
+  export interface MemorySection {
+    content: string;
+    timestamp: number;
     metadata?: Record<string, unknown>;
+  }
+
+  export interface MemoryStructure {
+    summary: string;
+    unstructured: Record<string, unknown>;
+    structured: Record<string, MemorySection>;
   }
 
   export interface RememberResponse {
@@ -49,4 +48,17 @@ declare module 'llongterm' {
     success: boolean;
     mindId: string;
   }
+
+  export interface LlongtermClient {
+    minds: {
+      create: (options: CreateOptions) => Promise<Mind>;
+      get: (mindId: string) => Promise<Mind>;
+      delete: (mindId: string) => Promise<DeleteResponse>;
+    }
+  }
+
+  // Add the factory function type
+  const llongtermFactory: (config: { apiKey: string }) => LlongtermClient;
+  export default llongtermFactory;
 }
+
