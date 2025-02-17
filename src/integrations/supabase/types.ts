@@ -749,12 +749,12 @@ export type Database = {
           },
         ]
       }
-      role_minds: {
+      role_minds_backup: {
         Row: {
           context_window: number | null
-          created_at: string
+          created_at: string | null
           error_message: string | null
-          id: string
+          id: string | null
           initialization_status: string | null
           last_error_at: string | null
           last_interaction_at: string | null
@@ -764,20 +764,20 @@ export type Database = {
           metadata: Json | null
           mind_id: string | null
           retry_count: number | null
-          role_id: string
+          role_id: string | null
           specialization:
             | Database["public"]["Enums"]["mind_specialization"]
             | null
           specialization_depth: number | null
           status: Database["public"]["Enums"]["mind_status"] | null
           structured_memory: Json | null
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           context_window?: number | null
-          created_at?: string
+          created_at?: string | null
           error_message?: string | null
-          id?: string
+          id?: string | null
           initialization_status?: string | null
           last_error_at?: string | null
           last_interaction_at?: string | null
@@ -787,20 +787,20 @@ export type Database = {
           metadata?: Json | null
           mind_id?: string | null
           retry_count?: number | null
-          role_id: string
+          role_id?: string | null
           specialization?:
             | Database["public"]["Enums"]["mind_specialization"]
             | null
           specialization_depth?: number | null
           status?: Database["public"]["Enums"]["mind_status"] | null
           structured_memory?: Json | null
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           context_window?: number | null
-          created_at?: string
+          created_at?: string | null
           error_message?: string | null
-          id?: string
+          id?: string | null
           initialization_status?: string | null
           last_error_at?: string | null
           last_interaction_at?: string | null
@@ -810,24 +810,16 @@ export type Database = {
           metadata?: Json | null
           mind_id?: string | null
           retry_count?: number | null
-          role_id?: string
+          role_id?: string | null
           specialization?:
             | Database["public"]["Enums"]["mind_specialization"]
             | null
           specialization_depth?: number | null
           status?: Database["public"]["Enums"]["mind_status"] | null
           structured_memory?: Json | null
-          updated_at?: string
+          updated_at?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "role_minds_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       roles: {
         Row: {
@@ -841,6 +833,9 @@ export type Database = {
           instructions: string
           interaction_preferences: Json | null
           is_template: boolean | null
+          mind_error: string | null
+          mind_id: string | null
+          mind_status: string | null
           model: string
           name: string
           package_name: string | null
@@ -868,6 +863,9 @@ export type Database = {
           instructions: string
           interaction_preferences?: Json | null
           is_template?: boolean | null
+          mind_error?: string | null
+          mind_id?: string | null
+          mind_status?: string | null
           model?: string
           name: string
           package_name?: string | null
@@ -895,6 +893,9 @@ export type Database = {
           instructions?: string
           interaction_preferences?: Json | null
           is_template?: boolean | null
+          mind_error?: string | null
+          mind_id?: string | null
+          mind_status?: string | null
           model?: string
           name?: string
           package_name?: string | null

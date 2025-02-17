@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { RoleFormValues } from "@/components/roles/RoleForm";
 import { UseFormReturn } from "react-hook-form";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { roleMindService } from "@/services/llongterm/RoleMindService";
 
 type UseRoleFormSubmissionProps = {
   form: UseFormReturn<RoleFormValues>;
@@ -50,7 +51,7 @@ export const useRoleFormSubmission = ({
         }
       }
 
-      // Call the parent onSubmit
+      // Call the parent onSubmit to create/update the role
       await onSubmit(values);
 
       // If this is a new role (no id), initialize the mind
@@ -65,11 +66,16 @@ export const useRoleFormSubmission = ({
 
           if (roles && roles.length > 0) {
             const roleId = roles[0].id;
-            const { error: mindError } = await supabase.functions.invoke('create-role-mind', {
-              body: { roleId }
+            
+            // Create mind using the service
+            await roleMindService.createMindForRole(roleId, {
+              specialism: values.name,
+              specialismDepth: 2,
+              metadata: {
+                description: values.description,
+                created: new Date().toISOString()
+              }
             });
-
-            if (mindError) throw mindError;
 
             toast({
               title: "Success",
