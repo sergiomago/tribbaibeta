@@ -1,11 +1,11 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { LlongtermError } from './errors';
-import type { CreateOptions, Mind } from 'llongterm';
+import type { CreateOptions, Mind, DeleteResponse } from 'llongterm';
 
 // Create a wrapper for Llongterm operations
-class LlongtermClient {
-  async createMind(options: CreateOptions): Promise<Mind> {
+class LlongtermMindClient {
+  async create(options: CreateOptions): Promise<Mind> {
     try {
       const { data, error } = await supabase.functions.invoke('create-mind', {
         body: {
@@ -23,8 +23,18 @@ class LlongtermClient {
       return {
         id: data.id,
         async kill() {
-          // We'll implement this later when needed
-          console.log('Kill method called for mind:', data.id);
+          const { error: deleteError } = await supabase.functions.invoke('delete-mind', {
+            body: { mindId: data.id }
+          });
+
+          if (deleteError) {
+            throw new Error(`Failed to delete mind: ${deleteError.message}`);
+          }
+
+          return {
+            success: true,
+            mindId: data.id
+          };
         }
       };
     } catch (error) {
@@ -33,24 +43,44 @@ class LlongtermClient {
     }
   }
 
-  // We'll add get() and delete() methods when needed
-  async getMind(mindId: string): Promise<Mind | null> {
+  async get(mindId: string): Promise<Mind> {
     // For now, just return a basic mind object since we're focusing on creation
     return {
       id: mindId,
       async kill() {
-        console.log('Kill method called for mind:', mindId);
+        const { error: deleteError } = await supabase.functions.invoke('delete-mind', {
+          body: { mindId }
+        });
+
+        if (deleteError) {
+          throw new Error(`Failed to delete mind: ${deleteError.message}`);
+        }
+
+        return {
+          success: true,
+          mindId
+        };
       }
     };
   }
 
-  async deleteMind(mindId: string): Promise<void> {
-    // We'll implement this properly later
-    console.log('Delete called for mind:', mindId);
+  async delete(mindId: string): Promise<DeleteResponse> {
+    const { error } = await supabase.functions.invoke('delete-mind', {
+      body: { mindId }
+    });
+
+    if (error) {
+      throw new Error(`Failed to delete mind: ${error.message}`);
+    }
+
+    return {
+      success: true,
+      mindId
+    };
   }
 }
 
-// Create and export the client instance
+// Create and export the client instance that matches LlongtermClient interface
 export const llongterm = {
-  minds: new LlongtermClient()
+  minds: new LlongtermMindClient()
 };
