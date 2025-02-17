@@ -1,4 +1,4 @@
-import { llongtermClient } from '@/lib/llongterm/client';
+import { llongterm } from '@/lib/llongterm/client';
 
 interface LlongtermResponse {
   memories: { content: string }[];
@@ -10,7 +10,7 @@ export class MemoryService {
   private static async getMind() {
     if (!this.llongtermClient) {
       try {
-        this.llongtermClient = await llongtermClient.createMind({ 
+        this.llongtermClient = await llongterm.createMind({ 
           specialism: 'Tribbai' 
         });
         

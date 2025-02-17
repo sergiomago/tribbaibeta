@@ -5,6 +5,18 @@ import type { CreateOptions, Mind } from 'llongterm';
 import { LlongtermError } from '@/lib/llongterm/errors';
 
 export class RoleMindService {
+  // Made this public so it can be used by useRoleMind
+  async updateMindStatus(roleId: string, status: string, errorMessage?: string): Promise<void> {
+    await supabase
+      .from('roles')
+      .update({
+        mind_status: status,
+        mind_error: errorMessage,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', roleId);
+  }
+
   async createMindForRole(roleId: string, options: CreateOptions): Promise<Mind> {
     try {
       // Get role details for mind metadata
@@ -51,15 +63,7 @@ export class RoleMindService {
       return mind;
     } catch (error) {
       // Update role status on error
-      await supabase
-        .from('roles')
-        .update({
-          mind_status: 'failed',
-          mind_error: error.message,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', roleId);
-
+      await this.updateMindStatus(roleId, 'failed', error.message);
       throw error;
     }
   }
@@ -110,17 +114,6 @@ export class RoleMindService {
       await this.updateMindStatus(roleId, 'failed', error.message);
       return false;
     }
-  }
-
-  private async updateMindStatus(roleId: string, status: string, errorMessage?: string): Promise<void> {
-    await supabase
-      .from('roles')
-      .update({
-        mind_status: status,
-        mind_error: errorMessage,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', roleId);
   }
 }
 
