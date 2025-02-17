@@ -3,6 +3,7 @@ import { useToast } from "./use-toast";
 import { supabase } from "@/lib/supabase";
 import { RoleFormValues } from "@/components/roles/RoleForm";
 import { UseFormReturn } from "react-hook-form";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 type UseRoleFormSubmissionProps = {
   form: UseFormReturn<RoleFormValues>;
@@ -18,11 +19,12 @@ export const useRoleFormSubmission = ({
   setIsInitializingMind,
 }: UseRoleFormSubmissionProps) => {
   const { toast } = useToast();
+  const { planType } = useSubscription();
 
   const handleSubmit = async (values: RoleFormValues) => {
     try {
       // Check role limits for Creator plan
-      if (!defaultValues?.id && form.getValues('planType') === 'creator') {
+      if (!defaultValues?.id && planType === 'creator') {
         const { count, error: countError } = await supabase
           .from('roles')
           .select('id', { count: 'exact' })
