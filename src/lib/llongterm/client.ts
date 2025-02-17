@@ -7,7 +7,7 @@ let llongterm;
 
 try {
   // Create SDK instance with our API key
-  const factory = (llongtermModule.default || llongtermModule) as (config: { apiKey: string }) => any;
+  const factory = llongtermModule as (config: { apiKey: string }) => any;
   llongterm = factory({
     apiKey: LLONGTERM_API_KEY,
   });
@@ -22,4 +22,3 @@ try {
 }
 
 export { llongterm };
-
