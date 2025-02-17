@@ -1,12 +1,11 @@
 
-import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 
 const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY') || '';
 
 const llongtermClient = {
   apiKey: llongtermApiKey,
-  baseURL: 'https://api.llongterm.com/v1', // Changed from .ai to .com
+  baseURL: 'https://api.llongterm.com/v1',
 };
 
 Deno.serve(async (req) => {
