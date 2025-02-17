@@ -749,6 +749,77 @@ export type Database = {
           },
         ]
       }
+      role_minds: {
+        Row: {
+          context_window: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          last_error_at: string | null
+          last_interaction_at: string | null
+          last_sync: string | null
+          memory_configuration: Json | null
+          metadata: Json | null
+          mind_id: string | null
+          retry_count: number | null
+          role_id: string
+          specialization:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth: number | null
+          status: Database["public"]["Enums"]["mind_status"]
+          updated_at: string
+        }
+        Insert: {
+          context_window?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_error_at?: string | null
+          last_interaction_at?: string | null
+          last_sync?: string | null
+          memory_configuration?: Json | null
+          metadata?: Json | null
+          mind_id?: string | null
+          retry_count?: number | null
+          role_id: string
+          specialization?:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth?: number | null
+          status?: Database["public"]["Enums"]["mind_status"]
+          updated_at?: string
+        }
+        Update: {
+          context_window?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          last_error_at?: string | null
+          last_interaction_at?: string | null
+          last_sync?: string | null
+          memory_configuration?: Json | null
+          metadata?: Json | null
+          mind_id?: string | null
+          retry_count?: number | null
+          role_id?: string
+          specialization?:
+            | Database["public"]["Enums"]["mind_specialization"]
+            | null
+          specialization_depth?: number | null
+          status?: Database["public"]["Enums"]["mind_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_minds_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: true
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       role_minds_backup: {
         Row: {
           context_window: number | null
