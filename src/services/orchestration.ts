@@ -12,8 +12,8 @@ type RoleResponse = {
   special_capabilities: string[];
 }
 
-// Define the shape of the thread role response
-type ThreadRoleResponse = {
+// Define the shape of the thread role response from Supabase
+type SupabaseThreadRole = {
   role: RoleResponse;
 }
 
@@ -42,8 +42,15 @@ export async function handleChatMessage(threadId: string, content: string, messa
       };
     }
 
-    // Cast the threadRoles to the correct type and extract the roles
-    const roles = (threadRoles as ThreadRoleResponse[]).map(tr => tr.role);
+    // Safely transform the Supabase response into our expected format
+    const roles = threadRoles.map((tr: any) => ({
+      id: tr.role.id,
+      name: tr.role.name,
+      tag: tr.role.tag,
+      instructions: tr.role.instructions,
+      special_capabilities: tr.role.special_capabilities
+    } as RoleResponse));
+
     const roleIds = roles.map(role => role.id);
 
     // Get conversation context
