@@ -50,12 +50,8 @@ export class RoleMindService {
         ...options.metadata
       };
 
-      const response = await supabase.functions.invoke('create-mind', {
-        body: mindParams
-      });
-
-      if (response.error) throw response.error;
-      const mind = response.data;
+      // Create mind
+      const mind = await llongterm.minds.create(mindParams);
 
       // Update role with mind_id
       const { error: updateError } = await supabase
@@ -69,7 +65,7 @@ export class RoleMindService {
 
       if (updateError) {
         // Rollback - delete the mind if database update fails
-        await llongterm.minds.delete(mind.id);
+        await mind.kill();
         throw updateError;
       }
 
@@ -131,3 +127,4 @@ export class RoleMindService {
 }
 
 export const roleMindService = new RoleMindService();
+

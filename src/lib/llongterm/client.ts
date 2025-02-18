@@ -1,7 +1,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { LlongtermError } from './errors';
-import type { CreateOptions, Mind, DeleteResponse, Message, RememberResponse, KnowledgeResponse } from 'llongterm';
+import type { CreateOptions, Mind, DeleteResponse, Message, RememberResponse, KnowledgeResponse, LlongtermMind } from 'llongterm';
 
 // Create a wrapper for Llongterm operations
 class LlongtermMindClient {
@@ -20,7 +20,7 @@ class LlongtermMindClient {
         throw new Error(`Failed to create mind: ${error.message}`);
       }
 
-      // Return a Mind object with all required methods
+      // The edge function now returns { id: mind.mind.id }
       return this.createMindInstance(data.id);
     } catch (error) {
       console.error('Error creating mind:', error);
@@ -108,3 +108,4 @@ class LlongtermMindClient {
 export const llongterm = {
   minds: new LlongtermMindClient()
 };
+

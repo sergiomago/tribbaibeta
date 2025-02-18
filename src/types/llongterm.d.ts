@@ -3,7 +3,15 @@ declare module 'llongterm' {
   export interface CreateOptions {
     specialism?: string;
     specialismDepth?: number;
+    customStructuredKeys?: string[];
     metadata?: Record<string, unknown>;
+  }
+
+  export interface LlongtermMind {
+    mind: {
+      id: string;
+      memory?: MemoryStructure;
+    }
   }
 
   export interface Mind {
@@ -51,14 +59,22 @@ declare module 'llongterm' {
 
   export interface LlongtermClient {
     minds: {
-      create: (options: CreateOptions) => Promise<Mind>;
+      create: (options: CreateOptions) => Promise<LlongtermMind>;
       get: (mindId: string) => Promise<Mind>;
       delete: (mindId: string) => Promise<DeleteResponse>;
     }
   }
 
+  export interface LlongtermConfig {
+    keys: {
+      llongterm: string;
+      openai: string;
+    }
+  }
+
   // Allow both default and named exports
-  const factory: (config: { apiKey: string }) => LlongtermClient;
+  const factory: (config: LlongtermConfig) => LlongtermClient;
   export default factory;
   export = factory;
 }
+
