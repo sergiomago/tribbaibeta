@@ -3,8 +3,14 @@ import { supabase } from "@/lib/supabase";
 import { memoryService } from "./memory-service";
 import { Role } from "@/types/role";
 
-interface ThreadRole {
-  role: Role;
+interface ThreadRoleResponse {
+  role: {
+    id: string;
+    name: string;
+    tag: string;
+    instructions: string;
+    special_capabilities: string[];
+  }
 }
 
 export async function handleChatMessage(threadId: string, content: string, messageId: string, taggedRoleId?: string | null) {
@@ -32,7 +38,7 @@ export async function handleChatMessage(threadId: string, content: string, messa
       };
     }
 
-    const roles = threadRoles.map((tr: ThreadRole) => tr.role);
+    const roles = threadRoles.map((tr: ThreadRoleResponse) => tr.role);
     const roleIds = roles.map(role => role.id);
 
     // Get conversation context
@@ -63,7 +69,13 @@ export async function handleChatMessage(threadId: string, content: string, messa
 
 async function processRoleResponse(
   threadId: string,
-  role: Role,
+  role: {
+    id: string;
+    name: string;
+    tag: string;
+    instructions: string;
+    special_capabilities: string[];
+  },
   content: string,
   context: any,
   messageId: string
