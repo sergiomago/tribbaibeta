@@ -28,18 +28,8 @@ export class RoleMindService {
 
       if (roleError) throw new Error('Failed to fetch role details');
 
-      // Create mind using correct parameter structure
-      const mindParams = options.specialism 
-        ? { 
-            specialism: options.specialism,
-            specialismDepth: options.specialismDepth || 2
-          }
-        : { 
-            customStructuredKeys: ['memory', 'context', 'instructions']
-          };
-
-      // Add metadata
-      mindParams.metadata = {
+      // Create the metadata object
+      const metadata = {
         roleId,
         name: role.name,
         description: role.description,
@@ -49,6 +39,18 @@ export class RoleMindService {
         specialCapabilities: role.special_capabilities,
         ...options.metadata
       };
+
+      // Create mind params with metadata included from the start
+      const mindParams: CreateOptions = options.specialism 
+        ? { 
+            specialism: options.specialism,
+            specialismDepth: options.specialismDepth || 2,
+            metadata
+          }
+        : { 
+            customStructuredKeys: ['memory', 'context', 'instructions'],
+            metadata
+          };
 
       // Create mind
       const mind = await llongterm.minds.create(mindParams);
