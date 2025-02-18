@@ -1,4 +1,5 @@
-import { SupabaseClient } from '@supabase/supabase-js';
+
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
 import { RoleChainMember } from './types.ts';
 
 export async function getRoleChain(
