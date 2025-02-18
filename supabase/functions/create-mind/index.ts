@@ -1,7 +1,8 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
-import Llongterm from "https://esm.sh/llongterm@latest"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
+import Llongterm from "https://esm.sh/llongterm@1.0.36"
 
 serve(async (req) => {
   // Handle CORS
@@ -22,21 +23,15 @@ serve(async (req) => {
     const { specialism, specialismDepth, metadata } = await req.json()
     console.log('Received request parameters:', { specialism, specialismDepth })
 
-    // Initialize Llongterm correctly as a factory function
-    const llongterm = Llongterm({ apiKey: llongtermApiKey })
+    // Create a Llongterm client instance
+    const llongterm = new Llongterm(llongtermApiKey)
 
-    if (!llongterm) {
-      console.error('Failed to initialize Llongterm client')
-      throw new Error('Failed to initialize Llongterm client')
-    }
-
-    console.log('Llongterm initialized successfully')
-
-    // Validate llongterm.minds exists
-    if (!llongterm.minds) {
+    if (!llongterm?.minds) {
       console.error('llongterm.minds is undefined after initialization')
       throw new Error('Invalid Llongterm client state: minds property is undefined')
     }
+
+    console.log('Llongterm initialized successfully')
 
     // Create mind with validation
     const mind = await llongterm.minds.create({
@@ -53,7 +48,6 @@ serve(async (req) => {
 
     console.log('Mind created successfully with ID:', mind.id)
 
-    // Return ONLY the id property - this matches what the client expects
     return new Response(
       JSON.stringify({ id: mind.id }),
       {
