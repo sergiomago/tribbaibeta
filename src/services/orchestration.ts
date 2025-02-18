@@ -3,19 +3,23 @@ import { supabase } from "@/lib/supabase";
 import { memoryService } from "./memory-service";
 import { Role } from "@/types/role";
 
-interface ThreadRoleResponse {
-  role: {
-    id: string;
-    name: string;
-    tag: string;
-    instructions: string;
-    special_capabilities: string[];
-  }
+// Define the shape of a role in the response
+type RoleResponse = {
+  id: string;
+  name: string;
+  tag: string;
+  instructions: string;
+  special_capabilities: string[];
+}
+
+// Define the shape of the thread role response
+type ThreadRoleResponse = {
+  role: RoleResponse;
 }
 
 export async function handleChatMessage(threadId: string, content: string, messageId: string, taggedRoleId?: string | null) {
   try {
-    // Get roles in the thread
+    // Get roles in the thread with proper type assertion
     const { data: threadRoles, error: rolesError } = await supabase
       .from('thread_roles')
       .select(`
@@ -38,7 +42,8 @@ export async function handleChatMessage(threadId: string, content: string, messa
       };
     }
 
-    const roles = threadRoles.map((tr: ThreadRoleResponse) => tr.role);
+    // Cast the threadRoles to the correct type and extract the roles
+    const roles = (threadRoles as ThreadRoleResponse[]).map(tr => tr.role);
     const roleIds = roles.map(role => role.id);
 
     // Get conversation context
@@ -69,13 +74,7 @@ export async function handleChatMessage(threadId: string, content: string, messa
 
 async function processRoleResponse(
   threadId: string,
-  role: {
-    id: string;
-    name: string;
-    tag: string;
-    instructions: string;
-    special_capabilities: string[];
-  },
+  role: RoleResponse,
   content: string,
   context: any,
   messageId: string
