@@ -7,7 +7,7 @@ import { useRoleMind } from "./useRoleMind";
 
 export function useMessages(threadId: string | null, roleId: string | null) {
   const queryClient = useQueryClient();
-  const { mind } = useRoleMind(roleId);
+  const roleMind = useRoleMind(roleId);
 
   const { data: messages, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["messages", threadId],
@@ -30,20 +30,6 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       
       if (error) throw error;
 
-      // If we have a mind, enrich messages with Llongterm context
-      if (mind && dbMessages) {
-        const context = await mind.ask(dbMessages.map(m => m.content).join('\n'));
-        return (dbMessages as Message[]).map(msg => ({
-          ...msg,
-          metadata: {
-            ...(msg.metadata || {}),
-            llongterm_context: context.relevantMemories
-              .filter(m => m.includes(msg.content))
-              .map(m => ({ content: m }))
-          }
-        }));
-      }
-
       return dbMessages as Message[];
     },
     enabled: !!threadId,
@@ -63,24 +49,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
           filter: `thread_id=eq.${threadId}`,
         },
         async (payload) => {
-          // When a new message arrives, update cache and store in Llongterm if available
           queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
-          
-          if (mind && payload.new) {
-            try {
-              await mind.remember([{
-                author: payload.new.role_id ? 'assistant' : 'user',
-                message: payload.new.content,
-                metadata: {
-                  messageId: payload.new.id,
-                  threadId: payload.new.thread_id,
-                  timestamp: payload.new.created_at
-                }
-              }]);
-            } catch (error) {
-              console.error('Failed to store message in Llongterm:', error);
-            }
-          }
         }
       )
       .subscribe();
@@ -88,7 +57,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId, mind, queryClient]);
+  }, [threadId, queryClient]);
 
   const refetchMessages = () => {
     queryClient.invalidateQueries({ queryKey: ["messages", threadId] });

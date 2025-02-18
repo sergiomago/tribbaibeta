@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { RoleFormValues } from "@/components/roles/RoleForm";
 import { UseFormReturn } from "react-hook-form";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { roleMindService } from "@/services/llongterm/RoleMindService";
 
 type UseRoleFormSubmissionProps = {
   form: UseFormReturn<RoleFormValues>;
@@ -67,26 +66,25 @@ export const useRoleFormSubmission = ({
           if (roles && roles.length > 0) {
             const roleId = roles[0].id;
             
-            // Create mind using the service
-            await roleMindService.createMindForRole(roleId, {
-              specialism: values.name,
-              specialismDepth: 2,
-              metadata: {
-                description: values.description,
-                created: new Date().toISOString()
-              }
-            });
+            // Update role status to active
+            await supabase
+              .from('roles')
+              .update({
+                mind_status: 'active',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', roleId);
 
             toast({
               title: "Success",
-              description: "Role and mind created successfully.",
+              description: "Role created successfully.",
             });
           }
         } catch (error) {
-          console.error('Error initializing mind:', error);
+          console.error('Error initializing role:', error);
           toast({
             title: "Warning",
-            description: "Role created but mind initialization failed. You can try again later.",
+            description: "Role created but initialization failed. You can try again later.",
             variant: "destructive",
           });
         } finally {
