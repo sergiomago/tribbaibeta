@@ -16,38 +16,48 @@ export async function processMessage(processor: MessageProcessor) {
       throw new Error("No roles available to process the message");
     }
 
-    // Analyze the message
-    const analysis = await analyzeMessage(content);
+    console.log("Processing with role chain:", chain);
 
     // For each role in the chain
     for (const role of chain) {
-      // Compile context for this role
-      const context = await compileContext(supabase, {
-        threadId,
-        roleId: role.role_id,
-        content,
-        analysis
-      });
+      try {
+        // Compile context for this role
+        const context = await compileContext(supabase, {
+          threadId,
+          roleId: role.role_id,
+          content,
+          analysis: await analyzeMessage(content)
+        });
 
-      // Generate response using the compiled context
-      const response = await generateResponse({
-        roleId: role.role_id,
-        content,
-        context,
-        analysis
-      });
+        // Generate response using the compiled context
+        const response = await generateResponse({
+          roleId: role.role_id,
+          content,
+          context,
+          analysis: await analyzeMessage(content)
+        });
 
-      // Store the response
-      await supabase.from('messages').insert({
-        thread_id: threadId,
-        role_id: role.role_id,
-        content: response,
-        is_bot: true,
-        metadata: {
-          context_type: 'response',
-          analysis: analysis
-        }
-      });
+        // Store the response
+        const { error: insertError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            role_id: role.role_id,
+            content: response,
+            is_bot: true,
+            response_order: role.order,
+            metadata: {
+              context_type: 'response',
+              origin_message_id: messageId
+            }
+          });
+
+        if (insertError) throw insertError;
+
+      } catch (roleError) {
+        console.error(`Error processing role ${role.role_id}:`, roleError);
+        // Continue with next role even if one fails
+      }
     }
 
     return { success: true, message: "Message processed successfully" };
