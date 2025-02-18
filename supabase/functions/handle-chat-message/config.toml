@@ -1,0 +1,3 @@
+
+project_id = "wdffpyeesafsejfmzwvi"
+environment = ["OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
