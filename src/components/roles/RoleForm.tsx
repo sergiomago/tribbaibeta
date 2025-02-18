@@ -7,7 +7,6 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { RoleNameField } from "./form/RoleNameField";
-import { AliasField } from "./form/AliasField";
 import { TagField } from "./form/TagField";
 import { DescriptionField } from "./form/DescriptionField";
 import { InstructionsField } from "./form/InstructionsField";
@@ -19,7 +18,6 @@ import { useRoleFormSubmission } from "@/hooks/useRoleFormSubmission";
 export const roleFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, "Role name is required"),
-  alias: z.string().optional(),
   tag: z.string().min(1, "Tag is required"),
   description: z.string().min(1, "Description is required"),
   instructions: z.string().min(1, "Instructions are required"),
@@ -44,7 +42,6 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
     resolver: zodResolver(roleFormSchema),
     defaultValues: defaultValues || {
       name: "",
-      alias: "",
       tag: "",
       description: "",
       instructions: "",
@@ -60,7 +57,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
     setIsInitializingMind,
   });
 
-  const generateContent = async (type: 'tag' | 'alias' | 'instructions') => {
+  const generateContent = async (type: 'tag' | 'instructions') => {
     try {
       setIsGenerating({ ...isGenerating, [type]: true });
       const { name, description } = form.getValues();
@@ -86,16 +83,7 @@ export const RoleForm = ({ onSubmit, isCreating, defaultValues }: RoleFormProps)
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-        <RoleNameField 
-          form={form} 
-          onNameChange={() => generateContent('tag')} 
-        />
-        
-        <AliasField 
-          form={form} 
-          isGenerating={isGenerating.alias} 
-          onGenerate={() => generateContent('alias')} 
-        />
+        <RoleNameField form={form} />
         
         <TagField 
           form={form} 

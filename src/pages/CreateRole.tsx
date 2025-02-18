@@ -1,3 +1,4 @@
+
 import { AppNavbar } from "@/components/AppNavbar";
 import { RoleForm, RoleFormValues } from "@/components/roles/RoleForm";
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +31,6 @@ const CreateRole = () => {
       const formValues: RoleFormValues = {
         id: data.id,
         name: data.name,
-        alias: data.alias || undefined,
         tag: data.tag,
         description: data.description || '',
         instructions: data.instructions,
@@ -54,7 +54,6 @@ const CreateRole = () => {
           .from('roles')
           .update({
             name: values.name,
-            alias: values.alias,
             tag: values.tag,
             description: values.description,
             instructions: values.instructions,
@@ -75,7 +74,6 @@ const CreateRole = () => {
           .from('roles')
           .insert({
             name: values.name,
-            alias: values.alias,
             tag: values.tag,
             description: values.description,
             instructions: values.instructions,

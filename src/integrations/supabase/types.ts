@@ -894,7 +894,6 @@ export type Database = {
       }
       roles: {
         Row: {
-          alias: string | null
           capability_metadata: Json | null
           created_at: string
           description: string | null
@@ -924,7 +923,6 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
-          alias?: string | null
           capability_metadata?: Json | null
           created_at?: string
           description?: string | null
@@ -954,7 +952,6 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
-          alias?: string | null
           capability_metadata?: Json | null
           created_at?: string
           description?: string | null
