@@ -1,47 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
-
-class LlongtermMindClient {
-  private apiKey: string;
-
-  constructor(apiKey: string) {
-    this.apiKey = apiKey;
-  }
-
-  async create(options: {
-    specialism: string;
-    specialismDepth: number;
-    metadata: Record<string, any>;
-  }) {
-    console.log('Creating mind with options:', options);
-
-    // Here you would make the actual API call to Llongterm's API
-    // Using the apiKey for authentication
-    const response = await fetch('https://api.llongterm.com/v1/minds', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(options)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Llongterm API error:', error);
-      throw new Error(`Failed to create mind: ${error.message || 'Unknown error'}`);
-    }
-
-    const data = await response.json();
-    console.log('Mind created successfully:', data);
-
-    return {
-      id: data.id,
-      // Add other properties that match the Mind interface
-    };
-  }
-}
+import Llongterm from "https://esm.sh/llongterm@1.0.36"
 
 serve(async (req) => {
   // Handle CORS
@@ -51,39 +11,44 @@ serve(async (req) => {
 
   try {
     const llongtermApiKey = Deno.env.get('LLONGTERM_API_KEY')
-    if (!llongtermApiKey) {
-      console.error('LLONGTERM_API_KEY is not set in environment variables')
-      throw new Error('LLONGTERM_API_KEY is not set')
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
+
+    if (!llongtermApiKey || !openaiApiKey) {
+      console.error('Missing required API keys')
+      throw new Error('LLONGTERM_API_KEY and OPENAI_API_KEY must be set')
     }
 
     console.log('Initializing Llongterm client')
 
     // Get request body
-    const { specialism, specialismDepth, metadata } = await req.json()
-    console.log('Received request parameters:', { specialism, specialismDepth })
+    const { specialism, specialismDepth, metadata, customStructure } = await req.json()
+    console.log('Received request parameters:', { specialism, customStructure })
 
-    // Create client instance using our own implementation
-    const llongterm = {
-      minds: new LlongtermMindClient(llongtermApiKey)
-    };
+    // Initialize Llongterm with both API keys
+    const llongterm = new Llongterm({
+      keys: {
+        llongterm: llongtermApiKey,
+        openai: openaiApiKey
+      }
+    });
 
-    // Create mind with validation
-    const mind = await llongterm.minds.create({
-      specialism,
-      specialismDepth,
-      metadata
-    })
+    // Create mind with correct parameter structure
+    const mindParams = specialism 
+      ? { specialism, specialismDepth: specialismDepth || 2 }
+      : { customStructuredKeys: customStructure };
 
-    // Validate mind object
-    if (!mind || !mind.id) {
+    console.log('Creating mind with params:', mindParams)
+    const mind = await llongterm.create(mindParams);
+
+    if (!mind?.mind?.id) {
       console.error('Invalid mind object returned:', mind)
       throw new Error('Failed to create valid mind object')
     }
 
-    console.log('Mind created successfully with ID:', mind.id)
+    console.log('Mind created successfully with ID:', mind.mind.id)
 
     return new Response(
-      JSON.stringify({ id: mind.id }),
+      JSON.stringify({ id: mind.mind.id }),
       {
         headers: {
           ...corsHeaders,

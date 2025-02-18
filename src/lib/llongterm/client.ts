@@ -11,6 +11,7 @@ class LlongtermMindClient {
         body: {
           specialism: options.specialism,
           specialismDepth: options.specialismDepth,
+          customStructure: options.customStructuredKeys,
           metadata: options.metadata
         }
       });

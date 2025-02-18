@@ -28,21 +28,34 @@ export class RoleMindService {
 
       if (roleError) throw new Error('Failed to fetch role details');
 
-      // Create mind using SDK
-      const mind = await llongterm.minds.create({
-        specialism: role.name,
-        specialismDepth: 2,
-        metadata: {
-          roleId,
-          name: role.name,
-          description: role.description,
-          tag: role.tag,
-          instructions: role.instructions,
-          expertiseAreas: role.expertise_areas,
-          specialCapabilities: role.special_capabilities,
-          ...options.metadata
-        }
+      // Create mind using correct parameter structure
+      const mindParams = options.specialism 
+        ? { 
+            specialism: options.specialism,
+            specialismDepth: options.specialismDepth || 2
+          }
+        : { 
+            customStructuredKeys: ['memory', 'context', 'instructions']
+          };
+
+      // Add metadata
+      mindParams.metadata = {
+        roleId,
+        name: role.name,
+        description: role.description,
+        tag: role.tag,
+        instructions: role.instructions,
+        expertiseAreas: role.expertise_areas,
+        specialCapabilities: role.special_capabilities,
+        ...options.metadata
+      };
+
+      const response = await supabase.functions.invoke('create-mind', {
+        body: mindParams
       });
+
+      if (response.error) throw response.error;
+      const mind = response.data;
 
       // Update role with mind_id
       const { error: updateError } = await supabase
