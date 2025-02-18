@@ -1,7 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { corsHeaders } from '../_shared/cors.ts'
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
 import Llongterm from "https://esm.sh/llongterm@1.0.36"
 
 serve(async (req) => {
@@ -23,15 +22,21 @@ serve(async (req) => {
     const { specialism, specialismDepth, metadata } = await req.json()
     console.log('Received request parameters:', { specialism, specialismDepth })
 
-    // Create a Llongterm client instance
-    const llongterm = new Llongterm(llongtermApiKey)
+    // Initialize Llongterm as a factory function
+    const llongterm = Llongterm({ apiKey: llongtermApiKey })
+    console.log('Llongterm factory initialized:', !!llongterm)
 
-    if (!llongterm?.minds) {
+    if (!llongterm) {
+      throw new Error('Failed to initialize Llongterm client')
+    }
+
+    // Double check the minds property exists
+    if (!llongterm.minds) {
       console.error('llongterm.minds is undefined after initialization')
       throw new Error('Invalid Llongterm client state: minds property is undefined')
     }
 
-    console.log('Llongterm initialized successfully')
+    console.log('Llongterm initialized successfully with minds property')
 
     // Create mind with validation
     const mind = await llongterm.minds.create({
