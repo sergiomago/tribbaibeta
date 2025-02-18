@@ -1,3 +1,4 @@
+
 import { Tables } from "@/integrations/supabase/types";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +21,6 @@ export const BaseRoleCard = ({ role, children }: BaseRoleCardProps) => {
         <div className="flex items-start justify-between">
           <div>
             <h3 className="font-semibold text-lg">{role.name}</h3>
-            {role.alias && (
-              <p className="text-sm text-muted-foreground">{role.alias}</p>
-            )}
           </div>
           <Tooltip>
             <TooltipTrigger>

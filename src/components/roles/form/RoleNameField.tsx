@@ -1,3 +1,4 @@
+
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -6,10 +7,9 @@ import { RoleFormValues } from "../RoleForm";
 
 type RoleNameFieldProps = {
   form: UseFormReturn<RoleFormValues>;
-  onNameChange: (value: string) => void;
 };
 
-export const RoleNameField = ({ form, onNameChange }: RoleNameFieldProps) => (
+export const RoleNameField = ({ form }: RoleNameFieldProps) => (
   <FormField
     control={form.control}
     name="name"
@@ -29,12 +29,6 @@ export const RoleNameField = ({ form, onNameChange }: RoleNameFieldProps) => (
           <Input 
             placeholder="Enter the role title (e.g., 'Marketing Expert', 'Tech Lead')" 
             {...field} 
-            onChange={(e) => {
-              field.onChange(e);
-              if (e.target.value) {
-                onNameChange(e.target.value);
-              }
-            }}
           />
         </FormControl>
         <FormMessage />
