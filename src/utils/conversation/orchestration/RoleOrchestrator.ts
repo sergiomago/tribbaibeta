@@ -14,75 +14,58 @@ export class RoleOrchestrator {
     console.log('Orchestrator handling message:', { content, taggedRoleId });
 
     try {
-      let chain;
-      
-      if (taggedRoleId) {
-        // If a role is tagged, get just that role
-        const { data: role, error } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', taggedRoleId)
-          .single();
-          
-        if (error) throw error;
-        chain = [{ role_id: role.id, order: 1 }];
-      } else {
-        // Get the conversation chain from the database
-        const { data: orderedChain, error } = await supabase
-          .rpc('get_conversation_chain', { 
-            p_thread_id: this.threadId,
-            p_tagged_role_id: null 
-          });
+      // Get roles in the thread
+      const { data: threadRoles, error: rolesError } = await supabase
+        .from('thread_roles')
+        .select('role:roles(*)')
+        .eq('thread_id', this.threadId);
 
-        if (error) {
-          console.error('Error getting conversation chain:', error);
-          // Fallback to role selector if chain retrieval fails
-          chain = await this.buildRelevanceChain(content);
-        } else {
-          chain = orderedChain;
-        }
+      if (rolesError) throw rolesError;
+
+      let chain;
+      if (taggedRoleId) {
+        chain = threadRoles
+          .filter(tr => tr.role.id === taggedRoleId)
+          .map(tr => ({
+            role_id: tr.role.id,
+            order: 1
+          }));
+      } else {
+        // Get roles ordered by relevance
+        const roleSelector = createRoleSelector(this.threadId);
+        const relevantRoles = await roleSelector.selectResponders(content);
+        
+        chain = relevantRoles.map((role, index) => ({
+          role_id: role.id,
+          order: index + 1
+        }));
+      }
+
+      if (!chain.length) {
+        throw new Error('No roles available to respond');
       }
 
       console.log('Processing with chain:', chain);
 
-      // Process message through edge function with ordered chain
-      const { data: response, error: fnError } = await supabase.functions.invoke(
+      // Process message through edge function
+      const { error: fnError } = await supabase.functions.invoke(
         'handle-chat-message',
         {
-          body: { 
+          body: JSON.stringify({ 
             threadId: this.threadId, 
             content,
             chain,
             taggedRoleId 
-          }
+          })
         }
       );
 
-      if (fnError) {
-        console.error('Error invoking edge function:', fnError);
-        throw fnError;
-      }
+      if (fnError) throw fnError;
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
       throw error;
     }
-  }
-
-  private async buildRelevanceChain(content: string) {
-    // Create a role selector instance
-    const roleSelector = createRoleSelector(this.threadId);
-    
-    // Get roles sorted by relevance to the message content
-    const relevantRoles = await roleSelector.selectResponders(content);
-    
-    console.log('Relevant roles selected:', relevantRoles);
-
-    // Convert to chain format with order
-    return relevantRoles.map((role, index) => ({
-      role_id: role.id,
-      order: index + 1
-    }));
   }
 }
 

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
@@ -34,7 +33,7 @@ export function ChatInput({
   const isMobile = useIsMobile();
 
   const handleSend = async () => {
-    if (!message.trim()) return;
+    if (!message.trim() || isSending) return;
     
     setIsSending(true);
     try {
@@ -43,7 +42,7 @@ export function ChatInput({
       const taggedRoleId = tagMatch ? tagMatch[1] : null;
       
       // First store user message
-      const { data: storedMessage, error: messageError } = await supabase
+      const { error: messageError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
@@ -53,9 +52,7 @@ export function ChatInput({
             context_type: 'conversation',
             tagged_role: taggedRoleId
           }
-        })
-        .select()
-        .single();
+        });
 
       if (messageError) throw messageError;
 
