@@ -38,10 +38,6 @@ export function ChatInput({
     
     setIsSending(true);
     try {
-      // Extract tagged role if present
-      const tagMatch = message.match(/@(\w+)/);
-      const taggedRoleId = tagMatch ? tagMatch[1] : null;
-      
       // Store user message
       const { error: messageError } = await supabase
         .from('messages')
@@ -50,15 +46,20 @@ export function ChatInput({
           content: message.trim(),
           is_bot: false,
           metadata: {
-            tagged_role: taggedRoleId
+            sender: 'user'
           }
         });
 
       if (messageError) throw messageError;
 
+      toast({
+        title: "Processing message",
+        description: "AI roles are preparing their responses...",
+      });
+
       // Process with orchestrator
       const orchestrator = createRoleOrchestrator(threadId);
-      await orchestrator.handleMessage(message.trim(), taggedRoleId);
+      await orchestrator.handleMessage(message.trim());
 
       setMessage("");
       onMessageSent?.();

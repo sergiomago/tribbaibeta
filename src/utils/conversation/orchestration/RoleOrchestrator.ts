@@ -14,34 +14,40 @@ export class RoleOrchestrator {
       // Get thread roles
       const { data: threadRoles, error: rolesError } = await supabase
         .from('thread_roles')
-        .select('role:roles(*)')
+        .select(`
+          role:roles (
+            id,
+            name,
+            instructions,
+            model
+          )
+        `)
         .eq('thread_id', this.threadId);
 
       if (rolesError) throw rolesError;
 
-      // Determine response chain
-      let chain;
-      if (taggedRoleId) {
-        // If role is tagged, only that role responds
-        chain = [{ role_id: taggedRoleId, order: 1 }];
-      } else {
-        // Get optimal response order based on message content
-        const roleSelector = createRoleSelector(this.threadId);
-        const relevantRoles = await roleSelector.selectResponders(content);
-        chain = relevantRoles.map((role, index) => ({
-          role_id: role.id,
-          order: index + 1
-        }));
-      }
+      // Create chain based on tagged role or all roles
+      const chain = taggedRoleId 
+        ? threadRoles.filter(tr => tr.role.id === taggedRoleId)
+        : threadRoles;
 
       if (!chain.length) {
         throw new Error('No roles available to respond');
       }
 
       // Process through edge function
-      await supabase.functions.invoke('handle-chat-message', {
-        body: { threadId: this.threadId, content, chain }
-      });
+      const { error: fnError } = await supabase.functions.invoke(
+        'handle-chat-message',
+        {
+          body: { 
+            threadId: this.threadId, 
+            content,
+            roles: chain.map(tr => tr.role)
+          }
+        }
+      );
+
+      if (fnError) throw fnError;
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
