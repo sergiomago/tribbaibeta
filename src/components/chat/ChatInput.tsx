@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
@@ -41,7 +42,7 @@ export function ChatInput({
       const tagMatch = message.match(/@(\w+)/);
       const taggedRoleId = tagMatch ? tagMatch[1] : null;
       
-      // First store user message
+      // Store user message
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
@@ -49,7 +50,6 @@ export function ChatInput({
           content: message.trim(),
           is_bot: false,
           metadata: {
-            context_type: 'conversation',
             tagged_role: taggedRoleId
           }
         });
@@ -58,7 +58,7 @@ export function ChatInput({
 
       // Process with orchestrator
       const orchestrator = createRoleOrchestrator(threadId);
-      await orchestrator.handleMessage(message, taggedRoleId);
+      await orchestrator.handleMessage(message.trim(), taggedRoleId);
 
       setMessage("");
       onMessageSent?.();

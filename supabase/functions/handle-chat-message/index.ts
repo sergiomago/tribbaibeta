@@ -9,97 +9,88 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const openAIApiKey = Deno.env.get('OPENAI_API_KEY')!;
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
   try {
     const { threadId, content, chain } = await req.json();
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY')!;
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    
-    console.log('Processing message:', { threadId, content, chainLength: chain.length });
+    console.log('Processing message:', { threadId, chainLength: chain.length });
 
-    // Process each role in the chain sequentially
+    // Process each role sequentially
     for (const { role_id, order } of chain) {
-      try {
-        // Get role details
-        const { data: role, error: roleError } = await supabase
-          .from('roles')
-          .select('*')
-          .eq('id', role_id)
-          .single();
+      // Get role details
+      const { data: role, error: roleError } = await supabase
+        .from('roles')
+        .select('*')
+        .eq('id', role_id)
+        .single();
 
-        if (roleError) throw roleError;
+      if (roleError) throw roleError;
 
-        // Get recent conversation history
-        const { data: messages, error: messagesError } = await supabase
-          .from('messages')
-          .select('content, role:roles(name), created_at')
-          .eq('thread_id', threadId)
-          .order('created_at', { ascending: false })
-          .limit(5);
+      // Get recent messages for context
+      const { data: messages } = await supabase
+        .from('messages')
+        .select('content, role:roles(name)')
+        .eq('thread_id', threadId)
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-        if (messagesError) throw messagesError;
+      // Format conversation context
+      const context = messages
+        ? messages.reverse().map(msg => 
+            `${msg.role?.name || 'User'}: ${msg.content}`
+          ).join('\n')
+        : '';
 
-        // Format conversation context
-        const conversationContext = messages
-          ? messages.reverse().map(msg => `${msg.role?.name || 'User'}: ${msg.content}`).join('\n')
-          : '';
-
-        // Prepare AI request
-        const aiRequestBody = {
+      // Generate AI response
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           model: role.model || 'gpt-4o-mini',
           messages: [
             {
               role: "system",
-              content: `${role.instructions}\n\nRecent conversation:\n${conversationContext}`
+              content: `${role.instructions}\n\nRecent conversation:\n${context}`
             },
             { role: "user", content }
-          ],
-          temperature: 0.7,
-          max_tokens: 1000
-        };
+          ]
+        })
+      });
 
-        // Generate AI response
-        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openAIApiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(aiRequestBody)
+      const aiData = await response.json();
+      
+      if (!aiData.choices?.[0]?.message?.content) {
+        throw new Error('No response generated');
+      }
+
+      // Store the response
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          content: aiData.choices[0].message.content,
+          role_id: role_id,
+          is_bot: true,
+          chain_position: order,
+          metadata: {
+            role_name: role.name,
+            chain_order: order
+          }
         });
 
-        const aiData = await aiResponse.json();
-        const responseContent = aiData.choices[0].message.content;
-
-        // Store the response
-        const { error: messageError } = await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            content: responseContent,
-            role_id: role_id,
-            is_bot: true,
-            chain_position: order,
-            metadata: {
-              context_type: 'response',
-              role_name: role.name,
-              chain_order: order
-            }
-          });
-
-        if (messageError) throw messageError;
-
-      } catch (roleError) {
-        console.error(`Error processing role ${role_id}:`, roleError);
-        throw roleError;
-      }
+      if (messageError) throw messageError;
     }
 
     return new Response(
@@ -113,7 +104,7 @@ serve(async (req) => {
       JSON.stringify({ error: error.message }),
       { 
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     );
   }
