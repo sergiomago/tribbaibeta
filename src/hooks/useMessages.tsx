@@ -43,13 +43,30 @@ export function useMessages(threadId: string | null, roleId: string | null) {
 
       if (relError) throw relError;
 
-      // Enrich messages with relationship data
+      // Properly map the data to match our Message type
       const enrichedMessages = dbMessages.map(message => ({
-        ...message,
+        id: message.id,
+        thread_id: message.thread_id,
+        role_id: message.role_id,
+        content: message.content,
+        created_at: message.created_at,
+        tagged_role_id: message.tagged_role_id,
+        role: message.role,
+        metadata: message.metadata,
+        // Ensure parent is properly structured as a single object or null
+        parent: message.parent?.[0] ? {
+          id: message.parent[0].id,
+          content: message.parent[0].content
+        } : null,
+        depth_level: message.depth_level,
+        parent_message_id: message.parent_message_id,
+        chain_position: message.chain_position,
+        chain_id: message.chain_id,
+        chain_order: message.chain_order,
         relationships: relationships.filter(r => r.parent_message_id === message.id)
-      }));
+      })) as Message[];
 
-      return enrichedMessages as Message[];
+      return enrichedMessages;
     },
     enabled: !!threadId,
   });
