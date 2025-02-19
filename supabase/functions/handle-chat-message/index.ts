@@ -11,7 +11,7 @@ const corsHeaders = {
 async function getPreviousMessages(supabaseClient: any, threadId: string, limit: number = 5) {
   const { data: messages, error } = await supabaseClient
     .from('messages')
-    .select('content, role:roles(name, tag)')
+    .select('content, role:roles(name, tag, instructions)')
     .eq('thread_id', threadId)
     .order('created_at', { ascending: false })
     .limit(limit);
@@ -21,35 +21,30 @@ async function getPreviousMessages(supabaseClient: any, threadId: string, limit:
 }
 
 function getRoleSpecificInstructions(role: any, previousMessages: any[]) {
-  const baseInstructions = `You are ${role.name}. ${role.instructions}`;
+  // Default instructions if role-specific ones aren't available
+  const baseInstructions = `You are ${role.name}. Your goal is to provide insights from your unique perspective while building upon previous responses.`;
   
   const roleSpecificGuidance = {
-    mathematician: `Focus on mathematical concepts, formulas, and theoretical frameworks. If others have mentioned concepts, add mathematical depth and precision. Use mathematical terminology but explain it clearly.`,
-    
-    physicist: `Emphasize physical phenomena, experimental evidence, and practical applications. If others have covered theory, focus on real-world implications and experimental verification. Use physics-specific examples.`,
-    
-    philosopher: `Examine the conceptual and philosophical implications. If others have explained technical aspects, explore the deeper meaning, paradoxes, and interpretational issues. Consider epistemological and ontological questions.`
+    mathematician: 'Approach the question from a mathematical perspective. Focus on patterns, logic, and quantitative aspects.',
+    physicist: 'Analyze the question through the lens of physical laws and empirical observation.',
+    philosopher: 'Examine the deeper implications and conceptual foundations of the question.'
   };
 
   const previousResponsesContext = previousMessages.length > 0 
-    ? `\nPrevious responses in this conversation:\n${previousMessages.map(m => 
-        `${m.role.name}: ${m.content.substring(0, 200)}...`
+    ? `\nPrevious responses:\n${previousMessages.map(m => 
+        `${m.role?.name || 'Unknown'}: ${m.content?.substring(0, 200) || ''}...`
       ).join('\n')}`
     : '';
 
-  const complementaryGuidance = `
-    Review previous responses and:
-    1. Add your unique perspective based on your expertise
-    2. Complement rather than repeat what others have said
-    3. Make explicit connections to previous points when relevant
-    4. Fill gaps in understanding from your field's perspective
-    5. If you're the first to respond, provide a foundation for others to build upon
-  `;
-
   return `${baseInstructions}
-${roleSpecificGuidance[role.tag.toLowerCase()] || ''}
+${roleSpecificGuidance[role.tag?.toLowerCase()] || ''}
 ${previousResponsesContext}
-${complementaryGuidance}`;
+Key guidelines:
+1. Provide unique insights from your expertise
+2. Build upon previous responses without repeating them
+3. Make specific references to points made by others when relevant
+4. Stay true to your role's perspective
+5. If you're first, provide a foundation for others`;
 }
 
 serve(async (req) => {
@@ -72,7 +67,7 @@ serve(async (req) => {
     if (!threadId || !content || !roles) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
-        {
+        { 
           status: 400,
           headers: { 'Content-Type': 'application/json', ...corsHeaders },
         }
@@ -81,72 +76,85 @@ serve(async (req) => {
 
     console.log('Processing message for thread:', threadId);
 
-    // Get previous messages for context
-    const previousMessages = await getPreviousMessages(supabaseClient, threadId);
+    try {
+      const previousMessages = await getPreviousMessages(supabaseClient, threadId);
 
-    // Process each role's response
-    for (const role of roles) {
-      try {
-        const systemInstructions = getRoleSpecificInstructions(role, previousMessages);
-        
-        const completion = await openai.chat.completions.create({
-          model: role.model || 'gpt-4o-mini',
-          messages: [
-            { role: 'system', content: systemInstructions },
-            { role: 'user', content }
-          ],
-        });
+      for (const role of roles) {
+        try {
+          console.log(`Processing role: ${role.name}`);
+          
+          const systemInstructions = getRoleSpecificInstructions(role, previousMessages);
+          
+          const completion = await openai.chat.completions.create({
+            model: role.model || 'gpt-4o-mini',
+            messages: [
+              { role: 'system', content: systemInstructions },
+              { role: 'user', content }
+            ],
+            temperature: 0.7,
+          });
 
-        const aiResponse = completion.choices[0].message.content;
+          const aiResponse = completion.choices[0].message.content;
 
-        const { error: updateError } = await supabaseClient
-          .from('messages')
-          .update({
-            content: aiResponse,
-            metadata: {
-              role_name: role.name,
-              streaming: false,
-              processed: true
-            }
-          })
-          .eq('thread_id', threadId)
-          .eq('role_id', role.id)
-          .eq('metadata->streaming', true);
+          const { error: updateError } = await supabaseClient
+            .from('messages')
+            .update({
+              content: aiResponse,
+              metadata: {
+                role_name: role.name,
+                streaming: false,
+                processed: true
+              }
+            })
+            .eq('thread_id', threadId)
+            .eq('role_id', role.id)
+            .eq('metadata->streaming', true);
 
-        if (updateError) throw updateError;
+          if (updateError) {
+            console.error('Error updating message:', updateError);
+            throw updateError;
+          }
 
-      } catch (error) {
-        console.error(`Error processing role ${role.name}:`, error);
-        
-        await supabaseClient
-          .from('messages')
-          .update({
-            content: `Error: Unable to generate response. Please try again.`,
-            metadata: {
-              role_name: role.name,
-              streaming: false,
-              processed: false,
-              error: error.message
-            }
-          })
-          .eq('thread_id', threadId)
-          .eq('role_id', role.id)
-          .eq('metadata->streaming', true);
+        } catch (roleError) {
+          console.error(`Error processing role ${role.name}:`, roleError);
+          
+          await supabaseClient
+            .from('messages')
+            .update({
+              content: `Error: Unable to generate response. Please try again.`,
+              metadata: {
+                role_name: role.name,
+                streaming: false,
+                processed: false,
+                error: roleError.message
+              }
+            })
+            .eq('thread_id', threadId)
+            .eq('role_id', role.id)
+            .eq('metadata->streaming', true);
+        }
       }
+
+      return new Response(
+        JSON.stringify({ success: true }),
+        {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders },
+          status: 200,
+        }
+      );
+
+    } catch (dbError) {
+      console.error('Database error:', dbError);
+      throw dbError;
     }
-
-    return new Response(
-      JSON.stringify({ success: true }),
-      {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders },
-        status: 200,
-      }
-    );
 
   } catch (error) {
     console.error('Error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: 'An error occurred while processing the request',
+        details: error.message 
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
