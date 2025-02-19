@@ -1,24 +1,3 @@
 
 project_id = "wdffpyeesafsejfmzwvi"
-
-[create-checkout-session.http]
-port = 54321
-
-[check-subscription.http]
-port = 54321
-
-[stripe-webhook.http]
-port = 54321
-
-[create-role-mind.http]
-port = 54321
-
-[generate-embedding.http]
-port = 54321
-
-[init-llongterm.http]
-port = 54321
-
-[create-mind.http]
-port = 54321
-
+environment = ["OPENAI_API_KEY", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "LLONGTERM_API_KEY"]
