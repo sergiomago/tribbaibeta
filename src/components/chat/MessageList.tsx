@@ -1,3 +1,4 @@
+
 import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
@@ -119,13 +120,16 @@ export function MessageList({
   };
 
   const renderThreadIndicator = (message: Message) => {
-    if (message.parent) {
-      return (
-        <div className="flex items-center text-xs text-muted-foreground">
-          <ArrowDown className="h-3 w-3 mr-1" />
-          <span>Reply to: {message.parent.content.substring(0, 30)}...</span>
-        </div>
-      );
+    if (message.parent_message_id) {
+      const parentMessage = messages.find(m => m.id === message.parent_message_id);
+      if (parentMessage) {
+        return (
+          <div className="flex items-center text-xs text-muted-foreground">
+            <ArrowDown className="h-3 w-3 mr-1" />
+            <span>Reply to: {parentMessage.content.substring(0, 30)}...</span>
+          </div>
+        );
+      }
     }
     return null;
   };
