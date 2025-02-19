@@ -16,8 +16,8 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       
       console.log('Fetching messages for thread:', threadId);
       
-      // Fetch messages
-      const { data: dbMessages, error } = await supabase
+      // First get messages without role information
+      const { data: dbMessages, error: msgError } = await supabase
         .from("messages")
         .select(`
           id,
@@ -31,25 +31,34 @@ export function useMessages(threadId: string | null, roleId: string | null) {
           parent_message_id,
           chain_position,
           chain_id,
-          chain_order,
-          role:roles (
-            id,
-            name,
-            tag,
-            special_capabilities
-          )
+          chain_order
         `)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
-      
-      if (error) {
-        console.error("Error fetching messages:", error);
+
+      if (msgError) {
+        console.error("Error fetching messages:", msgError);
         return [];
       }
 
-      console.log('Fetched messages:', dbMessages);
+      // Then get role information separately for all role_ids
+      const roleIds = dbMessages
+        ?.map(msg => msg.role_id)
+        .filter((id): id is string => !!id);
 
-      // Transform messages to include required fields
+      const { data: roleData, error: roleError } = await supabase
+        .from("roles")
+        .select("id, name, tag, special_capabilities")
+        .in("id", roleIds || []);
+
+      if (roleError) {
+        console.error("Error fetching roles:", roleError);
+      }
+
+      // Create a map of roles for easy lookup
+      const rolesMap = new Map(roleData?.map(role => [role.id, role]) || []);
+
+      // Transform messages with role information
       const enrichedMessages = (dbMessages || []).map(message => ({
         id: message.id,
         thread_id: message.thread_id,
@@ -57,16 +66,20 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         content: message.content,
         created_at: message.created_at,
         tagged_role_id: message.tagged_role_id,
-        role: message.role,
+        role: message.role_id ? {
+          name: rolesMap.get(message.role_id)?.name || "Unknown Role",
+          tag: rolesMap.get(message.role_id)?.tag || "unknown",
+          special_capabilities: rolesMap.get(message.role_id)?.special_capabilities || []
+        } : undefined,
         metadata: message.metadata || {},
         depth_level: message.depth_level || 0,
         parent_message_id: message.parent_message_id,
         chain_position: message.chain_position || 0,
         chain_id: message.chain_id,
-        chain_order: message.chain_order || 0,
-        relationships: []
-      })) as Message[];
+        chain_order: message.chain_order || 0
+      })) satisfies Message[];
 
+      console.log('Enriched messages:', enrichedMessages);
       return enrichedMessages;
     },
     enabled: !!threadId,

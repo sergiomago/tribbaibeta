@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
@@ -41,13 +42,24 @@ export function ChatInput({
     try {
       console.log('Sending message to thread:', threadId);
 
+      // Get thread roles first
+      const { data: threadRoles, error: rolesError } = await supabase
+        .from('thread_roles')
+        .select('role:roles(id, name)')
+        .eq('thread_id', threadId);
+
+      if (rolesError) throw rolesError;
+
+      if (!threadRoles || threadRoles.length === 0) {
+        throw new Error("No roles assigned to this thread");
+      }
+
       // Insert user message
       const { data: userMessage, error: userError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
           content: message.trim(),
-          is_bot: false,
           metadata: {
             sender: 'user'
           }
@@ -59,32 +71,23 @@ export function ChatInput({
 
       console.log('User message stored:', userMessage);
 
-      // Get thread roles
-      const { data: threadRoles, error: rolesError } = await supabase
-        .from('thread_roles')
-        .select('role:roles(id, name)')
-        .eq('thread_id', threadId);
-
-      if (rolesError) throw rolesError;
-
       // Create placeholder messages
-      if (threadRoles) {
-        for (const [index, tr] of threadRoles.entries()) {
-          const { error: placeholderError } = await supabase
-            .from('messages')
-            .insert({
-              thread_id: threadId,
-              content: '...',
-              is_bot: true,
-              role_id: tr.role.id,
-              chain_position: index + 1,
-              metadata: {
-                role_name: tr.role.name,
-                streaming: true
-              }
-            });
+      for (const [index, tr] of threadRoles.entries()) {
+        const { error: placeholderError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: threadId,
+            content: '...',
+            role_id: tr.role.id,
+            chain_position: index + 1,
+            metadata: {
+              role_name: tr.role.name,
+              streaming: true
+            }
+          });
 
-          if (placeholderError) throw placeholderError;
+        if (placeholderError) {
+          console.error("Error creating placeholder:", placeholderError);
         }
       }
 
@@ -101,7 +104,7 @@ export function ChatInput({
       console.error("Error sending message:", error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to send message. Please try again.",
         variant: "destructive",
       });
     } finally {
