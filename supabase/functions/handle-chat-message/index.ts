@@ -1,6 +1,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import OpenAI from 'https://esm.sh/openai@4.26.0'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    const openai = new OpenAI({
+      apiKey: Deno.env.get('OPENAI_API_KEY'),
+    });
 
     const { threadId, content, roles } = await req.json();
 
@@ -42,11 +47,25 @@ serve(async (req) => {
     // Process each role's response
     for (const role of roles) {
       try {
-        // Update placeholder message with actual content
+        // Generate AI response
+        const completion = await openai.chat.completions.create({
+          model: role.model || 'gpt-4o-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: `${role.instructions}\n\nYou are ${role.name}. Respond in character.` 
+            },
+            { role: 'user', content: content }
+          ],
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+
+        // Update message with AI response
         const { error: updateError } = await supabaseClient
           .from('messages')
           .update({
-            content: `Response from ${role.name}: Processing the question about ${content.substring(0, 30)}...`,
+            content: aiResponse,
             metadata: {
               role_name: role.name,
               streaming: false,
@@ -64,6 +83,22 @@ serve(async (req) => {
 
       } catch (error) {
         console.error(`Error processing role ${role.name}:`, error);
+        
+        // Update message with error state
+        await supabaseClient
+          .from('messages')
+          .update({
+            content: `Error: Unable to generate response. Please try again.`,
+            metadata: {
+              role_name: role.name,
+              streaming: false,
+              processed: false,
+              error: error.message
+            }
+          })
+          .eq('thread_id', threadId)
+          .eq('role_id', role.id)
+          .eq('metadata->streaming', true);
       }
     }
 
