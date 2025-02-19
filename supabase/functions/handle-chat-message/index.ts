@@ -8,90 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function getPreviousMessages(supabaseClient: any, threadId: string, currentRoleOrder: number) {
-  const { data: messages, error } = await supabaseClient
-    .from('messages')
-    .select(`
-      id,
-      content,
-      role_id,
-      chain_order,
-      roles:roles (
-        name,
-        tag,
-        instructions
-      )
-    `)
-    .eq('thread_id', threadId)
-    .lt('chain_order', currentRoleOrder)
-    .order('created_at', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching previous messages:', error);
-    return [];
-  }
-
-  return messages || [];
-}
-
-function createRolePrompt(role: any, previousMessages: any[], userQuestion: string) {
-  const roleType = role.tag?.toLowerCase() || '';
-  
-  // Basic role characteristics
-  const roleCharacteristics = {
-    mathematician: {
-      perspective: "mathematical",
-      focus: "patterns, equations, and logical structures",
-      approach: "Break down concepts into mathematical frameworks and provide quantitative insights."
-    },
-    physicist: {
-      perspective: "physical",
-      focus: "natural laws, empirical evidence, and experimental results",
-      approach: "Explain phenomena through physical principles and real-world applications."
-    },
-    philosopher: {
-      perspective: "philosophical",
-      focus: "conceptual analysis, ethics, and metaphysical implications",
-      approach: "Examine the deeper meaning and philosophical implications of ideas."
-    }
-  }[roleType] || {
-    perspective: "professional",
-    focus: "your area of expertise",
-    approach: "Provide insights based on your specific knowledge domain."
-  };
-
-  // Create context from previous messages
-  const conversationContext = previousMessages
-    .map(msg => `${msg.roles.name}: ${msg.content}`)
-    .join('\n\n');
-
-  const prompt = `You are ${role.name}, a ${roleCharacteristics.perspective} expert.
-
-CORE INSTRUCTIONS:
-${role.instructions || 'Provide expert insights from your field of study.'}
-
-YOUR APPROACH:
-1. Focus on ${roleCharacteristics.focus}
-2. ${roleCharacteristics.approach}
-3. Address the question: "${userQuestion}"
-
-${previousMessages.length > 0 ? `
-PREVIOUS RESPONSES IN THIS CONVERSATION:
-${conversationContext}
-
-HOW TO BUILD ON PREVIOUS RESPONSES:
-1. Acknowledge relevant points made by others
-2. Add your unique expertise to expand the discussion
-3. Fill gaps in understanding from your perspective
-4. Avoid repeating information already covered
-5. Make explicit connections to previous insights when relevant
-` : 'You are the first to respond. Provide a foundation that others can build upon.'}
-
-Maintain your role's perspective and expertise throughout your response.`;
-
-  return prompt;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -108,86 +24,73 @@ serve(async (req) => {
     });
 
     const { threadId, content, role, chain_order } = await req.json();
-
-    console.log('Processing message:', {
-      threadId,
-      roleName: role.name,
-      chainOrder: chain_order
-    });
-
-    // Get previous messages in the chain
-    const previousMessages = await getPreviousMessages(supabaseClient, threadId, chain_order);
     
-    // Generate the role-specific prompt
-    const systemPrompt = createRolePrompt(role, previousMessages, content);
-
-    try {
-      // Generate AI response
-      const completion = await openai.chat.completions.create({
-        model: role.model || 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content }
-        ],
-        temperature: 0.7,
-      });
-
-      const aiResponse = completion.choices[0].message.content;
-
-      // Update the message with the AI response
-      const { error: updateError } = await supabaseClient
-        .from('messages')
-        .update({
-          content: aiResponse,
-          metadata: {
-            processed: true,
-            streaming: false
-          }
-        })
-        .eq('thread_id', threadId)
-        .eq('role_id', role.id)
-        .eq('chain_order', chain_order);
-
-      if (updateError) {
-        throw updateError;
-      }
-
-      return new Response(
-        JSON.stringify({ success: true }),
-        {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders },
-          status: 200,
-        }
-      );
-
-    } catch (error) {
-      console.error('Error generating response:', error);
-      
-      // Update message with error state
-      await supabaseClient
-        .from('messages')
-        .update({
-          content: 'Error: Unable to generate response. Please try again.',
-          metadata: {
-            processed: false,
-            streaming: false,
-            error: error.message
-          }
-        })
-        .eq('thread_id', threadId)
-        .eq('role_id', role.id)
-        .eq('chain_order', chain_order);
-
-      throw error;
+    if (!threadId || !content || !role || !chain_order) {
+      throw new Error('Missing required fields');
     }
 
-  } catch (error) {
-    console.error('Error in edge function:', error);
+    console.log('Processing response:', { role: role.name, chainOrder: chain_order });
+
+    // Get previous messages for context
+    const { data: previousMessages } = await supabaseClient
+      .from('messages')
+      .select('content, roles(name)')
+      .eq('thread_id', threadId)
+      .lt('chain_order', chain_order)
+      .order('chain_order', { ascending: true });
+
+    // Create the system prompt
+    const systemPrompt = `You are ${role.name}. ${role.instructions || ''}
+
+Previous responses in this conversation:
+${previousMessages?.map(m => `${m.roles.name}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
+
+Key guidelines:
+1. Stay true to your role's expertise and perspective
+2. Build upon previous responses without repeating information
+3. Make connections to points raised by others when relevant
+4. Provide unique insights from your field
+5. If you're first, establish a foundation for others to build upon
+
+Address the user's question: "${content}"`;
+
+    // Generate response
+    const completion = await openai.chat.completions.create({
+      model: role.model || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content }
+      ],
+      temperature: 0.7,
+    });
+
+    const aiResponse = completion.choices[0].message.content;
+
+    // Update message
+    const { error: updateError } = await supabaseClient
+      .from('messages')
+      .update({
+        content: aiResponse,
+        metadata: {
+          processed: true,
+          streaming: false
+        }
+      })
+      .eq('thread_id', threadId)
+      .eq('role_id', role.id)
+      .eq('chain_order', chain_order);
+
+    if (updateError) throw updateError;
+
     return new Response(
-      JSON.stringify({ 
-        error: 'Failed to process message',
-        details: error.message 
-      }),
+      JSON.stringify({ success: true }),
+      { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    );
+
+  } catch (error) {
+    console.error('Error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...corsHeaders },
