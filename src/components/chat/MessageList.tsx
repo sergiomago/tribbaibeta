@@ -1,9 +1,8 @@
-
 import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMemoryManagement } from "@/hooks/useMemoryManagement";
-import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown, MessageSquare } from "lucide-react";
+import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown, MessageSquare, Loader2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -168,6 +167,9 @@ export function MessageList({
                 <div className="flex items-center gap-2 text-sm font-medium">
                   {message.role?.name}
                   {getVerificationIcon(message.id)}
+                  {message.metadata?.streaming && (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  )}
                 </div>
               )}
               <div className="text-sm whitespace-pre-wrap">{message.content}</div>

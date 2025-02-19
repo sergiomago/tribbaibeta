@@ -43,7 +43,6 @@ export function useMessages(threadId: string | null, roleId: string | null) {
 
       if (relError) throw relError;
 
-      // Properly map the data to match our Message type
       const enrichedMessages = dbMessages.map(message => ({
         id: message.id,
         thread_id: message.thread_id,
@@ -53,7 +52,6 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         tagged_role_id: message.tagged_role_id,
         role: message.role,
         metadata: message.metadata,
-        // Ensure parent is properly structured as a single object or null
         parent: message.parent?.[0] ? {
           id: message.parent[0].id,
           content: message.parent[0].content
@@ -69,22 +67,23 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       return enrichedMessages;
     },
     enabled: !!threadId,
+    refetchInterval: 1000, // Poll every second for updates while streaming
   });
 
   useEffect(() => {
     if (!threadId) return;
 
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel('messages-channel')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        async (payload) => {
+        () => {
           queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
         }
       )

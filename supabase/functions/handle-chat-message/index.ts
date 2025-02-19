@@ -9,7 +9,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -50,6 +49,26 @@ serve(async (req) => {
           ).join('\n')
         : '';
 
+      // Create a placeholder message for streaming
+      const { data: placeholderMessage, error: placeholderError } = await supabase
+        .from('messages')
+        .insert({
+          thread_id: threadId,
+          content: '',
+          role_id: role_id,
+          is_bot: true,
+          chain_position: order,
+          metadata: {
+            role_name: role.name,
+            chain_order: order,
+            streaming: true
+          }
+        })
+        .select()
+        .single();
+
+      if (placeholderError) throw placeholderError;
+
       // Generate AI response
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -65,32 +84,66 @@ serve(async (req) => {
               content: `${role.instructions}\n\nRecent conversation:\n${context}`
             },
             { role: "user", content }
-          ]
+          ],
+          stream: true
         })
       });
 
-      const aiData = await response.json();
-      
-      if (!aiData.choices?.[0]?.message?.content) {
-        throw new Error('No response generated');
-      }
+      const reader = response.body?.getReader();
+      let responseContent = '';
 
-      // Store the response
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          content: aiData.choices[0].message.content,
-          role_id: role_id,
-          is_bot: true,
-          chain_position: order,
-          metadata: {
-            role_name: role.name,
-            chain_order: order
+      if (!reader) throw new Error('No response stream available');
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          // Parse the SSE data
+          const chunk = new TextDecoder().decode(value);
+          const lines = chunk.split('\n');
+          const validLines = lines.filter(line => line.startsWith('data: ') && line !== 'data: [DONE]');
+
+          for (const line of validLines) {
+            try {
+              const json = JSON.parse(line.replace('data: ', ''));
+              const token = json.choices[0]?.delta?.content || '';
+              if (token) {
+                responseContent += token;
+                
+                // Update the message content with the new token
+                await supabase
+                  .from('messages')
+                  .update({ 
+                    content: responseContent,
+                    metadata: {
+                      ...placeholderMessage.metadata,
+                      streaming: true
+                    }
+                  })
+                  .eq('id', placeholderMessage.id);
+              }
+            } catch (e) {
+              console.error('Error parsing SSE chunk:', e);
+            }
           }
-        });
+        }
 
-      if (messageError) throw messageError;
+        // Mark message as complete
+        await supabase
+          .from('messages')
+          .update({ 
+            content: responseContent,
+            metadata: {
+              ...placeholderMessage.metadata,
+              streaming: false
+            }
+          })
+          .eq('id', placeholderMessage.id);
+
+      } finally {
+        reader.releaseLock();
+      }
     }
 
     return new Response(
