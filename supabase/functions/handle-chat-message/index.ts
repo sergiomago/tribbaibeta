@@ -8,6 +8,45 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function createContextualPrompt(role: any, previousMessages: any[], userQuestion: string) {
+  const previousResponsesText = previousMessages
+    .map(msg => `${msg.roles?.name || 'Unknown'}: ${msg.content}`)
+    .join('\n\n');
+
+  const isFirstResponder = previousMessages.length === 0;
+
+  let contextBuilder = `You are ${role.name}. ${role.instructions || ''}
+
+Your primary goal is to provide insights from your expertise while acknowledging and building upon the perspectives shared by others.
+
+${isFirstResponder ? `
+As the first responder:
+1. Establish a foundation for others to build upon
+2. Share your core perspective on the question
+3. Raise points that other experts might want to address
+` : `
+Previous experts have shared their perspectives:
+${previousResponsesText}
+
+Your task:
+1. Acknowledge key insights from previous responses that align with or complement your expertise
+2. Add your unique perspective, especially where it differs or expands upon previous points
+3. Bridge any gaps between your field and the insights already shared
+4. Be explicit about how your response connects to or builds upon others' points
+`}
+
+Guidelines for your response:
+1. Start by briefly acknowledging previous insights (if any)
+2. Clearly state your perspective from your field of expertise
+3. Make explicit connections to others' points when relevant
+4. Add new dimensions to the discussion
+5. Keep your tone collaborative and build upon the collective wisdom
+
+Question to address: "${userQuestion}"`;
+
+  return contextBuilder;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -40,23 +79,13 @@ serve(async (req) => {
         .lt('chain_order', chain_order)
         .order('chain_order', { ascending: true });
 
-      // Generate AI response
+      // Generate AI response with contextual prompt
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
           { 
             role: 'system', 
-            content: `You are ${role.name}. ${role.instructions || ''}
-
-Previous responses in this conversation:
-${previousMessages?.map(m => `${m.roles?.name || 'Unknown'}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
-
-Key guidelines:
-1. Stay true to your role's expertise and perspective
-2. Build upon previous responses without repeating information
-3. Make connections to points raised by others when relevant
-4. Provide unique insights from your field
-5. If you're first, establish a foundation for others to build upon`
+            content: createContextualPrompt(role, previousMessages || [], content)
           },
           { role: 'user', content }
         ],
@@ -88,7 +117,6 @@ Key guidelines:
 
     } catch (error) {
       console.error('Error generating response:', error);
-      // Update message to show error
       await supabaseClient
         .from('messages')
         .update({
