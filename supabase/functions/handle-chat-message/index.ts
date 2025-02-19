@@ -2,8 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 import { Configuration, OpenAIApi } from "https://esm.sh/openai@4.26.0";
-import { getRoleChain } from "./responseChainManager.ts";
-import { MessageProcessor } from "./types.ts";
+import { selectResponders } from "./roleSelector.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,22 +37,32 @@ serve(async (req) => {
 
     console.log("Processing message:", { threadId, content, messageId, taggedRoleId });
 
-    // Get role chain
-    const chain = await getRoleChain(supabaseClient, threadId, taggedRoleId);
-    console.log("Role chain:", chain);
+    // Get relevant roles using the new selector
+    const roles = await selectResponders(supabaseClient, content, threadId, taggedRoleId);
+    console.log("Selected roles:", roles);
 
-    // Process message through chain
+    if (!roles.length) {
+      throw new Error("No suitable roles found to respond");
+    }
+
+    // Get thread context (last 5 messages)
+    const { data: threadContext } = await supabaseClient
+      .from('messages')
+      .select('content, role_id, is_bot')
+      .eq('thread_id', threadId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    console.log("Thread context:", threadContext);
+
+    // Process message through selected roles
     const responses = await Promise.all(
-      chain.map(async (member) => {
-        const { data: role } = await supabaseClient
-          .from('roles')
-          .select('*')
-          .eq('id', member.role_id)
-          .single();
-
-        if (!role) {
-          throw new Error(`Role ${member.role_id} not found`);
-        }
+      roles.map(async (role, index) => {
+        // Build context-aware prompt
+        const contextMessages = threadContext?.map(msg => ({
+          role: msg.is_bot ? "assistant" : "user",
+          content: msg.content
+        })) || [];
 
         // Generate response using OpenAI
         const response = await openai.createChatCompletion({
@@ -63,6 +72,7 @@ serve(async (req) => {
               role: "system",
               content: role.instructions
             },
+            ...contextMessages,
             {
               role: "user",
               content
@@ -70,23 +80,30 @@ serve(async (req) => {
           ],
         });
 
+        const responseContent = response.data.choices[0].message?.content;
+
         // Store response in messages table
         const { error: messageError } = await supabaseClient
           .from('messages')
           .insert({
             thread_id: threadId,
-            content: response.data.choices[0].message?.content,
-            role_id: member.role_id,
+            content: responseContent,
+            role_id: role.id,
             is_bot: true,
             response_to_id: messageId,
-            response_order: member.order
+            response_order: index + 1,
+            memory_context: {
+              context_messages: threadContext,
+              response_confidence: response.data.choices[0].finish_reason === 'stop' ? 1 : 0.5
+            }
           });
 
         if (messageError) throw messageError;
 
         return {
-          role_id: member.role_id,
-          content: response.data.choices[0].message?.content
+          role_id: role.id,
+          content: responseContent,
+          role_name: role.name
         };
       })
     );
