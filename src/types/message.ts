@@ -18,4 +18,21 @@ export type Message = {
     tag: string;
   };
   metadata?: MessageMetadata;
+  // Add the new properties
+  parent?: {
+    id: string;
+    content: string;
+  } | null;
+  depth_level?: number;
+  parent_message_id?: string | null;
+  chain_position?: number;
+  chain_id?: string;
+  chain_order?: number;
+  relationships?: Array<{
+    id: string;
+    parent_message_id: string;
+    child_message_id: string;
+    relationship_type: string;
+    created_at: string;
+  }>;
 };
