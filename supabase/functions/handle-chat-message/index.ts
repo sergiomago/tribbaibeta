@@ -1,5 +1,4 @@
 
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
 
@@ -20,31 +19,27 @@ serve(async (req) => {
 
   try {
     const { threadId, content, roles } = await req.json();
-    console.log('Processing message:', { threadId, content, rolesCount: roles.length });
+    console.log('Processing message:', { threadId, rolesCount: roles?.length });
+
+    // Get existing placeholder messages
+    const { data: placeholders } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('thread_id', threadId)
+      .eq('is_bot', true)
+      .eq('content', '...')
+      .order('chain_position', { ascending: true });
+
+    if (!placeholders?.length) {
+      throw new Error('No placeholder messages found');
+    }
 
     // Process each role sequentially
-    for (const [index, role] of roles.entries()) {
+    for (const [index, placeholder] of placeholders.entries()) {
       try {
-        // Create initial message placeholder
-        const { data: message, error: msgError } = await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            role_id: role.id,
-            content: '...',
-            is_bot: true,
-            chain_position: index + 1,
-            metadata: {
-              streaming: true,
-              role_name: role.name
-            }
-          })
-          .select()
-          .single();
-
-        if (msgError) throw msgError;
-
-        // Get recent context
+        const role = roles[index];
+        
+        // Get conversation context
         const { data: history } = await supabase
           .from('messages')
           .select('content, role:roles(name)')
@@ -58,21 +53,8 @@ serve(async (req) => {
             ).join('\n')
           : '';
 
-        // Role-specific prompt enhancement
-        const rolePrompt = `You are ${role.name}. ${role.instructions}
-
-Your role is to provide expertise and insights based on your specialized knowledge.
-
-Recent conversation:
-${context}
-
-Current question/topic:
-${content}
-
-Please provide a clear, helpful response focusing on your area of expertise.`;
-
         // Generate response
-        const aiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${openAIApiKey}`,
@@ -81,38 +63,51 @@ Please provide a clear, helpful response focusing on your area of expertise.`;
           body: JSON.stringify({
             model: role.model || 'gpt-4o-mini',
             messages: [
-              { role: "system", content: rolePrompt },
+              {
+                role: "system",
+                content: `You are ${role.name}. ${role.instructions}\n\nRecent conversation:\n${context}`
+              },
               { role: "user", content }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000
+            ]
           })
         });
 
-        const aiData = await aiResponse.json();
-        
+        const aiData = await response.json();
+        console.log('AI Response:', aiData);
+
         if (!aiData.choices?.[0]?.message?.content) {
           throw new Error('No response generated');
         }
 
-        // Update message with response
+        // Update placeholder with response
         const { error: updateError } = await supabase
           .from('messages')
-          .update({ 
+          .update({
             content: aiData.choices[0].message.content,
             metadata: {
-              role_name: role.name,
-              chain_position: index + 1,
+              ...placeholder.metadata,
               streaming: false
             }
           })
-          .eq('id', message.id);
+          .eq('id', placeholder.id);
 
         if (updateError) throw updateError;
-
+        
       } catch (roleError) {
-        console.error(`Error processing role ${role.id}:`, roleError);
-        throw roleError;
+        console.error(`Error processing role ${index}:`, roleError);
+        
+        // Update placeholder to show error
+        await supabase
+          .from('messages')
+          .update({
+            content: 'Failed to generate response.',
+            metadata: {
+              ...placeholder.metadata,
+              streaming: false,
+              error: true
+            }
+          })
+          .eq('id', placeholder.id);
       }
     }
 

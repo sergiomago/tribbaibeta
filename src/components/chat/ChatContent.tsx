@@ -19,8 +19,7 @@ export function ChatContent({
   messagesEndRef,
   maxMessages = Infinity 
 }: ChatContentProps) {
-  // Pass null as roleId since we handle multiple roles in the thread
-  const { messages, isLoadingMessages } = useMessages(threadId, null);
+  const { messages, isLoadingMessages, refetchMessages } = useMessages(threadId, null);
 
   const { data: thread } = useQuery({
     queryKey: ["thread", threadId],
@@ -37,18 +36,6 @@ export function ChatContent({
     enabled: !!threadId,
   });
 
-  const { data: freeTierLimits } = useQuery({
-    queryKey: ["free-tier-limits"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("free_tier_limits")
-        .select("*")
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
-
   if (!threadId) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -58,8 +45,6 @@ export function ChatContent({
   }
 
   const messageCount = messages?.length || 0;
-  const messageLimitPerThread = freeTierLimits?.message_limit || 10;
-  const canSendMessage = messageCount < (maxMessages || messageLimitPerThread);
 
   return (
     <div className="h-full flex flex-col">
@@ -70,13 +55,14 @@ export function ChatContent({
         messagesEndRef={messagesEndRef}
         threadId={threadId}
         messageListRef={messageListRef}
-        maxMessages={maxMessages || messageLimitPerThread}
+        maxMessages={maxMessages}
       />
       <ChatInput 
         threadId={threadId} 
-        disabled={!canSendMessage}
+        disabled={messageCount >= maxMessages}
         messageCount={messageCount}
-        maxMessages={maxMessages || messageLimitPerThread}
+        maxMessages={maxMessages}
+        onMessageSent={refetchMessages}
       />
     </div>
   );

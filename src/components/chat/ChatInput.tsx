@@ -38,8 +38,8 @@ export function ChatInput({
     
     setIsSending(true);
     try {
-      // Store user message
-      const { error: messageError } = await supabase
+      // First store user message
+      const { data: userMessage, error: messageError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
@@ -48,16 +48,37 @@ export function ChatInput({
           metadata: {
             sender: 'user'
           }
-        });
+        })
+        .select()
+        .single();
 
       if (messageError) throw messageError;
 
-      toast({
-        title: "Processing message",
-        description: "AI roles are preparing their responses...",
-      });
+      // Create placeholder messages for each role
+      const { data: threadRoles } = await supabase
+        .from('thread_roles')
+        .select('role:roles(id, name)')
+        .eq('thread_id', threadId);
 
-      // Process with orchestrator
+      if (threadRoles) {
+        for (const [index, tr] of threadRoles.entries()) {
+          await supabase
+            .from('messages')
+            .insert({
+              thread_id: threadId,
+              content: '...',
+              is_bot: true,
+              role_id: tr.role.id,
+              chain_position: index + 1,
+              metadata: {
+                role_name: tr.role.name,
+                streaming: true
+              }
+            });
+        }
+      }
+
+      // Then process with orchestrator
       const orchestrator = createRoleOrchestrator(threadId);
       await orchestrator.handleMessage(message.trim());
 
