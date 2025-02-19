@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMemoryManagement } from "@/hooks/useMemoryManagement";
-import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown } from "lucide-react";
+import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown, MessageSquare } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -107,9 +107,17 @@ export function MessageList({
     }
   };
 
-  if (isLoading) {
-    return <div className="flex-1 p-4">Loading messages...</div>;
-  }
+  const renderChainIndicator = (message: Message) => {
+    if (message.chain_position && message.chain_position > 1) {
+      return (
+        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
+          <MessageSquare className="h-3 w-3" />
+          <span>Chain Response #{message.chain_position}</span>
+        </div>
+      );
+    }
+    return null;
+  };
 
   const renderThreadIndicator = (message: Message) => {
     if (message.parent) {
@@ -123,6 +131,10 @@ export function MessageList({
     return null;
   };
 
+  if (isLoading) {
+    return <div className="flex-1 p-4">Loading messages...</div>;
+  }
+
   return (
     <div 
       ref={messageListRef}
@@ -134,9 +146,11 @@ export function MessageList({
           id={message.id}
           className={cn(
             "flex flex-col gap-1",
-            message.depth_level > 1 && "ml-6"
+            message.depth_level > 1 && "ml-6",
+            "animate-fade-in"
           )}
         >
+          {renderChainIndicator(message)}
           {renderThreadIndicator(message)}
           <div className={cn(
             "flex items-start gap-4",
@@ -147,7 +161,7 @@ export function MessageList({
                 "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
                 message.role?.tag === "user"
                   ? "bg-primary text-primary-foreground"
-                  : "bg-muted"
+                  : "bg-muted hover:bg-muted/90 transition-colors"
               )}
             >
               {message.role?.tag !== "user" && (
