@@ -36,23 +36,73 @@ export class RoleOrchestrator {
         throw new Error('No roles available to respond');
       }
 
+      // Create placeholder messages first
+      for (let i = 0; i < chain.length; i++) {
+        const { error: placeholderError } = await supabase
+          .from('messages')
+          .insert({
+            thread_id: this.threadId,
+            role_id: chain[i].role.id,
+            content: '...',
+            chain_order: i + 1,
+            metadata: {
+              role_name: chain[i].role.name,
+              streaming: true
+            }
+          });
+
+        if (placeholderError) {
+          console.error('Error creating placeholder:', placeholderError);
+          throw placeholderError;
+        }
+      }
+
       // Process each role in sequence
       for (let i = 0; i < chain.length; i++) {
-        const { error: fnError } = await supabase.functions.invoke(
-          'handle-chat-message',
-          {
-            body: { 
-              threadId: this.threadId, 
-              content,
-              role: chain[i].role,
-              chain_order: i + 1
+        try {
+          const { error: fnError } = await supabase.functions.invoke(
+            'handle-chat-message',
+            {
+              body: { 
+                threadId: this.threadId, 
+                content,
+                role: chain[i].role,
+                chain_order: i + 1
+              }
             }
-          }
-        );
+          );
 
-        if (fnError) {
-          console.error('Error in role response:', fnError);
-          throw fnError;
+          if (fnError) {
+            console.error('Error in role response:', fnError);
+            // Update message to show error
+            await supabase
+              .from('messages')
+              .update({
+                content: 'Failed to generate response. Please try again.',
+                metadata: {
+                  error: fnError.message,
+                  streaming: false
+                }
+              })
+              .eq('thread_id', this.threadId)
+              .eq('role_id', chain[i].role.id)
+              .eq('chain_order', i + 1);
+          }
+        } catch (roleError) {
+          console.error(`Error processing role ${chain[i].role.name}:`, roleError);
+          // Update message to show error
+          await supabase
+            .from('messages')
+            .update({
+              content: 'Failed to generate response. Please try again.',
+              metadata: {
+                error: roleError.message,
+                streaming: false
+              }
+            })
+            .eq('thread_id', this.threadId)
+            .eq('role_id', chain[i].role.id)
+            .eq('chain_order', i + 1);
         }
       }
 

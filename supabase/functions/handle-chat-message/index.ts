@@ -29,66 +29,84 @@ serve(async (req) => {
       throw new Error('Missing required fields');
     }
 
-    console.log('Processing response:', { role: role.name, chainOrder: chain_order });
+    console.log('Processing message:', { role: role.name, chainOrder: chain_order });
 
-    // Get previous messages for context
-    const { data: previousMessages } = await supabaseClient
-      .from('messages')
-      .select('content, roles(name)')
-      .eq('thread_id', threadId)
-      .lt('chain_order', chain_order)
-      .order('chain_order', { ascending: true });
+    try {
+      // Get previous messages for context
+      const { data: previousMessages } = await supabaseClient
+        .from('messages')
+        .select('content, roles(name)')
+        .eq('thread_id', threadId)
+        .lt('chain_order', chain_order)
+        .order('chain_order', { ascending: true });
 
-    // Create the system prompt
-    const systemPrompt = `You are ${role.name}. ${role.instructions || ''}
+      // Generate AI response
+      const completion = await openai.chat.completions.create({
+        model: role.model || 'gpt-4o-mini',
+        messages: [
+          { 
+            role: 'system', 
+            content: `You are ${role.name}. ${role.instructions || ''}
 
 Previous responses in this conversation:
-${previousMessages?.map(m => `${m.roles.name}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
+${previousMessages?.map(m => `${m.roles?.name || 'Unknown'}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
 
 Key guidelines:
 1. Stay true to your role's expertise and perspective
 2. Build upon previous responses without repeating information
 3. Make connections to points raised by others when relevant
 4. Provide unique insights from your field
-5. If you're first, establish a foundation for others to build upon
+5. If you're first, establish a foundation for others to build upon`
+          },
+          { role: 'user', content }
+        ],
+        temperature: 0.7,
+      });
 
-Address the user's question: "${content}"`;
+      const aiResponse = completion.choices[0].message.content;
 
-    // Generate response
-    const completion = await openai.chat.completions.create({
-      model: role.model || 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content }
-      ],
-      temperature: 0.7,
-    });
+      // Update message with AI response
+      const { error: updateError } = await supabaseClient
+        .from('messages')
+        .update({
+          content: aiResponse,
+          metadata: {
+            streaming: false,
+            processed: true
+          }
+        })
+        .eq('thread_id', threadId)
+        .eq('role_id', role.id)
+        .eq('chain_order', chain_order);
 
-    const aiResponse = completion.choices[0].message.content;
+      if (updateError) throw updateError;
 
-    // Update message
-    const { error: updateError } = await supabaseClient
-      .from('messages')
-      .update({
-        content: aiResponse,
-        metadata: {
-          processed: true,
-          streaming: false
-        }
-      })
-      .eq('thread_id', threadId)
-      .eq('role_id', role.id)
-      .eq('chain_order', chain_order);
+      return new Response(
+        JSON.stringify({ success: true }),
+        { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      );
 
-    if (updateError) throw updateError;
+    } catch (error) {
+      console.error('Error generating response:', error);
+      // Update message to show error
+      await supabaseClient
+        .from('messages')
+        .update({
+          content: 'Failed to generate response. Please try again.',
+          metadata: {
+            error: error.message,
+            streaming: false
+          }
+        })
+        .eq('thread_id', threadId)
+        .eq('role_id', role.id)
+        .eq('chain_order', chain_order);
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { headers: { 'Content-Type': 'application/json', ...corsHeaders } }
-    );
+      throw error;
+    }
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error in edge function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
