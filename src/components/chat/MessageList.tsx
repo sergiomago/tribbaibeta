@@ -130,8 +130,15 @@ export function MessageList({
     return null;
   };
 
-  if (isLoading) {
-    return <div className="flex-1 p-4">Loading messages...</div>;
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className="flex-1 p-4 flex items-center justify-center">
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Loading messages...</span>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -33,17 +33,25 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         .order("chain_position", { ascending: true })
         .order("created_at", { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching messages:", error);
+        return [];
+      }
 
-      // Fetch message relationships
-      const { data: relationships, error: relError } = await supabase
-        .from("message_relationships")
-        .select("*")
-        .in("parent_message_id", dbMessages.map(m => m.id));
+      // Fetch message relationships even if there are no messages yet
+      const relationships = [];
+      if (dbMessages && dbMessages.length > 0) {
+        const { data: relData, error: relError } = await supabase
+          .from("message_relationships")
+          .select("*")
+          .in("parent_message_id", dbMessages.map(m => m.id));
 
-      if (relError) throw relError;
+        if (!relError) {
+          relationships.push(...(relData || []));
+        }
+      }
 
-      const enrichedMessages = dbMessages.map(message => ({
+      const enrichedMessages = (dbMessages || []).map(message => ({
         id: message.id,
         thread_id: message.thread_id,
         role_id: message.role_id,
@@ -68,6 +76,8 @@ export function useMessages(threadId: string | null, roleId: string | null) {
     },
     enabled: !!threadId,
     refetchInterval: 1000, // Poll every second for updates while streaming
+    staleTime: 0, // Consider data always stale to ensure fresh data
+    initialData: [], // Provide empty array as initial data
   });
 
   useEffect(() => {
@@ -99,7 +109,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
   };
 
   return { 
-    messages, 
+    messages: messages || [], // Ensure we always return an array
     refetchMessages, 
     isLoadingMessages 
   };
