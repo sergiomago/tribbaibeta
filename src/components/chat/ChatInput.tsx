@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { FileUploadButtons } from "./FileUploadButtons";
@@ -11,6 +10,7 @@ import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
 import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface ChatInputProps {
   threadId: string;
@@ -32,14 +32,17 @@ export function ChatInput({
   const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   const handleSend = async () => {
     if (!message.trim() || isSending) return;
     
     setIsSending(true);
     try {
-      // First store user message
-      const { data: userMessage, error: messageError } = await supabase
+      console.log('Sending message to thread:', threadId);
+
+      // Insert user message
+      const { data: userMessage, error: userError } = await supabase
         .from('messages')
         .insert({
           thread_id: threadId,
@@ -52,17 +55,22 @@ export function ChatInput({
         .select()
         .single();
 
-      if (messageError) throw messageError;
+      if (userError) throw userError;
 
-      // Create placeholder messages for each role
-      const { data: threadRoles } = await supabase
+      console.log('User message stored:', userMessage);
+
+      // Get thread roles
+      const { data: threadRoles, error: rolesError } = await supabase
         .from('thread_roles')
         .select('role:roles(id, name)')
         .eq('thread_id', threadId);
 
+      if (rolesError) throw rolesError;
+
+      // Create placeholder messages
       if (threadRoles) {
         for (const [index, tr] of threadRoles.entries()) {
-          await supabase
+          const { error: placeholderError } = await supabase
             .from('messages')
             .insert({
               thread_id: threadId,
@@ -75,15 +83,20 @@ export function ChatInput({
                 streaming: true
               }
             });
+
+          if (placeholderError) throw placeholderError;
         }
       }
 
-      // Then process with orchestrator
+      // Process with orchestrator
       const orchestrator = createRoleOrchestrator(threadId);
       await orchestrator.handleMessage(message.trim());
 
+      // Clear input and refetch messages
       setMessage("");
+      queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
       onMessageSent?.();
+
     } catch (error) {
       console.error("Error sending message:", error);
       toast({

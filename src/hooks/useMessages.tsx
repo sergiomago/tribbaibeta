@@ -14,23 +14,32 @@ export function useMessages(threadId: string | null, roleId: string | null) {
     queryFn: async () => {
       if (!threadId) return [];
       
-      // Fetch messages with chain information
+      console.log('Fetching messages for thread:', threadId);
+      
+      // Fetch messages
       const { data: dbMessages, error } = await supabase
         .from("messages")
         .select(`
-          *,
-          role:roles!messages_role_id_fkey(
-            name, 
+          id,
+          thread_id,
+          role_id,
+          content,
+          created_at,
+          tagged_role_id,
+          metadata,
+          depth_level,
+          parent_message_id,
+          chain_position,
+          chain_id,
+          chain_order,
+          role:roles (
+            id,
+            name,
             tag,
             special_capabilities
-          ),
-          parent:messages!messages_parent_message_id_fkey(
-            id,
-            content
           )
         `)
         .eq("thread_id", threadId)
-        .order("chain_position", { ascending: true })
         .order("created_at", { ascending: true });
       
       if (error) {
@@ -38,19 +47,9 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         return [];
       }
 
-      // Fetch message relationships even if there are no messages yet
-      const relationships = [];
-      if (dbMessages && dbMessages.length > 0) {
-        const { data: relData, error: relError } = await supabase
-          .from("message_relationships")
-          .select("*")
-          .in("parent_message_id", dbMessages.map(m => m.id));
+      console.log('Fetched messages:', dbMessages);
 
-        if (!relError) {
-          relationships.push(...(relData || []));
-        }
-      }
-
+      // Transform messages to include required fields
       const enrichedMessages = (dbMessages || []).map(message => ({
         id: message.id,
         thread_id: message.thread_id,
@@ -59,32 +58,30 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         created_at: message.created_at,
         tagged_role_id: message.tagged_role_id,
         role: message.role,
-        metadata: message.metadata,
-        parent: message.parent?.[0] ? {
-          id: message.parent[0].id,
-          content: message.parent[0].content
-        } : null,
-        depth_level: message.depth_level,
+        metadata: message.metadata || {},
+        depth_level: message.depth_level || 0,
         parent_message_id: message.parent_message_id,
-        chain_position: message.chain_position,
+        chain_position: message.chain_position || 0,
         chain_id: message.chain_id,
-        chain_order: message.chain_order,
-        relationships: relationships.filter(r => r.parent_message_id === message.id)
+        chain_order: message.chain_order || 0,
+        relationships: []
       })) as Message[];
 
       return enrichedMessages;
     },
     enabled: !!threadId,
-    refetchInterval: 1000, // Poll every second for updates while streaming
-    staleTime: 0, // Consider data always stale to ensure fresh data
-    initialData: [], // Provide empty array as initial data
+    refetchInterval: 1000,
+    staleTime: 0,
+    retry: 3,
+    retryDelay: 1000,
   });
 
   useEffect(() => {
     if (!threadId) return;
 
+    // Subscribe to message changes
     const channel = supabase
-      .channel('messages-channel')
+      .channel(`messages-${threadId}`)
       .on(
         'postgres_changes',
         {
@@ -93,24 +90,23 @@ export function useMessages(threadId: string | null, roleId: string | null) {
           table: 'messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        () => {
+        (payload) => {
+          console.log('Message change received:', payload);
           queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [threadId, queryClient]);
 
-  const refetchMessages = () => {
-    queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
-  };
-
   return { 
-    messages: messages || [], // Ensure we always return an array
-    refetchMessages, 
+    messages: messages || [], 
+    refetchMessages: () => queryClient.invalidateQueries({ queryKey: ["messages", threadId] }), 
     isLoadingMessages 
   };
 }
