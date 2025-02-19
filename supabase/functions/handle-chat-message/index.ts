@@ -24,63 +24,46 @@ serve(async (req) => {
     });
 
     const { threadId, content, role, chain_order } = await req.json();
-    console.log('Processing request:', { threadId, role: role.name, chain_order });
     
     if (!threadId || !content || !role || !chain_order) {
       throw new Error('Missing required fields');
     }
 
+    console.log('Processing message:', { role: role.name, chainOrder: chain_order });
+
     try {
       // Get previous messages for context
-      const { data: previousMessages, error: prevMsgError } = await supabaseClient
+      const { data: previousMessages } = await supabaseClient
         .from('messages')
         .select('content, roles(name)')
         .eq('thread_id', threadId)
         .lt('chain_order', chain_order)
         .order('chain_order', { ascending: true });
 
-      if (prevMsgError) throw prevMsgError;
-
-      console.log('Previous messages:', previousMessages?.length || 0);
-
-      // Prepare prompt based on role position
-      const isFirstResponder = !previousMessages?.length;
-      const systemPrompt = `You are ${role.name}. ${role.instructions || ''}
-
-${isFirstResponder ? `
-As the first responder:
-1. Share your core expertise on the question
-2. Raise points that other experts might want to address
-3. Set a foundation for a collaborative discussion
-` : `
-Previous responses:
-${previousMessages?.map(msg => `${msg.roles?.name || 'Unknown'}: ${msg.content}`).join('\n\n')}
-
-Your task:
-1. Acknowledge relevant insights from previous responses
-2. Add your unique perspective from your field
-3. Make connections to others' points when relevant
-4. Fill any gaps in the discussion
-`}
-
-Remember to:
-- Stay focused on your area of expertise
-- Be clear and concise
-- Build upon others' insights
-- Add value to the discussion`;
-
       // Generate AI response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { 
+            role: 'system', 
+            content: `You are ${role.name}. ${role.instructions || ''}
+
+Previous responses in this conversation:
+${previousMessages?.map(m => `${m.roles?.name || 'Unknown'}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
+
+Key guidelines:
+1. Stay true to your role's expertise and perspective
+2. Build upon previous responses without repeating information
+3. Make connections to points raised by others when relevant
+4. Provide unique insights from your field
+5. If you're first, establish a foundation for others to build upon`
+          },
           { role: 'user', content }
         ],
         temperature: 0.7,
       });
 
       const aiResponse = completion.choices[0].message.content;
-      console.log('Generated response for:', role.name);
 
       // Update message with AI response
       const { error: updateError } = await supabaseClient
@@ -105,6 +88,7 @@ Remember to:
 
     } catch (error) {
       console.error('Error generating response:', error);
+      // Update message to show error
       await supabaseClient
         .from('messages')
         .update({
