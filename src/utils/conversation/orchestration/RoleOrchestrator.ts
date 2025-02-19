@@ -36,19 +36,6 @@ export class RoleOrchestrator {
         throw new Error('No roles available to respond');
       }
 
-      // Insert user message first
-      const { error: userMessageError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: this.threadId,
-          content: content,
-          metadata: {
-            sender: 'user'
-          }
-        });
-
-      if (userMessageError) throw userMessageError;
-
       // Create placeholder messages
       for (let i = 0; i < chain.length; i++) {
         const { error: placeholderError } = await supabase

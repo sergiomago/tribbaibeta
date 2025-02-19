@@ -8,43 +8,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-function createContextualPrompt(role: any, previousMessages: any[], userQuestion: string) {
-  const previousResponsesText = previousMessages
-    .map(msg => `${msg.roles?.name || 'Unknown'}: ${msg.content}`)
-    .join('\n\n');
-
-  const isFirstResponder = previousMessages.length === 0;
-
-  return `You are ${role.name}. ${role.instructions || ''}
-
-Your primary goal is to provide insights from your expertise while acknowledging and building upon the perspectives shared by others.
-
-${isFirstResponder ? `
-As the first responder:
-1. Establish a foundation for others to build upon
-2. Share your core perspective on the question
-3. Raise points that other experts might want to address
-` : `
-Previous experts have shared their perspectives:
-${previousResponsesText}
-
-Your task:
-1. Acknowledge key insights from previous responses that align with or complement your expertise
-2. Add your unique perspective, especially where it differs or expands upon previous points
-3. Bridge any gaps between your field and the insights already shared
-4. Be explicit about how your response connects to or builds upon others' points
-`}
-
-Guidelines for your response:
-1. Start by briefly acknowledging previous insights (if any)
-2. Clearly state your perspective from your field of expertise
-3. Make explicit connections to others' points when relevant
-4. Add new dimensions to the discussion
-5. Keep your tone collaborative and build upon the collective wisdom
-
-Question to address: "${userQuestion}"`;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -80,14 +43,37 @@ serve(async (req) => {
 
       console.log('Previous messages:', previousMessages?.length || 0);
 
+      // Prepare prompt based on role position
+      const isFirstResponder = !previousMessages?.length;
+      const systemPrompt = `You are ${role.name}. ${role.instructions || ''}
+
+${isFirstResponder ? `
+As the first responder:
+1. Share your core expertise on the question
+2. Raise points that other experts might want to address
+3. Set a foundation for a collaborative discussion
+` : `
+Previous responses:
+${previousMessages?.map(msg => `${msg.roles?.name || 'Unknown'}: ${msg.content}`).join('\n\n')}
+
+Your task:
+1. Acknowledge relevant insights from previous responses
+2. Add your unique perspective from your field
+3. Make connections to others' points when relevant
+4. Fill any gaps in the discussion
+`}
+
+Remember to:
+- Stay focused on your area of expertise
+- Be clear and concise
+- Build upon others' insights
+- Add value to the discussion`;
+
       // Generate AI response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
-          { 
-            role: 'system', 
-            content: createContextualPrompt(role, previousMessages || [], content)
-          },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content }
         ],
         temperature: 0.7,
