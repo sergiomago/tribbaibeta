@@ -60,19 +60,8 @@ export function ChatInput({
       if (messageError) throw messageError;
 
       // Process with orchestrator
-      const { data: response, error: fnError } = await supabase.functions.invoke(
-        'handle-chat-message',
-        {
-          body: { 
-            threadId, 
-            content: message,
-            messageId: storedMessage.id,
-            taggedRoleId 
-          }
-        }
-      );
-
-      if (fnError) throw fnError;
+      const orchestrator = createRoleOrchestrator(threadId);
+      await orchestrator.handleMessage(message, taggedRoleId);
 
       setMessage("");
       onMessageSent?.();

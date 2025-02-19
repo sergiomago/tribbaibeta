@@ -22,19 +22,19 @@ export class RoleOrchestrator {
       console.log('Processing with chain:', chain);
 
       // Process message through edge function
-      const { error } = await supabase.functions.invoke(
+      const { data: response, error: fnError } = await supabase.functions.invoke(
         'handle-chat-message',
         {
-          body: {
-            threadId: this.threadId,
+          body: { 
+            threadId: this.threadId, 
             content,
             chain,
-            taggedRoleId
-          },
+            taggedRoleId 
+          }
         }
       );
 
-      if (error) throw error;
+      if (fnError) throw fnError;
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
