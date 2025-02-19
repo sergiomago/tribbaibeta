@@ -36,7 +36,20 @@ export class RoleOrchestrator {
         throw new Error('No roles available to respond');
       }
 
-      // Create placeholder messages first
+      // Insert user message first
+      const { error: userMessageError } = await supabase
+        .from('messages')
+        .insert({
+          thread_id: this.threadId,
+          content: content,
+          metadata: {
+            sender: 'user'
+          }
+        });
+
+      if (userMessageError) throw userMessageError;
+
+      // Create placeholder messages
       for (let i = 0; i < chain.length; i++) {
         const { error: placeholderError } = await supabase
           .from('messages')
@@ -60,6 +73,7 @@ export class RoleOrchestrator {
       // Process each role in sequence
       for (let i = 0; i < chain.length; i++) {
         try {
+          console.log(`Invoking edge function for role ${chain[i].role.name}`);
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
             {
@@ -74,7 +88,6 @@ export class RoleOrchestrator {
 
           if (fnError) {
             console.error('Error in role response:', fnError);
-            // Update message to show error
             await supabase
               .from('messages')
               .update({
@@ -90,7 +103,6 @@ export class RoleOrchestrator {
           }
         } catch (roleError) {
           console.error(`Error processing role ${chain[i].role.name}:`, roleError);
-          // Update message to show error
           await supabase
             .from('messages')
             .update({

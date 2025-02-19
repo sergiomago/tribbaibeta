@@ -15,7 +15,7 @@ function createContextualPrompt(role: any, previousMessages: any[], userQuestion
 
   const isFirstResponder = previousMessages.length === 0;
 
-  let contextBuilder = `You are ${role.name}. ${role.instructions || ''}
+  return `You are ${role.name}. ${role.instructions || ''}
 
 Your primary goal is to provide insights from your expertise while acknowledging and building upon the perspectives shared by others.
 
@@ -43,8 +43,6 @@ Guidelines for your response:
 5. Keep your tone collaborative and build upon the collective wisdom
 
 Question to address: "${userQuestion}"`;
-
-  return contextBuilder;
 }
 
 serve(async (req) => {
@@ -63,23 +61,26 @@ serve(async (req) => {
     });
 
     const { threadId, content, role, chain_order } = await req.json();
+    console.log('Processing request:', { threadId, role: role.name, chain_order });
     
     if (!threadId || !content || !role || !chain_order) {
       throw new Error('Missing required fields');
     }
 
-    console.log('Processing message:', { role: role.name, chainOrder: chain_order });
-
     try {
       // Get previous messages for context
-      const { data: previousMessages } = await supabaseClient
+      const { data: previousMessages, error: prevMsgError } = await supabaseClient
         .from('messages')
         .select('content, roles(name)')
         .eq('thread_id', threadId)
         .lt('chain_order', chain_order)
         .order('chain_order', { ascending: true });
 
-      // Generate AI response with contextual prompt
+      if (prevMsgError) throw prevMsgError;
+
+      console.log('Previous messages:', previousMessages?.length || 0);
+
+      // Generate AI response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
@@ -93,6 +94,7 @@ serve(async (req) => {
       });
 
       const aiResponse = completion.choices[0].message.content;
+      console.log('Generated response for:', role.name);
 
       // Update message with AI response
       const { error: updateError } = await supabaseClient
