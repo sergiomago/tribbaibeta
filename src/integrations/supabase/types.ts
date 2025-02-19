@@ -214,6 +214,8 @@ export type Database = {
         Row: {
           analysis_result: Json | null
           analyzed_intent: Json | null
+          chain_id: string | null
+          chain_order: number | null
           chain_position: number | null
           confidence_score: number | null
           content: string
@@ -242,6 +244,8 @@ export type Database = {
         Insert: {
           analysis_result?: Json | null
           analyzed_intent?: Json | null
+          chain_id?: string | null
+          chain_order?: number | null
           chain_position?: number | null
           confidence_score?: number | null
           content: string
@@ -270,6 +274,8 @@ export type Database = {
         Update: {
           analysis_result?: Json | null
           analyzed_intent?: Json | null
+          chain_id?: string | null
+          chain_order?: number | null
           chain_position?: number | null
           confidence_score?: number | null
           content?: string

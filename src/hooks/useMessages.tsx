@@ -14,7 +14,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
     queryFn: async () => {
       if (!threadId) return [];
       
-      // Fetch messages from Supabase
+      // Fetch messages with chain information
       const { data: dbMessages, error } = await supabase
         .from("messages")
         .select(`
@@ -23,14 +23,33 @@ export function useMessages(threadId: string | null, roleId: string | null) {
             name, 
             tag,
             special_capabilities
+          ),
+          parent:messages!messages_parent_message_id_fkey(
+            id,
+            content
           )
         `)
         .eq("thread_id", threadId)
+        .order("chain_position", { ascending: true })
         .order("created_at", { ascending: true });
       
       if (error) throw error;
 
-      return dbMessages as Message[];
+      // Fetch message relationships
+      const { data: relationships, error: relError } = await supabase
+        .from("message_relationships")
+        .select("*")
+        .in("parent_message_id", dbMessages.map(m => m.id));
+
+      if (relError) throw relError;
+
+      // Enrich messages with relationship data
+      const enrichedMessages = dbMessages.map(message => ({
+        ...message,
+        relationships: relationships.filter(r => r.parent_message_id === message.id)
+      }));
+
+      return enrichedMessages as Message[];
     },
     enabled: !!threadId,
   });

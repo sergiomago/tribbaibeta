@@ -1,3 +1,4 @@
+
 import { Tables } from "@/integrations/supabase/types";
 
 export type Role = Tables<"roles">;
@@ -37,4 +38,12 @@ export interface TaggingMetadata {
   role_tag: string;
   tagging_timestamp: string;
   special_capabilities: string[];
+}
+
+export interface MessageRelationship {
+  id: string;
+  parentMessageId: string;
+  childMessageId: string;
+  relationshipType: string;
+  createdAt: string;
 }

@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMemoryManagement } from "@/hooks/useMemoryManagement";
-import { Shield, ShieldCheck, ShieldX, AlertCircle } from "lucide-react";
+import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -111,6 +111,18 @@ export function MessageList({
     return <div className="flex-1 p-4">Loading messages...</div>;
   }
 
+  const renderThreadIndicator = (message: Message) => {
+    if (message.parent) {
+      return (
+        <div className="flex items-center text-xs text-muted-foreground">
+          <ArrowDown className="h-3 w-3 mr-1" />
+          <span>Reply to: {message.parent.content.substring(0, 30)}...</span>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div 
       ref={messageListRef}
@@ -121,29 +133,35 @@ export function MessageList({
           key={message.id}
           id={message.id}
           className={cn(
-            "flex items-start gap-4 transition-colors",
-            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
+            "flex flex-col gap-1",
+            message.depth_level > 1 && "ml-6"
           )}
         >
-          <div
-            className={cn(
-              "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
-              message.role?.tag === "user"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted"
+          {renderThreadIndicator(message)}
+          <div className={cn(
+            "flex items-start gap-4",
+            message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"
+          )}>
+            <div
+              className={cn(
+                "rounded-lg px-4 py-2 max-w-[80%] space-y-2",
+                message.role?.tag === "user"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted"
+              )}
+            >
+              {message.role?.tag !== "user" && (
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  {message.role?.name}
+                  {getVerificationIcon(message.id)}
+                </div>
+              )}
+              <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+            </div>
+            {index === messages.length - 1 && (
+              <div ref={lastMessageRef} />
             )}
-          >
-            {message.role?.tag !== "user" && (
-              <div className="flex items-center gap-2 text-sm font-medium">
-                {message.role?.name}
-                {getVerificationIcon(message.id)}
-              </div>
-            )}
-            <div className="text-sm whitespace-pre-wrap">{message.content}</div>
           </div>
-          {index === messages.length - 1 && (
-            <div ref={lastMessageRef} />
-          )}
         </div>
       ))}
       <div ref={messagesEndRef} />

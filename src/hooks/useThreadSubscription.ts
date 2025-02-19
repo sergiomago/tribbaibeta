@@ -1,3 +1,4 @@
+
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -17,6 +18,17 @@ export function useThreadSubscription() {
         },
         () => {
           queryClient.invalidateQueries({ queryKey: ["threads"] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'message_relationships',
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["messages"] });
         }
       )
       .subscribe();
