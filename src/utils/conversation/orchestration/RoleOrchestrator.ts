@@ -36,6 +36,16 @@ export class RoleOrchestrator {
         throw new Error('No roles available to respond');
       }
 
+      // Get the latest chain_order from messages
+      const { data: latestMessage } = await supabase
+        .from('messages')
+        .select('chain_order')
+        .eq('thread_id', this.threadId)
+        .order('chain_order', { ascending: false })
+        .limit(1);
+
+      const startingOrder = (latestMessage?.[0]?.chain_order || 0) + 1;
+
       // Create placeholder messages
       for (let i = 0; i < chain.length; i++) {
         const { error: placeholderError } = await supabase
@@ -44,7 +54,7 @@ export class RoleOrchestrator {
             thread_id: this.threadId,
             role_id: chain[i].role.id,
             content: '...',
-            chain_order: i + 1,
+            chain_order: startingOrder + i,
             metadata: {
               role_name: chain[i].role.name,
               streaming: true
@@ -68,7 +78,7 @@ export class RoleOrchestrator {
                 threadId: this.threadId, 
                 content,
                 role: chain[i].role,
-                chain_order: i + 1
+                chain_order: startingOrder + i
               }
             }
           );
@@ -86,7 +96,7 @@ export class RoleOrchestrator {
               })
               .eq('thread_id', this.threadId)
               .eq('role_id', chain[i].role.id)
-              .eq('chain_order', i + 1);
+              .eq('chain_order', startingOrder + i);
           }
         } catch (roleError) {
           console.error(`Error processing role ${chain[i].role.name}:`, roleError);
@@ -101,7 +111,7 @@ export class RoleOrchestrator {
             })
             .eq('thread_id', this.threadId)
             .eq('role_id', chain[i].role.id)
-            .eq('chain_order', i + 1);
+            .eq('chain_order', startingOrder + i);
         }
       }
 
