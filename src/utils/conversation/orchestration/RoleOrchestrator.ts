@@ -1,6 +1,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { Message } from "@/types";
+import { Role } from "@/types";
 import { createRoleSelector } from "../../roles/selection/RoleSelector";
 
 export class RoleOrchestrator {
@@ -14,14 +14,38 @@ export class RoleOrchestrator {
     console.log('Orchestrator handling message:', { content, taggedRoleId });
 
     try {
-      // If a specific role is tagged, use only that role
-      const chain = taggedRoleId 
-        ? [{ role_id: taggedRoleId }]
-        : await this.buildRelevanceChain(content);
+      let chain;
+      
+      if (taggedRoleId) {
+        // If a role is tagged, get just that role
+        const { data: role, error } = await supabase
+          .from('roles')
+          .select('*')
+          .eq('id', taggedRoleId)
+          .single();
+          
+        if (error) throw error;
+        chain = [{ role_id: role.id, order: 1 }];
+      } else {
+        // Get the conversation chain from the database
+        const { data: orderedChain, error } = await supabase
+          .rpc('get_conversation_chain', { 
+            p_thread_id: this.threadId,
+            p_tagged_role_id: null 
+          });
+
+        if (error) {
+          console.error('Error getting conversation chain:', error);
+          // Fallback to role selector if chain retrieval fails
+          chain = await this.buildRelevanceChain(content);
+        } else {
+          chain = orderedChain;
+        }
+      }
 
       console.log('Processing with chain:', chain);
 
-      // Process message through edge function
+      // Process message through edge function with ordered chain
       const { data: response, error: fnError } = await supabase.functions.invoke(
         'handle-chat-message',
         {
@@ -34,7 +58,10 @@ export class RoleOrchestrator {
         }
       );
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        console.error('Error invoking edge function:', fnError);
+        throw fnError;
+      }
 
     } catch (error) {
       console.error('Error in orchestrator:', error);
@@ -51,9 +78,10 @@ export class RoleOrchestrator {
     
     console.log('Relevant roles selected:', relevantRoles);
 
-    // Convert to chain format
-    return relevantRoles.map(role => ({
-      role_id: role.id
+    // Convert to chain format with order
+    return relevantRoles.map((role, index) => ({
+      role_id: role.id,
+      order: index + 1
     }));
   }
 }
