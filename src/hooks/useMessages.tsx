@@ -2,8 +2,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect } from "react";
-import { Message } from "@/types";
+import { Message, MessageMetadata } from "@/types";
 import { useRoleMind } from "./useRoleMind";
+import { Json } from "@/integrations/supabase/types";
 
 export function useMessages(threadId: string | null, roleId: string | null) {
   const queryClient = useQueryClient();
@@ -71,7 +72,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
           tag: rolesMap.get(message.role_id)?.tag || "unknown",
           special_capabilities: rolesMap.get(message.role_id)?.special_capabilities || []
         } : undefined,
-        metadata: message.metadata || {},
+        metadata: transformMetadata(message.metadata),
         depth_level: message.depth_level || 0,
         parent_message_id: message.parent_message_id,
         chain_position: message.chain_position || 0,
@@ -122,4 +123,18 @@ export function useMessages(threadId: string | null, roleId: string | null) {
     refetchMessages: () => queryClient.invalidateQueries({ queryKey: ["messages", threadId] }), 
     isLoadingMessages 
   };
+}
+
+// Helper function to transform metadata to correct type
+function transformMetadata(metadata: Json | null): MessageMetadata {
+  if (!metadata || typeof metadata !== 'object') {
+    return {};
+  }
+
+  // Ensure the metadata matches our MessageMetadata type
+  const transformed: MessageMetadata = {
+    ...(metadata as Record<string, any>),
+  };
+
+  return transformed;
 }
