@@ -63,7 +63,11 @@ export class RoleOrchestrator {
     const thinkingMessage = await ConversationStore.saveMessage(
       this.threadId,
       '...',
-      role.id
+      role.id,
+      {
+        role_name: role.name,
+        streaming: true
+      }
     );
 
     try {
@@ -71,7 +75,7 @@ export class RoleOrchestrator {
       const memories = await ConversationStore.getRoleMemoriesFromThread(role.id, this.threadId);
 
       const { error: fnError } = await supabase.functions.invoke('handle-chat-message', {
-        body: {
+        body: JSON.stringify({
           threadId: this.threadId,
           content: message,
           role,
@@ -79,7 +83,7 @@ export class RoleOrchestrator {
           memories,
           lastAiResponse,
           messageId: thinkingMessage.id
-        }
+        })
       });
 
       if (fnError) {

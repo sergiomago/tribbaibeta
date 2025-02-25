@@ -17,22 +17,17 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       
       console.log('Fetching messages for thread:', threadId);
       
-      // First get messages without role information
+      // Get messages and roles in a single query to reduce race conditions
       const { data: dbMessages, error: msgError } = await supabase
         .from("messages")
         .select(`
-          id,
-          thread_id,
-          role_id,
-          content,
-          created_at,
-          tagged_role_id,
-          metadata,
-          depth_level,
-          parent_message_id,
-          chain_position,
-          chain_id,
-          chain_order
+          *,
+          role:roles (
+            id,
+            name,
+            tag,
+            special_capabilities
+          )
         `)
         .eq("thread_id", threadId)
         .order("created_at", { ascending: true });
@@ -44,24 +39,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
 
       if (!dbMessages?.length) return [];
 
-      // Then get role information separately for all role_ids
-      const roleIds = dbMessages
-        .map(msg => msg.role_id)
-        .filter((id): id is string => !!id);
-
-      const { data: roleData, error: roleError } = await supabase
-        .from("roles")
-        .select("id, name, tag, special_capabilities")
-        .in("id", roleIds);
-
-      if (roleError) {
-        console.error("Error fetching roles:", roleError);
-      }
-
-      // Create a map of roles for easy lookup
-      const rolesMap = new Map(roleData?.map(role => [role.id, role]) || []);
-
-      // Transform messages with role information
+      // Transform messages with embedded role information
       const enrichedMessages = dbMessages.map(message => ({
         id: message.id,
         thread_id: message.thread_id,
@@ -69,10 +47,10 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         content: message.content,
         created_at: message.created_at,
         tagged_role_id: message.tagged_role_id,
-        role: message.role_id ? {
-          name: rolesMap.get(message.role_id)?.name || "Unknown Role",
-          tag: rolesMap.get(message.role_id)?.tag || "unknown",
-          special_capabilities: rolesMap.get(message.role_id)?.special_capabilities || []
+        role: message.role ? {
+          name: message.role.name,
+          tag: message.role.tag,
+          special_capabilities: message.role.special_capabilities
         } : undefined,
         metadata: transformMetadata(message.metadata),
         depth_level: message.depth_level || 0,
@@ -85,16 +63,13 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       return enrichedMessages;
     },
     enabled: !!threadId,
-    staleTime: 1000, // Time before data is considered stale
-    gcTime: 5000,    // Renamed from cacheTime to gcTime in v5
-    retry: 3,
-    retryDelay: 1000,
+    staleTime: 1000,
+    gcTime: 5000,
   });
 
   useEffect(() => {
     if (!threadId) return;
 
-    // Subscribe to message changes
     const channel = supabase
       .channel(`messages-${threadId}`)
       .on(
@@ -105,18 +80,74 @@ export function useMessages(threadId: string | null, roleId: string | null) {
           table: 'messages',
           filter: `thread_id=eq.${threadId}`,
         },
-        (payload) => {
+        async (payload) => {
           console.log('Message change received:', payload);
-          // Only invalidate if the change is relevant
-          if (payload.eventType === 'INSERT' || 
-              (payload.eventType === 'UPDATE' && payload.new?.content !== payload.old?.content)) {
+          
+          // For updates, only invalidate if content or metadata changed
+          if (payload.eventType === 'UPDATE') {
+            const oldContent = payload.old?.content;
+            const newContent = payload.new?.content;
+            const oldMetadata = payload.old?.metadata;
+            const newMetadata = payload.new?.metadata;
+            
+            if (oldContent === newContent && 
+                JSON.stringify(oldMetadata) === JSON.stringify(newMetadata)) {
+              return;
+            }
+          }
+          
+          // Use setQueryData for better performance
+          const previousData = queryClient.getQueryData<Message[]>(["messages", threadId]);
+          if (previousData) {
+            if (payload.eventType === 'INSERT') {
+              // Fetch the complete message with role information
+              const { data: newMessage } = await supabase
+                .from("messages")
+                .select(`
+                  *,
+                  role:roles (
+                    id,
+                    name,
+                    tag,
+                    special_capabilities
+                  )
+                `)
+                .eq("id", payload.new.id)
+                .single();
+
+              if (newMessage) {
+                const enrichedMessage = {
+                  ...newMessage,
+                  role: newMessage.role ? {
+                    name: newMessage.role.name,
+                    tag: newMessage.role.tag,
+                    special_capabilities: newMessage.role.special_capabilities
+                  } : undefined,
+                  metadata: transformMetadata(newMessage.metadata)
+                } as Message;
+
+                queryClient.setQueryData(
+                  ["messages", threadId],
+                  [...previousData, enrichedMessage]
+                );
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              queryClient.setQueryData(
+                ["messages", threadId],
+                previousData.map(msg => 
+                  msg.id === payload.new.id 
+                    ? { ...msg, ...payload.new } 
+                    : msg
+                )
+              );
+            }
+          } else {
+            // If we don't have the data cached, invalidate the query
             queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
@@ -130,16 +161,9 @@ export function useMessages(threadId: string | null, roleId: string | null) {
   };
 }
 
-// Helper function to transform metadata to correct type
 function transformMetadata(metadata: Json | null): MessageMetadata {
   if (!metadata || typeof metadata !== 'object') {
     return {};
   }
-
-  // Ensure the metadata matches our MessageMetadata type
-  const transformed: MessageMetadata = {
-    ...(metadata as Record<string, any>),
-  };
-
-  return transformed;
+  return metadata as MessageMetadata;
 }
