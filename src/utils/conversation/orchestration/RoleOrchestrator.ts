@@ -3,16 +3,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { RoleScoringData } from "../../roles/types/roles";
 
-type SimpleRole = {
-  role: {
-    id: string;
-    name: string;
-    instructions: string;
-    tag: string;
-    model: string;
-    expertise_areas?: string[];
-    primary_topics?: string[];
-  };
+// Flatten the role structure to avoid deep type instantiations
+type ThreadRole = {
+  id: string;
+  name: string;
+  instructions: string;
+  tag: string;
+  model: string;
+  expertise_areas?: string[];
+  primary_topics?: string[];
 };
 
 export class RoleOrchestrator {
@@ -24,22 +23,30 @@ export class RoleOrchestrator {
     this.relevanceScorer = new RelevanceScorer();
   }
 
-  private async calculateRoleScores(roles: SimpleRole[]): Promise<RoleScoringData[]> {
-    const result: RoleScoringData[] = [];
+  private async selectRoles(threadRoles: any[], taggedRoleId?: string | null): Promise<ThreadRole[]> {
+    if (!threadRoles?.length) return [];
+
+    if (taggedRoleId) {
+      return threadRoles
+        .filter(tr => tr.role.id === taggedRoleId)
+        .map(tr => tr.role);
+    }
+
+    const selectedRoles: ThreadRole[] = [];
     
-    for (const role of roles) {
+    for (const tr of threadRoles) {
       const score = await this.relevanceScorer.calculateScore(
-        role.role as RoleScoringData,
+        tr.role,
         this.threadId,
         this.threadId
       );
       
       if (score > 0) {
-        result.push(role.role as RoleScoringData);
+        selectedRoles.push(tr.role);
       }
     }
     
-    return result;
+    return selectedRoles;
   }
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
@@ -62,30 +69,21 @@ export class RoleOrchestrator {
       if (rolesError) throw rolesError;
       if (!threadRoles?.length) throw new Error('No roles found');
 
-      let selectedRoles: RoleScoringData[] = [];
-      
-      if (taggedRoleId) {
-        selectedRoles = threadRoles
-          .filter(tr => tr.role.id === taggedRoleId)
-          .map(tr => tr.role as RoleScoringData);
-      } else {
-        selectedRoles = await this.calculateRoleScores(threadRoles as SimpleRole[]);
-      }
+      const selectedRoles = await this.selectRoles(threadRoles, taggedRoleId);
 
       if (!selectedRoles.length) {
         throw new Error('No roles available to respond');
       }
 
-      // Process roles sequentially
-      for (const currentRole of selectedRoles) {
+      for (const role of selectedRoles) {
         const { data: thinkingMessage, error: thinkingError } = await supabase
           .from('messages')
           .insert({
             thread_id: this.threadId,
-            role_id: currentRole.id,
+            role_id: role.id,
             content: '...',
             metadata: {
-              role_name: currentRole.name,
+              role_name: role.name,
               streaming: true
             }
           })
@@ -98,9 +96,9 @@ export class RoleOrchestrator {
         }
 
         try {
-          console.log(`Processing response for ${currentRole.name}`);
+          console.log(`Processing response for ${role.name}`);
           
-          const { data: previousResponses } = await supabase
+          const { data: messages } = await supabase
             .from('messages')
             .select('content, role_id, roles(name)')
             .eq('thread_id', this.threadId)
@@ -113,8 +111,8 @@ export class RoleOrchestrator {
               body: { 
                 threadId: this.threadId, 
                 content,
-                role: currentRole,
-                previousResponses,
+                role,
+                previousResponses: messages || [],
                 messageId: thinkingMessage.id
               }
             }
@@ -134,11 +132,10 @@ export class RoleOrchestrator {
               .eq('id', thinkingMessage.id);
           }
 
-          // Wait for the response to be processed before continuing
           await new Promise(resolve => setTimeout(resolve, 1000));
 
-        } catch (error) {
-          console.error(`Error processing role ${currentRole.name}:`, error);
+        } catch (error: any) {
+          console.error(`Error processing role ${role.name}:`, error);
           await supabase
             .from('messages')
             .update({
