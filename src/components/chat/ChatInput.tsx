@@ -10,7 +10,6 @@ import { MessageValidation } from "./MessageValidation";
 import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
-import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface ChatInputProps {
@@ -34,72 +33,29 @@ export function ChatInput({
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  
+  // Create orchestrator instance outside of handleSend to avoid duplication
+  const orchestrator = createRoleOrchestrator(threadId);
 
-  const handleSend = async () => {
-    if (!message.trim() || isSending) return;
+  const handleSend = async (event?: React.FormEvent) => {
+    if (event) {
+      event.preventDefault();
+    }
     
+    if (!message.trim() || isSending) return;
+
     setIsSending(true);
+    
     try {
       console.log('Sending message to thread:', threadId);
-
-      // Get thread roles first
-      const { data: threadRoles, error: rolesError } = await supabase
-        .from('thread_roles')
-        .select('role:roles(id, name)')
-        .eq('thread_id', threadId);
-
-      if (rolesError) throw rolesError;
-
-      if (!threadRoles || threadRoles.length === 0) {
-        throw new Error("No roles assigned to this thread");
-      }
-
-      // Insert user message
-      const { data: userMessage, error: userError } = await supabase
-        .from('messages')
-        .insert({
-          thread_id: threadId,
-          content: message.trim(),
-          metadata: {
-            sender: 'user'
-          }
-        })
-        .select()
-        .single();
-
-      if (userError) throw userError;
-
-      console.log('User message stored:', userMessage);
-
-      // Create placeholder messages
-      for (const [index, tr] of threadRoles.entries()) {
-        const { error: placeholderError } = await supabase
-          .from('messages')
-          .insert({
-            thread_id: threadId,
-            content: '...',
-            role_id: tr.role.id,
-            chain_position: index + 1,
-            metadata: {
-              role_name: tr.role.name,
-              streaming: true
-            }
-          });
-
-        if (placeholderError) {
-          console.error("Error creating placeholder:", placeholderError);
-        }
-      }
-
-      // Process with orchestrator
-      const orchestrator = createRoleOrchestrator(threadId);
+      
       await orchestrator.handleMessage(message.trim());
-
+      
       // Clear input and refetch messages
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
       onMessageSent?.();
-
+      
     } catch (error) {
       console.error("Error sending message:", error);
       toast({
@@ -126,7 +82,7 @@ export function ChatInput({
         const formData = new FormData();
         formData.append('file', file);
         formData.append('threadId', threadId);
-
+        
         const { error } = await supabase.functions.invoke("upload-file", {
           body: formData,
         });
@@ -167,7 +123,7 @@ export function ChatInput({
             messageCount={messageCount}
             maxMessages={maxMessages}
           >
-            <div className="flex gap-2">
+            <form onSubmit={handleSend} className="flex gap-2">
               <FileUploadButtons
                 threadId={threadId}
                 onFileUpload={(e) => fileHandler.handleFileUpload(e, 'document')}
@@ -183,7 +139,7 @@ export function ChatInput({
                 disabled={isSending || disabled}
               />
               <Button 
-                onClick={handleSend} 
+                type="submit"
                 disabled={isSending || disabled || !message.trim()}
                 size={isMobile ? "sm" : "default"}
                 className="shrink-0"
@@ -195,7 +151,7 @@ export function ChatInput({
                 )}
                 {!isMobile && <span className="ml-2">{isSending ? "Sending..." : "Send"}</span>}
               </Button>
-            </div>
+            </form>
           </MessageValidation>
         </div>
       </div>
