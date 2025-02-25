@@ -1,28 +1,27 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
+import { RoleScoringData } from "../../roles/types/roles";
 
-// Flat, explicit interfaces to avoid deep type instantiation
-interface ThreadRole {
+// Explicitly match RoleScoringData structure
+interface ThreadRole extends RoleScoringData {
   id: string;
   name: string;
   instructions: string;
   tag: string;
   model: string;
-  expertise_areas?: string[];
-  primary_topics?: string[];
+  expertise_areas: string[]; // Now required to match RoleScoringData
+  primary_topics: string[]; // Now required to match RoleScoringData
 }
 
 interface DatabaseThreadRole {
   role: ThreadRole;
 }
 
-interface Message {
+interface DatabaseMessage {
   content: string;
   role_id: string;
-  roles?: {
-    name: string;
-  };
+  role_name?: string; // Simplified role reference
 }
 
 export class RoleOrchestrator {
@@ -62,7 +61,7 @@ export class RoleOrchestrator {
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      // Explicitly type the database response
+      // Simplified query to avoid deep nesting
       const { data, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
@@ -88,7 +87,6 @@ export class RoleOrchestrator {
       }
 
       for (const role of selectedRoles) {
-        // Create thinking message
         const { data: thinkingMessage, error: thinkingError } = await supabase
           .from('messages')
           .insert({
@@ -111,15 +109,24 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${role.name}`);
           
-          // Explicitly type the message response
+          // Simplified message query to avoid relationship complexities
           const { data: messages } = await supabase
             .from('messages')
-            .select('content, role_id, roles(name)')
+            .select(`
+              content,
+              role_id,
+              role_name:roles!inner(name)
+            `)
             .eq('thread_id', this.threadId)
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
-          // Process role response
+          const previousResponses: DatabaseMessage[] = messages?.map(msg => ({
+            content: msg.content,
+            role_id: msg.role_id,
+            role_name: msg.role_name?.name
+          })) || [];
+
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
             {
@@ -127,7 +134,7 @@ export class RoleOrchestrator {
                 threadId: this.threadId, 
                 content,
                 role,
-                previousResponses: (messages || []) as Message[],
+                previousResponses,
                 messageId: thinkingMessage.id
               }
             }
