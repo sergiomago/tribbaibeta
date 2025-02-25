@@ -82,7 +82,7 @@ export class RoleOrchestrator {
       const memories = await ConversationStore.getRoleMemoriesFromThread(role.id, this.threadId);
       console.log(`Retrieved ${memories.length} memories for role`);
 
-      const response = await supabase.functions.invoke('handle-chat-message', {
+      const { data, error } = await supabase.functions.invoke('handle-chat-message', {
         body: {
           threadId: this.threadId,
           content: message,
@@ -94,9 +94,25 @@ export class RoleOrchestrator {
         }
       });
 
-      if (response.error) {
-        console.error('Edge function error:', response.error);
-        throw response.error;
+      console.log('Edge function response:', { data, error });
+
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
+      }
+
+      // Wait for the message to be updated by the edge function
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Verify the message was updated
+      const { data: updatedMessage } = await supabase
+        .from('messages')
+        .select('content, metadata')
+        .eq('id', thinkingMessage.id)
+        .single();
+
+      if (updatedMessage?.metadata?.error) {
+        throw new Error(updatedMessage.metadata.error);
       }
 
       return thinkingMessage;
@@ -173,7 +189,7 @@ export class RoleOrchestrator {
             }
 
             // Give time for the previous message to be processed
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 2000));
           } catch (error) {
             console.error(`Error processing role ${role.name}:`, error);
             continue;
