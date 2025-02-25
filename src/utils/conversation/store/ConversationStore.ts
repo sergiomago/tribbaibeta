@@ -12,10 +12,13 @@ export interface Message {
 }
 
 export interface RoleMemory {
+  id: string;
   content: string;
   created_at: string;
-  thread_id: string | null;
+  metadata: Json;
   relevance_score: number;
+  context_type: string;
+  role_id: string | null;
 }
 
 export class ConversationStore {
@@ -54,7 +57,7 @@ export class ConversationStore {
   static async getRoleMemoriesFromThread(roleId: string, threadId: string): Promise<RoleMemory[]> {
     const { data, error } = await supabase
       .from('role_memories')
-      .select('*')
+      .select('id, content, created_at, metadata, relevance_score, context_type, role_id')
       .eq('role_id', roleId)
       .filter('metadata->thread_id', 'eq', threadId)
       .order('relevance_score', { ascending: false })
@@ -68,7 +71,7 @@ export class ConversationStore {
   static async getRoleMemories(roleId: string): Promise<RoleMemory[]> {
     const { data, error } = await supabase
       .from('role_memories')
-      .select('*')
+      .select('id, content, created_at, metadata, relevance_score, context_type, role_id')
       .eq('role_id', roleId)
       .order('relevance_score', { ascending: false })
       .limit(50);
