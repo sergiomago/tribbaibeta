@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { ConversationStore } from "../store/ConversationStore";
+import { Json } from "@/integrations/supabase/types";
 
 interface Role {
   id: string;
@@ -17,6 +18,14 @@ interface ConversationMessage {
   role: string;
   content: string;
   role_name?: string;
+}
+
+interface MessageMetadata {
+  streaming?: boolean;
+  processed?: boolean;
+  error?: string;
+  errorTimestamp?: string;
+  generated_at?: string;
 }
 
 export class RoleOrchestrator {
@@ -107,12 +116,12 @@ export class RoleOrchestrator {
       // Verify the message was updated
       const { data: updatedMessage } = await supabase
         .from('messages')
-        .select('content, metadata')
+        .select<'content, metadata', { content: string; metadata: MessageMetadata }>('content, metadata')
         .eq('id', thinkingMessage.id)
         .single();
 
-      if (updatedMessage?.metadata?.error) {
-        throw new Error(updatedMessage.metadata.error);
+      if (updatedMessage?.metadata && 'error' in updatedMessage.metadata) {
+        throw new Error(updatedMessage.metadata.error || 'Unknown error occurred');
       }
 
       return thinkingMessage;
@@ -120,16 +129,18 @@ export class RoleOrchestrator {
     } catch (error: any) {
       console.error('Error generating response:', error);
       
+      const errorMetadata: MessageMetadata = {
+        error: error.message || 'Unknown error occurred',
+        streaming: false,
+        errorTimestamp: new Date().toISOString()
+      };
+
       // Update thinking message with error
       await supabase
         .from('messages')
         .update({
           content: 'Failed to generate response.',
-          metadata: {
-            error: error.message || 'Unknown error occurred',
-            streaming: false,
-            errorTimestamp: new Date().toISOString()
-          }
+          metadata: errorMetadata
         })
         .eq('id', thinkingMessage.id);
 
