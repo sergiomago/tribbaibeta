@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
+import { ConversationStore } from "../store/ConversationStore";
 
 interface Role {
   id: string;
@@ -29,25 +30,22 @@ export class RoleOrchestrator {
   }
 
   private async loadRoles(): Promise<void> {
-    const { data, error } = await supabase
+    const { data: threadRolesData } = await supabase
       .from('thread_roles')
-      .select(`
-        roles (
-          id,
-          name,
-          instructions,
-          tag,
-          model,
-          expertise_areas,
-          primary_topics
-        )
-      `)
+      .select('role_id')
       .eq('thread_id', this.threadId);
 
-    if (error) throw error;
-    if (!data?.length) throw new Error('No roles found');
+    if (!threadRolesData?.length) throw new Error('No roles found');
 
-    this.roles = data.map(item => item.roles as Role);
+    const roleIds = threadRolesData.map(tr => tr.role_id);
+
+    const { data: rolesData } = await supabase
+      .from('roles')
+      .select('*')
+      .in('id', roleIds);
+
+    if (!rolesData?.length) throw new Error('No roles found');
+    this.roles = rolesData;
   }
 
   private extractTaggedRole(message: string): string | null {
@@ -60,71 +58,47 @@ export class RoleOrchestrator {
     return null;
   }
 
-  private async getConversationHistory(): Promise<ConversationMessage[]> {
-    const { data: messages, error } = await supabase
-      .from('messages')
-      .select('content, role:roles(name), role_id')
-      .eq('thread_id', this.threadId)
-      .eq('metadata->streaming', false)
-      .order('created_at', { ascending: true });
+  private async generateRoleResponse(role: Role, message: string, previousResponses: ConversationMessage[], lastAiResponse?: string) {
+    // Save thinking message
+    const thinkingMessage = await ConversationStore.saveMessage(
+      this.threadId,
+      '...',
+      role.id
+    );
 
-    if (error) throw error;
-    
-    return messages.map(msg => ({
-      role: msg.role_id ? 'assistant' : 'user',
-      content: msg.content,
-      role_name: msg.role?.name
-    }));
-  }
+    try {
+      // Get role's memories
+      const memories = await ConversationStore.getRoleMemoriesFromThread(role.id, this.threadId);
 
-  private async saveThinkingMessage(roleId: string, roleName: string) {
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        thread_id: this.threadId,
-        role_id: roleId,
-        content: '...',
-        metadata: {
-          role_name: roleName,
-          streaming: true
+      const { error: fnError } = await supabase.functions.invoke('handle-chat-message', {
+        body: {
+          threadId: this.threadId,
+          content: message,
+          role,
+          previousResponses,
+          memories,
+          lastAiResponse,
+          messageId: thinkingMessage.id
         }
-      })
-      .select()
-      .single();
+      });
 
-    if (error) {
-      console.error('Error creating thinking message:', error);
+      if (fnError) throw fnError;
+
+    } catch (error: any) {
+      // Update thinking message with error
+      await supabase
+        .from('messages')
+        .update({
+          content: 'Failed to generate response.',
+          metadata: {
+            error: error.message,
+            streaming: false
+          }
+        })
+        .eq('id', thinkingMessage.id);
+
       throw error;
     }
-
-    return data;
-  }
-
-  private async updateMessage(messageId: string, content: string, error?: string) {
-    await supabase
-      .from('messages')
-      .update({
-        content,
-        metadata: {
-          streaming: false,
-          ...(error && { error })
-        }
-      })
-      .eq('id', messageId);
-  }
-
-  private async generateRoleResponse(role: Role, message: string, conversation: ConversationMessage[]) {
-    const { error: fnError } = await supabase.functions.invoke('handle-chat-message', {
-      body: {
-        threadId: this.threadId,
-        content: message,
-        role,
-        previousResponses: conversation,
-        roleId: role.id
-      }
-    });
-
-    if (fnError) throw fnError;
   }
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
@@ -132,41 +106,45 @@ export class RoleOrchestrator {
       await this.loadRoles();
 
       const taggedRole = taggedRoleId || this.extractTaggedRole(content);
-      const conversation = await this.getConversationHistory();
+      const messages = await ConversationStore.getMessages(this.threadId);
+      const conversation = messages.map(msg => ({
+        role: msg.role_id ? 'assistant' : 'user',
+        content: msg.content,
+        role_name: this.roles.find(r => r.id === msg.role_id)?.name
+      }));
+
+      // Save user message
+      await ConversationStore.saveMessage(this.threadId, content, null);
 
       if (taggedRole) {
         // Handle tagged role response
         const role = this.roles.find(r => r.id === taggedRole);
         if (!role) throw new Error('Tagged role not found');
 
-        const thinkingMessage = await this.saveThinkingMessage(role.id, role.name);
-        
-        try {
-          await this.generateRoleResponse(role, content, conversation);
-        } catch (error: any) {
-          await this.updateMessage(
-            thinkingMessage.id,
-            'Failed to generate response.',
-            error.message
-          );
-        }
+        await this.generateRoleResponse(role, content, conversation);
       } else {
         // Handle orchestrated responses
+        let lastResponse = content;
         for (const role of this.roles) {
-          const thinkingMessage = await this.saveThinkingMessage(role.id, role.name);
-          
           try {
-            await this.generateRoleResponse(role, content, conversation);
-          } catch (error: any) {
-            await this.updateMessage(
-              thinkingMessage.id,
-              'Failed to generate response.',
-              error.message
-            );
-          }
+            await this.generateRoleResponse(role, content, conversation, lastResponse);
+            
+            // Get the latest response from this role to pass to next role
+            const latestMessages = await ConversationStore.getMessages(this.threadId);
+            const roleResponse = latestMessages
+              .filter(m => m.role_id === role.id)
+              .pop();
+              
+            if (roleResponse) {
+              lastResponse = roleResponse.content;
+            }
 
-          // Give time for the previous message to be processed
-          await new Promise(resolve => setTimeout(resolve, 1000));
+            // Give time for the previous message to be processed
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            console.error(`Error processing role ${role.name}:`, error);
+            continue;
+          }
         }
       }
     } catch (error) {
