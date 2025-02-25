@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { ConversationStore } from "../store/ConversationStore";
@@ -57,25 +58,32 @@ export class RoleOrchestrator {
     return null;
   }
 
-  private async generateRoleResponse(role: Role, message: string, previousResponses: ConversationMessage[], lastAiResponse?: string) {
-    // Save thinking message with stringified metadata
+  private async generateRoleResponse(
+    role: Role, 
+    message: string, 
+    previousResponses: ConversationMessage[], 
+    lastAiResponse?: string
+  ) {
+    console.log(`Generating response for role: ${role.name}`);
+    
+    // Save thinking message
     const thinkingMessage = await ConversationStore.saveMessage(
       this.threadId,
       '...',
       role.id,
       {
         role_name: role.name,
-        streaming: true,
-        chain_position: 1  // Add chain position
+        streaming: true
       }
     );
 
     try {
       // Get role's memories
       const memories = await ConversationStore.getRoleMemoriesFromThread(role.id, this.threadId);
+      console.log(`Retrieved ${memories.length} memories for role`);
 
-      const { error: fnError } = await supabase.functions.invoke('handle-chat-message', {
-        body: {  // Don't stringify here, let Supabase handle it
+      const response = await supabase.functions.invoke('handle-chat-message', {
+        body: {
           threadId: this.threadId,
           content: message,
           role,
@@ -86,15 +94,17 @@ export class RoleOrchestrator {
         }
       });
 
-      if (fnError) {
-        console.error('Edge function error:', fnError);
-        throw fnError;
+      if (response.error) {
+        console.error('Edge function error:', response.error);
+        throw response.error;
       }
+
+      return thinkingMessage;
 
     } catch (error: any) {
       console.error('Error generating response:', error);
       
-      // Update thinking message with error, ensure metadata is properly structured
+      // Update thinking message with error
       await supabase
         .from('messages')
         .update({
@@ -136,12 +146,12 @@ export class RoleOrchestrator {
         // Handle tagged role response
         const role = this.roles.find(r => r.id === taggedRole);
         if (!role) throw new Error('Tagged role not found');
-
+        console.log('Processing tagged role response');
         await this.generateRoleResponse(role, content, conversation);
       } else {
         // Handle orchestrated responses
         let lastResponse = content;
-        let chainPosition = 1;
+        console.log('Processing orchestrated responses');
         
         for (const role of this.roles) {
           try {
@@ -161,8 +171,6 @@ export class RoleOrchestrator {
             if (roleResponse) {
               lastResponse = roleResponse.content;
             }
-
-            chainPosition++;
 
             // Give time for the previous message to be processed
             await new Promise(resolve => setTimeout(resolve, 1000));
