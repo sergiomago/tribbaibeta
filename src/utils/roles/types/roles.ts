@@ -33,6 +33,9 @@ export interface RoleInteraction {
   createdAt: string;
 }
 
+// New type for role scoring to avoid full Role type requirement
+export type RoleScoringData = Pick<Role, 'id' | 'name' | 'instructions' | 'tag' | 'model' | 'expertise_areas' | 'primary_topics'>;
+
 export interface TaggingMetadata {
   role_name: string;
   role_tag: string;

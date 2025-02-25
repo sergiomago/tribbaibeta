@@ -1,7 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
-import { createRoleSelector } from "../../roles/selection/RoleSelector";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
+import { RoleScoringData } from "../../roles/types/roles";
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -14,7 +14,7 @@ export class RoleOrchestrator {
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      // Get thread roles
+      // Get thread roles with only needed fields
       const { data: threadRoles, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
@@ -35,14 +35,12 @@ export class RoleOrchestrator {
       let chain = [];
       
       if (taggedRoleId) {
-        // If role is tagged, only use that role
         chain = threadRoles.filter(tr => tr.role.id === taggedRoleId);
       } else {
-        // Score and sort roles by relevance
         const scoredRoles = await Promise.all(
           threadRoles.map(async (tr) => ({
             ...tr,
-            score: await this.relevanceScorer.calculateScore(tr.role, content, this.threadId)
+            score: await this.relevanceScorer.calculateScore(tr.role as RoleScoringData, content, this.threadId)
           }))
         );
 
@@ -123,14 +121,14 @@ export class RoleOrchestrator {
           console.error(`Error processing role ${currentRole.name}:`, error);
           await supabase
             .from('messages')
-            .update({
-              content: 'Failed to generate response. Please try again.',
-              metadata: {
-                error: error.message,
-                streaming: false
-              }
-            })
-            .eq('id', placeholderMessage.id);
+              .update({
+                content: 'Failed to generate response. Please try again.',
+                metadata: {
+                  error: error.message,
+                  streaming: false
+                }
+              })
+              .eq('id', placeholderMessage.id);
         }
       }
 
