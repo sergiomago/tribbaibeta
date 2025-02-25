@@ -3,9 +3,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { RoleScoringData } from "../../roles/types/roles";
 
-type RoleWithScore = {
-  role: RoleScoringData;
-  score: number;
+type SimpleRole = {
+  role: {
+    id: string;
+    name: string;
+    instructions: string;
+    tag: string;
+    model: string;
+    expertise_areas?: string[];
+    primary_topics?: string[];
+  };
 };
 
 export class RoleOrchestrator {
@@ -17,20 +24,26 @@ export class RoleOrchestrator {
     this.relevanceScorer = new RelevanceScorer();
   }
 
-  private async scoreRoles(roles: Array<{ role: RoleScoringData }>, content: string): Promise<RoleWithScore[]> {
-    const scoredRoles: RoleWithScore[] = [];
+  private async calculateRoleScores(roles: SimpleRole[]): Promise<RoleScoringData[]> {
+    const result: RoleScoringData[] = [];
     
-    for (const tr of roles) {
-      const score = await this.relevanceScorer.calculateScore(tr.role, content, this.threadId);
-      scoredRoles.push({ role: tr.role, score });
+    for (const role of roles) {
+      const score = await this.relevanceScorer.calculateScore(
+        role.role as RoleScoringData,
+        this.threadId,
+        this.threadId
+      );
+      
+      if (score > 0) {
+        result.push(role.role as RoleScoringData);
+      }
     }
-
-    return scoredRoles.sort((a, b) => b.score - a.score);
+    
+    return result;
   }
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      // Get thread roles with only needed fields
       const { data: threadRoles, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
@@ -47,16 +60,16 @@ export class RoleOrchestrator {
         .eq('thread_id', this.threadId);
 
       if (rolesError) throw rolesError;
+      if (!threadRoles?.length) throw new Error('No roles found');
 
       let selectedRoles: RoleScoringData[] = [];
       
       if (taggedRoleId) {
         selectedRoles = threadRoles
           .filter(tr => tr.role.id === taggedRoleId)
-          .map(tr => tr.role);
+          .map(tr => tr.role as RoleScoringData);
       } else {
-        const scoredRoles = await this.scoreRoles(threadRoles, content);
-        selectedRoles = scoredRoles.map(sr => sr.role);
+        selectedRoles = await this.calculateRoleScores(threadRoles as SimpleRole[]);
       }
 
       if (!selectedRoles.length) {
@@ -65,7 +78,6 @@ export class RoleOrchestrator {
 
       // Process roles sequentially
       for (const currentRole of selectedRoles) {
-        // Create thinking message
         const { data: thinkingMessage, error: thinkingError } = await supabase
           .from('messages')
           .insert({
@@ -88,7 +100,6 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${currentRole.name}`);
           
-          // Get previous responses for context
           const { data: previousResponses } = await supabase
             .from('messages')
             .select('content, role_id, roles(name)')
@@ -96,7 +107,6 @@ export class RoleOrchestrator {
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
-          // Process role response
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
             {
