@@ -110,24 +110,25 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${role.name}`);
           
-          // Simplified message query with proper role relationship
+          // Get previous messages
           const { data: messages } = await supabase
             .from('messages')
-            .select(`
-              content,
-              role_id,
-              role:roles (
-                name
-              )
-            `)
+            .select('content, role_id')
             .eq('thread_id', this.threadId)
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
+          // Get role names in a separate query
+          const { data: roles } = await supabase
+            .from('roles')
+            .select('id, name')
+            .in('id', (messages || []).map(m => m.role_id));
+
+          // Map role names to messages
           const previousResponses = (messages || []).map(msg => ({
             content: msg.content,
             role_id: msg.role_id,
-            role_name: msg.role?.name
+            role_name: roles?.find(r => r.id === msg.role_id)?.name
           }));
 
           const { error: fnError } = await supabase.functions.invoke(
