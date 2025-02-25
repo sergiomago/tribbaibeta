@@ -42,15 +42,17 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         return [];
       }
 
+      if (!dbMessages?.length) return [];
+
       // Then get role information separately for all role_ids
       const roleIds = dbMessages
-        ?.map(msg => msg.role_id)
+        .map(msg => msg.role_id)
         .filter((id): id is string => !!id);
 
       const { data: roleData, error: roleError } = await supabase
         .from("roles")
         .select("id, name, tag, special_capabilities")
-        .in("id", roleIds || []);
+        .in("id", roleIds);
 
       if (roleError) {
         console.error("Error fetching roles:", roleError);
@@ -60,7 +62,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       const rolesMap = new Map(roleData?.map(role => [role.id, role]) || []);
 
       // Transform messages with role information
-      const enrichedMessages = (dbMessages || []).map(message => ({
+      const enrichedMessages = dbMessages.map(message => ({
         id: message.id,
         thread_id: message.thread_id,
         role_id: message.role_id,
@@ -80,12 +82,11 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         chain_order: message.chain_order || 0
       })) satisfies Message[];
 
-      console.log('Enriched messages:', enrichedMessages);
       return enrichedMessages;
     },
     enabled: !!threadId,
-    refetchInterval: 1000,
-    staleTime: 0,
+    staleTime: 1000, // Add staleTime to prevent unnecessary refetches
+    cacheTime: 5000,
     retry: 3,
     retryDelay: 1000,
   });
@@ -106,7 +107,11 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         },
         (payload) => {
           console.log('Message change received:', payload);
-          queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
+          // Only invalidate if the change is relevant
+          if (payload.eventType === 'INSERT' || 
+              (payload.eventType === 'UPDATE' && payload.new?.content !== payload.old?.content)) {
+            queryClient.invalidateQueries({ queryKey: ["messages", threadId] });
+          }
         }
       )
       .subscribe((status) => {

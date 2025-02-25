@@ -82,9 +82,14 @@ export class RoleOrchestrator {
         }
       });
 
-      if (fnError) throw fnError;
+      if (fnError) {
+        console.error('Edge function error:', fnError);
+        throw fnError;
+      }
 
     } catch (error: any) {
+      console.error('Error generating response:', error);
+      
       // Update thinking message with error
       await supabase
         .from('messages')
