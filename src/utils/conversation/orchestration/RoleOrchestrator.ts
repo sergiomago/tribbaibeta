@@ -1,10 +1,9 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
-import { RoleScoringData } from "../../roles/types/roles";
 
-// Flatten the role structure to avoid deep type instantiations
-type ThreadRole = {
+// Flat, explicit interfaces to avoid deep type instantiation
+interface ThreadRole {
   id: string;
   name: string;
   instructions: string;
@@ -12,7 +11,19 @@ type ThreadRole = {
   model: string;
   expertise_areas?: string[];
   primary_topics?: string[];
-};
+}
+
+interface DatabaseThreadRole {
+  role: ThreadRole;
+}
+
+interface Message {
+  content: string;
+  role_id: string;
+  roles?: {
+    name: string;
+  };
+}
 
 export class RoleOrchestrator {
   private threadId: string;
@@ -23,7 +34,7 @@ export class RoleOrchestrator {
     this.relevanceScorer = new RelevanceScorer();
   }
 
-  private async selectRoles(threadRoles: any[], taggedRoleId?: string | null): Promise<ThreadRole[]> {
+  private async selectRoles(threadRoles: DatabaseThreadRole[], taggedRoleId?: string | null): Promise<ThreadRole[]> {
     if (!threadRoles?.length) return [];
 
     if (taggedRoleId) {
@@ -51,7 +62,8 @@ export class RoleOrchestrator {
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      const { data: threadRoles, error: rolesError } = await supabase
+      // Explicitly type the database response
+      const { data, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
           role:roles (
@@ -67,15 +79,16 @@ export class RoleOrchestrator {
         .eq('thread_id', this.threadId);
 
       if (rolesError) throw rolesError;
-      if (!threadRoles?.length) throw new Error('No roles found');
+      if (!data?.length) throw new Error('No roles found');
 
-      const selectedRoles = await this.selectRoles(threadRoles, taggedRoleId);
+      const selectedRoles = await this.selectRoles(data as DatabaseThreadRole[], taggedRoleId);
 
       if (!selectedRoles.length) {
         throw new Error('No roles available to respond');
       }
 
       for (const role of selectedRoles) {
+        // Create thinking message
         const { data: thinkingMessage, error: thinkingError } = await supabase
           .from('messages')
           .insert({
@@ -98,6 +111,7 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${role.name}`);
           
+          // Explicitly type the message response
           const { data: messages } = await supabase
             .from('messages')
             .select('content, role_id, roles(name)')
@@ -105,6 +119,7 @@ export class RoleOrchestrator {
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
+          // Process role response
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
             {
@@ -112,7 +127,7 @@ export class RoleOrchestrator {
                 threadId: this.threadId, 
                 content,
                 role,
-                previousResponses: messages || [],
+                previousResponses: (messages || []) as Message[],
                 messageId: thinkingMessage.id
               }
             }
