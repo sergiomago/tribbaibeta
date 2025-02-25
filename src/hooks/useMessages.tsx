@@ -85,8 +85,8 @@ export function useMessages(threadId: string | null, roleId: string | null) {
       return enrichedMessages;
     },
     enabled: !!threadId,
-    staleTime: 1000, // Add staleTime to prevent unnecessary refetches
-    cacheTime: 5000,
+    staleTime: 1000, // Time before data is considered stale
+    gcTime: 5000,    // Renamed from cacheTime to gcTime in v5
     retry: 3,
     retryDelay: 1000,
   });
