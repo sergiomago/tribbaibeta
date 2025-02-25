@@ -18,12 +18,14 @@ interface DatabaseThreadRole {
   role: ThreadRole;
 }
 
-interface DatabaseMessage {
+interface MessageData {
   content: string;
   role_id: string;
-  role: {
-    name: string;
-  } | null;
+}
+
+interface RoleData {
+  id: string;
+  name: string;
 }
 
 export class RoleOrchestrator {
@@ -63,7 +65,8 @@ export class RoleOrchestrator {
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      const { data, error: rolesError } = await supabase
+      // Get thread roles
+      const { data: threadRolesData, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
           role:roles (
@@ -79,9 +82,9 @@ export class RoleOrchestrator {
         .eq('thread_id', this.threadId);
 
       if (rolesError) throw rolesError;
-      if (!data?.length) throw new Error('No roles found');
+      if (!threadRolesData?.length) throw new Error('No roles found');
 
-      const selectedRoles = await this.selectRoles(data as DatabaseThreadRole[], taggedRoleId);
+      const selectedRoles = await this.selectRoles(threadRolesData as DatabaseThreadRole[], taggedRoleId);
 
       if (!selectedRoles.length) {
         throw new Error('No roles available to respond');
@@ -110,25 +113,30 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${role.name}`);
           
-          // Get previous messages
-          const { data: messages } = await supabase
+          // Get messages with explicit typing
+          const { data: messagesData } = await supabase
             .from('messages')
-            .select('content, role_id')
+            .select<'messages', MessageData>('content, role_id')
             .eq('thread_id', this.threadId)
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
-          // Get role names in a separate query
-          const { data: roles } = await supabase
-            .from('roles')
-            .select('id, name')
-            .in('id', (messages || []).map(m => m.role_id));
+          const messages = messagesData || [];
+          const roleIds = [...new Set(messages.map(m => m.role_id))];
 
-          // Map role names to messages
-          const previousResponses = (messages || []).map(msg => ({
+          // Get roles with explicit typing
+          const { data: rolesData } = await supabase
+            .from('roles')
+            .select<'roles', RoleData>('id, name')
+            .in('id', roleIds);
+
+          const roles = rolesData || [];
+
+          // Map messages to responses with role names
+          const previousResponses = messages.map(msg => ({
             content: msg.content,
             role_id: msg.role_id,
-            role_name: roles?.find(r => r.id === msg.role_id)?.name
+            role_name: roles.find(r => r.id === msg.role_id)?.name
           }));
 
           const { error: fnError } = await supabase.functions.invoke(
