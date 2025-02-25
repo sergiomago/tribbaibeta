@@ -63,11 +63,7 @@ export class RoleOrchestrator {
     const thinkingMessage = await ConversationStore.saveMessage(
       this.threadId,
       '...',
-      role.id,
-      {
-        role_name: role.name,
-        streaming: true
-      }
+      role.id
     );
 
     try {

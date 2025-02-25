@@ -22,7 +22,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         .from("messages")
         .select(`
           *,
-          role:roles (
+          roles!messages_role_id_fkey (
             id,
             name,
             tag,
@@ -47,10 +47,10 @@ export function useMessages(threadId: string | null, roleId: string | null) {
         content: message.content,
         created_at: message.created_at,
         tagged_role_id: message.tagged_role_id,
-        role: message.role ? {
-          name: message.role.name,
-          tag: message.role.tag,
-          special_capabilities: message.role.special_capabilities
+        role: message.roles ? {
+          name: message.roles.name,
+          tag: message.roles.tag,
+          special_capabilities: message.roles.special_capabilities
         } : undefined,
         metadata: transformMetadata(message.metadata),
         depth_level: message.depth_level || 0,
@@ -105,7 +105,7 @@ export function useMessages(threadId: string | null, roleId: string | null) {
                 .from("messages")
                 .select(`
                   *,
-                  role:roles (
+                  roles!messages_role_id_fkey (
                     id,
                     name,
                     tag,
@@ -118,10 +118,10 @@ export function useMessages(threadId: string | null, roleId: string | null) {
               if (newMessage) {
                 const enrichedMessage = {
                   ...newMessage,
-                  role: newMessage.role ? {
-                    name: newMessage.role.name,
-                    tag: newMessage.role.tag,
-                    special_capabilities: newMessage.role.special_capabilities
+                  role: newMessage.roles ? {
+                    name: newMessage.roles.name,
+                    tag: newMessage.roles.tag,
+                    special_capabilities: newMessage.roles.special_capabilities
                   } : undefined,
                   metadata: transformMetadata(newMessage.metadata)
                 } as Message;
