@@ -3,6 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { RoleScoringData } from "../../roles/types/roles";
 
+interface ThreadRole {
+  role: RoleScoringData;
+}
+
+interface ScoredRole extends ThreadRole {
+  score: number;
+}
+
 export class RoleOrchestrator {
   private threadId: string;
   private relevanceScorer: RelevanceScorer;
@@ -32,21 +40,24 @@ export class RoleOrchestrator {
 
       if (rolesError) throw rolesError;
 
-      let orderedRoles = [];
+      let orderedRoles: ThreadRole[] = [];
       
       if (taggedRoleId) {
-        orderedRoles = threadRoles.filter(tr => tr.role.id === taggedRoleId);
+        orderedRoles = threadRoles
+          .filter(tr => tr.role.id === taggedRoleId)
+          .map(tr => ({ role: tr.role }));
       } else {
         // Score and sort roles by relevance
-        const scoredRoles = await Promise.all(
+        const scoredRoles: ScoredRole[] = await Promise.all(
           threadRoles.map(async (tr) => ({
-            ...tr,
+            role: tr.role as RoleScoringData,
             score: await this.relevanceScorer.calculateScore(tr.role as RoleScoringData, content, this.threadId)
           }))
         );
 
         orderedRoles = scoredRoles
-          .sort((a, b) => b.score - a.score);
+          .sort((a, b) => b.score - a.score)
+          .map(sr => ({ role: sr.role }));
       }
 
       if (!orderedRoles.length) {
