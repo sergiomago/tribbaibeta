@@ -35,17 +35,27 @@ export class ConversationStore {
   }
 
   // Save a message to a conversation
-  static async saveMessage(threadId: string, content: string, roleId: string | null): Promise<Message> {
+  static async saveMessage(
+    threadId: string, 
+    content: string, 
+    roleId: string | null, 
+    metadata?: Record<string, any>
+  ): Promise<Message> {
+    const messageData = {
+      thread_id: threadId,
+      role_id: roleId,
+      content,
+      metadata: metadata ? {
+        ...metadata,
+        created_at: new Date().toISOString()
+      } : {
+        created_at: new Date().toISOString()
+      }
+    };
+
     const { data, error } = await supabase
       .from('messages')
-      .insert({
-        thread_id: threadId,
-        role_id: roleId,
-        content,
-        metadata: {
-          created_at: new Date().toISOString()
-        }
-      })
+      .insert(messageData)
       .select()
       .single();
 

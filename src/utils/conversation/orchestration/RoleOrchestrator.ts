@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 import { ConversationStore } from "../store/ConversationStore";
@@ -59,11 +58,16 @@ export class RoleOrchestrator {
   }
 
   private async generateRoleResponse(role: Role, message: string, previousResponses: ConversationMessage[], lastAiResponse?: string) {
-    // Save thinking message
+    // Save thinking message with stringified metadata
     const thinkingMessage = await ConversationStore.saveMessage(
       this.threadId,
       '...',
-      role.id
+      role.id,
+      {
+        role_name: role.name,
+        streaming: true,
+        chain_position: 1  // Add chain position
+      }
     );
 
     try {
@@ -71,7 +75,7 @@ export class RoleOrchestrator {
       const memories = await ConversationStore.getRoleMemoriesFromThread(role.id, this.threadId);
 
       const { error: fnError } = await supabase.functions.invoke('handle-chat-message', {
-        body: JSON.stringify({
+        body: {  // Don't stringify here, let Supabase handle it
           threadId: this.threadId,
           content: message,
           role,
@@ -79,7 +83,7 @@ export class RoleOrchestrator {
           memories,
           lastAiResponse,
           messageId: thinkingMessage.id
-        })
+        }
       });
 
       if (fnError) {
@@ -90,14 +94,15 @@ export class RoleOrchestrator {
     } catch (error: any) {
       console.error('Error generating response:', error);
       
-      // Update thinking message with error
+      // Update thinking message with error, ensure metadata is properly structured
       await supabase
         .from('messages')
         .update({
           content: 'Failed to generate response.',
           metadata: {
-            error: error.message,
-            streaming: false
+            error: error.message || 'Unknown error occurred',
+            streaming: false,
+            errorTimestamp: new Date().toISOString()
           }
         })
         .eq('id', thinkingMessage.id);
@@ -115,11 +120,17 @@ export class RoleOrchestrator {
       const conversation = messages.map(msg => ({
         role: msg.role_id ? 'assistant' : 'user',
         content: msg.content,
-        role_name: this.roles.find(r => r.id === msg.role_id)?.name
+        role_name: this.roles.find(r => r.id === msg.role_id)?.name,
+        metadata: msg.metadata || {}
       }));
 
-      // Save user message
-      await ConversationStore.saveMessage(this.threadId, content, null);
+      // Save user message with metadata
+      await ConversationStore.saveMessage(
+        this.threadId, 
+        content, 
+        null,
+        { sender: 'user' }
+      );
 
       if (taggedRole) {
         // Handle tagged role response
@@ -130,9 +141,16 @@ export class RoleOrchestrator {
       } else {
         // Handle orchestrated responses
         let lastResponse = content;
+        let chainPosition = 1;
+        
         for (const role of this.roles) {
           try {
-            await this.generateRoleResponse(role, content, conversation, lastResponse);
+            await this.generateRoleResponse(
+              role, 
+              content, 
+              conversation,
+              lastResponse
+            );
             
             // Get the latest response from this role to pass to next role
             const latestMessages = await ConversationStore.getMessages(this.threadId);
@@ -143,6 +161,8 @@ export class RoleOrchestrator {
             if (roleResponse) {
               lastResponse = roleResponse.content;
             }
+
+            chainPosition++;
 
             // Give time for the previous message to be processed
             await new Promise(resolve => setTimeout(resolve, 1000));
