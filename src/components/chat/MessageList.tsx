@@ -1,9 +1,8 @@
-
 import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
 import { useMemoryManagement } from "@/hooks/useMemoryManagement";
-import { Shield, ShieldCheck, ShieldX, AlertCircle, ArrowDown, MessageSquare, Loader2 } from "lucide-react";
+import { Shield, ShieldCheck, ShieldX, AlertCircle, Loader2 } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -107,33 +106,6 @@ export function MessageList({
     }
   };
 
-  const renderChainIndicator = (message: Message) => {
-    if (message.chain_position && message.chain_position > 1) {
-      return (
-        <div className="flex items-center gap-1 text-xs text-muted-foreground mb-1">
-          <MessageSquare className="h-3 w-3" />
-          <span>Chain Response #{message.chain_position}</span>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderThreadIndicator = (message: Message) => {
-    if (message.parent_message_id) {
-      const parentMessage = messages.find(m => m.id === message.parent_message_id);
-      if (parentMessage) {
-        return (
-          <div className="flex items-center text-xs text-muted-foreground">
-            <ArrowDown className="h-3 w-3 mr-1" />
-            <span>Reply to: {parentMessage.content.substring(0, 30)}...</span>
-          </div>
-        );
-      }
-    }
-    return null;
-  };
-
   if (isLoading && messages.length === 0) {
     return (
       <div className="flex-1 p-4 flex items-center justify-center">
@@ -160,8 +132,6 @@ export function MessageList({
             "animate-fade-in"
           )}
         >
-          {renderChainIndicator(message)}
-          {renderThreadIndicator(message)}
           <div className={cn(
             "flex items-start gap-4",
             message.role?.tag === "user" ? "flex-row-reverse" : "flex-row"

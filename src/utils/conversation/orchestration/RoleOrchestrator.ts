@@ -32,11 +32,12 @@ export class RoleOrchestrator {
 
       if (rolesError) throw rolesError;
 
-      let chain = [];
+      let orderedRoles = [];
       
       if (taggedRoleId) {
-        chain = threadRoles.filter(tr => tr.role.id === taggedRoleId);
+        orderedRoles = threadRoles.filter(tr => tr.role.id === taggedRoleId);
       } else {
+        // Score and sort roles by relevance
         const scoredRoles = await Promise.all(
           threadRoles.map(async (tr) => ({
             ...tr,
@@ -44,38 +45,25 @@ export class RoleOrchestrator {
           }))
         );
 
-        chain = scoredRoles
-          .sort((a, b) => b.score - a.score)
-          .map(sr => ({ role: sr.role }));
+        orderedRoles = scoredRoles
+          .sort((a, b) => b.score - a.score);
       }
 
-      if (!chain.length) {
+      if (!orderedRoles.length) {
         throw new Error('No roles available to respond');
       }
 
-      // Get the highest existing chain_order
-      const { data: latestMessage } = await supabase
-        .from('messages')
-        .select('chain_order')
-        .eq('thread_id', this.threadId)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      const baseOrder = (latestMessage?.[0]?.chain_order || 0) + 1;
-
-      // Create and process messages sequentially
-      for (let i = 0; i < chain.length; i++) {
-        const currentRole = chain[i].role;
-        const currentOrder = baseOrder + i;
-
-        // Create placeholder message
-        const { data: placeholderMessage, error: placeholderError } = await supabase
+      // Process roles sequentially
+      for (let i = 0; i < orderedRoles.length; i++) {
+        const currentRole = orderedRoles[i].role;
+        
+        // Create thinking message
+        const { data: thinkingMessage, error: thinkingError } = await supabase
           .from('messages')
           .insert({
             thread_id: this.threadId,
             role_id: currentRole.id,
             content: '...',
-            chain_order: currentOrder,
             metadata: {
               role_name: currentRole.name,
               streaming: true
@@ -84,12 +72,22 @@ export class RoleOrchestrator {
           .select()
           .single();
 
-        if (placeholderError) {
-          console.error('Error creating placeholder:', placeholderError);
+        if (thinkingError) {
+          console.error('Error creating thinking message:', thinkingError);
           continue;
         }
 
         try {
+          console.log(`Processing response for ${currentRole.name}`);
+          
+          // Get previous responses for context
+          const { data: previousResponses } = await supabase
+            .from('messages')
+            .select('content, role_id, roles(name)')
+            .eq('thread_id', this.threadId)
+            .eq('metadata->streaming', false)
+            .order('created_at', { ascending: true });
+
           // Process role response
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
@@ -98,8 +96,8 @@ export class RoleOrchestrator {
                 threadId: this.threadId, 
                 content,
                 role: currentRole,
-                chain_order: currentOrder,
-                messageId: placeholderMessage.id
+                previousResponses,
+                messageId: thinkingMessage.id
               }
             }
           );
@@ -115,20 +113,24 @@ export class RoleOrchestrator {
                   streaming: false
                 }
               })
-              .eq('id', placeholderMessage.id);
+              .eq('id', thinkingMessage.id);
           }
+
+          // Wait for the response to be processed before continuing
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
         } catch (error) {
           console.error(`Error processing role ${currentRole.name}:`, error);
           await supabase
             .from('messages')
-              .update({
-                content: 'Failed to generate response. Please try again.',
-                metadata: {
-                  error: error.message,
-                  streaming: false
-                }
-              })
-              .eq('id', placeholderMessage.id);
+            .update({
+              content: 'Failed to generate response. Please try again.',
+              metadata: {
+                error: error.message,
+                streaming: false
+              }
+            })
+            .eq('id', thinkingMessage.id);
         }
       }
 
