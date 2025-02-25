@@ -11,6 +11,7 @@ import { FileHandler } from "./FileHandler";
 import { MessageCounter } from "./MessageCounter";
 import { createRoleOrchestrator } from "@/utils/conversation/orchestration/RoleOrchestrator";
 import { useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChatInputProps {
   threadId: string;
