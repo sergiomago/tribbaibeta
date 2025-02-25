@@ -53,11 +53,12 @@ export class ConversationStore {
   // Get role memories from a specific conversation
   static async getRoleMemoriesFromThread(roleId: string, threadId: string): Promise<RoleMemory[]> {
     const { data, error } = await supabase
-      .rpc('get_role_memories', { 
-        p_role_id: roleId, 
-        p_thread_id: threadId,
-        p_limit: 10 
-      });
+      .from('role_memories')
+      .select('*')
+      .eq('role_id', roleId)
+      .filter('metadata->thread_id', 'eq', threadId)
+      .order('relevance_score', { ascending: false })
+      .limit(10);
 
     if (error) throw error;
     return data || [];
@@ -66,10 +67,11 @@ export class ConversationStore {
   // Get all memories for a role
   static async getRoleMemories(roleId: string): Promise<RoleMemory[]> {
     const { data, error } = await supabase
-      .rpc('get_role_memories', { 
-        p_role_id: roleId,
-        p_limit: 50
-      });
+      .from('role_memories')
+      .select('*')
+      .eq('role_id', roleId)
+      .order('relevance_score', { ascending: false })
+      .limit(50);
 
     if (error) throw error;
     return data || [];
