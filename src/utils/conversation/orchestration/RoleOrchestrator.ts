@@ -10,8 +10,8 @@ interface ThreadRole extends RoleScoringData {
   instructions: string;
   tag: string;
   model: string;
-  expertise_areas: string[]; // Now required to match RoleScoringData
-  primary_topics: string[]; // Now required to match RoleScoringData
+  expertise_areas: string[];
+  primary_topics: string[];
 }
 
 interface DatabaseThreadRole {
@@ -21,7 +21,9 @@ interface DatabaseThreadRole {
 interface DatabaseMessage {
   content: string;
   role_id: string;
-  role_name?: string; // Simplified role reference
+  role: {
+    name: string;
+  } | null;
 }
 
 export class RoleOrchestrator {
@@ -61,7 +63,6 @@ export class RoleOrchestrator {
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
     try {
-      // Simplified query to avoid deep nesting
       const { data, error: rolesError } = await supabase
         .from('thread_roles')
         .select(`
@@ -109,23 +110,25 @@ export class RoleOrchestrator {
         try {
           console.log(`Processing response for ${role.name}`);
           
-          // Simplified message query to avoid relationship complexities
+          // Simplified message query with proper role relationship
           const { data: messages } = await supabase
             .from('messages')
             .select(`
               content,
               role_id,
-              role_name:roles!inner(name)
+              role:roles (
+                name
+              )
             `)
             .eq('thread_id', this.threadId)
             .eq('metadata->streaming', false)
             .order('created_at', { ascending: true });
 
-          const previousResponses: DatabaseMessage[] = messages?.map(msg => ({
+          const previousResponses = (messages || []).map(msg => ({
             content: msg.content,
             role_id: msg.role_id,
-            role_name: msg.role_name?.name
-          })) || [];
+            role_name: msg.role?.name
+          }));
 
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
