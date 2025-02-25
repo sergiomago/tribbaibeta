@@ -1,12 +1,15 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { createRoleSelector } from "../../roles/selection/RoleSelector";
+import { RelevanceScorer } from "../../roles/selection/RelevanceScoring";
 
 export class RoleOrchestrator {
   private threadId: string;
+  private relevanceScorer: RelevanceScorer;
 
   constructor(threadId: string) {
     this.threadId = threadId;
+    this.relevanceScorer = new RelevanceScorer();
   }
 
   async handleMessage(content: string, taggedRoleId?: string | null): Promise<void> {
@@ -20,61 +23,91 @@ export class RoleOrchestrator {
             name,
             instructions,
             tag,
-            model
+            model,
+            expertise_areas,
+            primary_topics
           )
         `)
         .eq('thread_id', this.threadId);
 
       if (rolesError) throw rolesError;
 
-      // Filter roles based on tagged role if provided
-      const chain = taggedRoleId 
-        ? threadRoles.filter(tr => tr.role.id === taggedRoleId)
-        : threadRoles;
+      let chain = [];
+      
+      if (taggedRoleId) {
+        // If role is tagged, only use that role
+        chain = threadRoles.filter(tr => tr.role.id === taggedRoleId);
+      } else {
+        // Score and sort roles by relevance
+        const scoredRoles = await Promise.all(
+          threadRoles.map(async (tr) => ({
+            ...tr,
+            score: await this.relevanceScorer.calculateScore(tr.role, content, this.threadId)
+          }))
+        );
+
+        chain = scoredRoles
+          .sort((a, b) => b.score - a.score)
+          .map(sr => ({ role: sr.role }));
+      }
 
       if (!chain.length) {
         throw new Error('No roles available to respond');
       }
 
-      // Create placeholder messages first
+      // Get the highest existing chain_order
+      const { data: latestMessage } = await supabase
+        .from('messages')
+        .select('chain_order')
+        .eq('thread_id', this.threadId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      const baseOrder = (latestMessage?.[0]?.chain_order || 0) + 1;
+
+      // Create and process messages sequentially
       for (let i = 0; i < chain.length; i++) {
-        const { error: placeholderError } = await supabase
+        const currentRole = chain[i].role;
+        const currentOrder = baseOrder + i;
+
+        // Create placeholder message
+        const { data: placeholderMessage, error: placeholderError } = await supabase
           .from('messages')
           .insert({
             thread_id: this.threadId,
-            role_id: chain[i].role.id,
+            role_id: currentRole.id,
             content: '...',
-            chain_order: i + 1,
+            chain_order: currentOrder,
             metadata: {
-              role_name: chain[i].role.name,
+              role_name: currentRole.name,
               streaming: true
             }
-          });
+          })
+          .select()
+          .single();
 
         if (placeholderError) {
           console.error('Error creating placeholder:', placeholderError);
-          throw placeholderError;
+          continue;
         }
-      }
 
-      // Process each role in sequence
-      for (let i = 0; i < chain.length; i++) {
         try {
+          // Process role response
           const { error: fnError } = await supabase.functions.invoke(
             'handle-chat-message',
             {
               body: { 
                 threadId: this.threadId, 
                 content,
-                role: chain[i].role,
-                chain_order: i + 1
+                role: currentRole,
+                chain_order: currentOrder,
+                messageId: placeholderMessage.id
               }
             }
           );
 
           if (fnError) {
             console.error('Error in role response:', fnError);
-            // Update message to show error
             await supabase
               .from('messages')
               .update({
@@ -84,25 +117,20 @@ export class RoleOrchestrator {
                   streaming: false
                 }
               })
-              .eq('thread_id', this.threadId)
-              .eq('role_id', chain[i].role.id)
-              .eq('chain_order', i + 1);
+              .eq('id', placeholderMessage.id);
           }
-        } catch (roleError) {
-          console.error(`Error processing role ${chain[i].role.name}:`, roleError);
-          // Update message to show error
+        } catch (error) {
+          console.error(`Error processing role ${currentRole.name}:`, error);
           await supabase
             .from('messages')
             .update({
               content: 'Failed to generate response. Please try again.',
               metadata: {
-                error: roleError.message,
+                error: error.message,
                 streaming: false
               }
             })
-            .eq('thread_id', this.threadId)
-            .eq('role_id', chain[i].role.id)
-            .eq('chain_order', i + 1);
+            .eq('id', placeholderMessage.id);
         }
       }
 

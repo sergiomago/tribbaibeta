@@ -23,13 +23,11 @@ serve(async (req) => {
       apiKey: Deno.env.get('OPENAI_API_KEY'),
     });
 
-    const { threadId, content, role, chain_order } = await req.json();
+    const { threadId, content, role, chain_order, messageId } = await req.json();
     
-    if (!threadId || !content || !role || !chain_order) {
+    if (!threadId || !content || !role || !chain_order || !messageId) {
       throw new Error('Missing required fields');
     }
-
-    console.log('Processing message:', { role: role.name, chainOrder: chain_order });
 
     try {
       // Get previous messages for context
@@ -40,24 +38,35 @@ serve(async (req) => {
         .lt('chain_order', chain_order)
         .order('chain_order', { ascending: true });
 
+      const previousResponsesText = previousMessages?.length
+        ? `Previous responses:\n${previousMessages.map(msg => 
+            `${msg.roles?.name || 'Unknown'}: ${msg.content}`
+          ).join('\n\n')}`
+        : '';
+
+      const expertiseAreas = role.expertise_areas?.join(', ') || 'your field';
+      const primaryTopics = role.primary_topics?.join(', ') || 'relevant topics';
+
+      const systemPrompt = `You are ${role.name}, an expert in ${expertiseAreas}. 
+${role.instructions || ''}
+
+Your expertise covers: ${primaryTopics}
+
+Key instructions:
+1. ALWAYS answer from your specific expertise perspective
+2. Use terminology and concepts from your field
+3. If the question isn't in your expertise, acknowledge this but provide relevant insights from your field
+4. Be precise and technical when appropriate
+
+${previousResponsesText}
+
+Remember: Stay true to your expertise and provide unique insights from your field.`;
+
       // Generate AI response
       const completion = await openai.chat.completions.create({
         model: role.model || 'gpt-4o-mini',
         messages: [
-          { 
-            role: 'system', 
-            content: `You are ${role.name}. ${role.instructions || ''}
-
-Previous responses in this conversation:
-${previousMessages?.map(m => `${m.roles?.name || 'Unknown'}: ${m.content}`).join('\n\n') || 'You are the first to respond.'}
-
-Key guidelines:
-1. Stay true to your role's expertise and perspective
-2. Build upon previous responses without repeating information
-3. Make connections to points raised by others when relevant
-4. Provide unique insights from your field
-5. If you're first, establish a foundation for others to build upon`
-          },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content }
         ],
         temperature: 0.7,
@@ -75,9 +84,7 @@ Key guidelines:
             processed: true
           }
         })
-        .eq('thread_id', threadId)
-        .eq('role_id', role.id)
-        .eq('chain_order', chain_order);
+        .eq('id', messageId);
 
       if (updateError) throw updateError;
 
@@ -88,7 +95,6 @@ Key guidelines:
 
     } catch (error) {
       console.error('Error generating response:', error);
-      // Update message to show error
       await supabaseClient
         .from('messages')
         .update({
@@ -98,9 +104,7 @@ Key guidelines:
             streaming: false
           }
         })
-        .eq('thread_id', threadId)
-        .eq('role_id', role.id)
-        .eq('chain_order', chain_order);
+        .eq('id', messageId);
 
       throw error;
     }
