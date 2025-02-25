@@ -1,3 +1,4 @@
+
 import { useEffect, useRef } from "react";
 import { Message } from "@/types";
 import { cn } from "@/lib/utils";
@@ -117,12 +118,17 @@ export function MessageList({
     );
   }
 
+  // Filter out duplicate messages based on id
+  const uniqueMessages = messages.filter((message, index, self) =>
+    index === self.findIndex((m) => m.id === message.id)
+  );
+
   return (
     <div 
       ref={messageListRef}
       className="flex-1 overflow-y-auto p-4 space-y-4"
     >
-      {messages.slice(-maxMessages).map((message, index) => (
+      {uniqueMessages.slice(-maxMessages).map((message, index) => (
         <div
           key={message.id}
           id={message.id}
@@ -155,7 +161,7 @@ export function MessageList({
               )}
               <div className="text-sm whitespace-pre-wrap">{message.content}</div>
             </div>
-            {index === messages.length - 1 && (
+            {index === uniqueMessages.length - 1 && (
               <div ref={lastMessageRef} />
             )}
           </div>
